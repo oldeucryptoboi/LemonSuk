@@ -9,6 +9,10 @@ export const apiConfig = {
     process.env.DATABASE_URL ?? 'postgresql://localhost:5432/lemonsuk',
   databaseSsl: process.env.PGSSLMODE === 'require',
   redisUrl: process.env.REDIS_URL ?? '',
+  internalServiceToken:
+    process.env.INTERNAL_SERVICE_TOKEN ??
+    'lemonsuk-dev-internal-service-token',
+  reviewQueueKey: process.env.REVIEW_QUEUE_KEY ?? 'lemonsuk:review-requested',
   jwtSecret: process.env.JWT_SECRET ?? 'lemonsuk-dev-jwt-secret',
   sendGridApiKey: process.env.SENDGRID_API_KEY ?? '',
   sendGridFromEmail: process.env.SENDGRID_FROM_EMAIL ?? '',

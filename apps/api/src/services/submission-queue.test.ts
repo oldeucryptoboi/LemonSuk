@@ -338,6 +338,7 @@ describe('submission queue service', () => {
         .mockResolvedValueOnce({ rowCount: 0, rows: [] })
         .mockResolvedValueOnce({ rowCount: 0, rows: [] })
         .mockResolvedValueOnce({ rowCount: 1, rows: [] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] })
         .mockResolvedValueOnce({ rowCount: 0, rows: [] }),
     }
     const reviewClient = {
@@ -373,6 +374,7 @@ describe('submission queue service', () => {
           ],
         })
         .mockResolvedValueOnce({ rowCount: 1, rows: [] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] })
         .mockResolvedValueOnce({ rowCount: 0, rows: [] }),
     }
     const withDatabaseTransaction = vi
@@ -385,105 +387,204 @@ describe('submission queue service', () => {
       withDatabaseClient: vi.fn(),
     }))
 
-    const queue = await import('./submission-queue')
-    const agent = {
-      id: 'agent_1',
-      handle: 'alpha',
-      displayName: 'Alpha',
-      ownerName: 'Owner',
-      modelProvider: 'OpenAI',
-      biography: 'Queue coverage agent.',
-      ownerEmail: null,
-      ownerVerifiedAt: null,
-      promoCredits: 0,
-      earnedCredits: 0,
-      availableCredits: 0,
-      createdAt: '2026-03-16T00:00:00.000Z',
-      claimUrl: '/?claim=claim_1',
-      challengeUrl: '/api/v1/auth/claims/claim_1',
+    try {
+      const queue = await import('./submission-queue')
+      const agent = {
+        id: 'agent_1',
+        handle: 'alpha',
+        displayName: 'Alpha',
+        ownerName: 'Owner',
+        modelProvider: 'OpenAI',
+        biography: 'Queue coverage agent.',
+        ownerEmail: null,
+        ownerVerifiedAt: null,
+        promoCredits: 0,
+        earnedCredits: 0,
+        availableCredits: 0,
+        createdAt: '2026-03-16T00:00:00.000Z',
+        claimUrl: '/?claim=claim_1',
+        challengeUrl: '/api/v1/auth/claims/claim_1',
+      }
+
+      await expect(
+        queue.enqueuePredictionSubmission(agent, {
+          headline: 'Coverage enqueue reload branch',
+          subject: 'Queue reload',
+          category: 'vehicle',
+          promisedDate: '2027-12-31T23:59:59.000Z',
+          summary:
+            'This submission exists only to cover the enqueue reload guard.',
+          sourceUrl: 'https://example.com/source',
+          tags: [],
+        }),
+      ).rejects.toThrow('Queued submission could not be reloaded.')
+
+      await expect(
+        queue.reviewPredictionSubmission({
+          submissionId: 'submission_1',
+          decision: 'rejected',
+        }),
+      ).rejects.toThrow('Reviewed submission could not be reloaded.')
+
+      await expect(
+        queue.readPredictionSubmissionQueueFromClient(
+          {
+            query: vi
+              .fn()
+              .mockResolvedValueOnce({ rows: [] })
+              .mockResolvedValueOnce({ rows: [] }),
+          } as never,
+          3,
+        ),
+      ).resolves.toEqual({
+        pendingCount: 0,
+        items: [],
+      })
+
+      await expect(
+        queue.readPredictionSubmissionQueueFromClient(
+          {
+            query: vi
+              .fn()
+              .mockResolvedValueOnce({ rows: [{ count: 1 }] })
+              .mockResolvedValueOnce({
+                rows: [
+                  {
+                    id: 'submission_2',
+                    submitted_by_agent_id: 'agent_2',
+                    headline: 'Queued queue read branch',
+                    subject: 'Queue read',
+                    category: 'vehicle',
+                    summary: 'Queue read branch coverage.',
+                    promised_date: new Date('2027-12-31T23:59:59.000Z'),
+                    source_url: 'https://example.com/source',
+                    source_label: null,
+                    source_note: null,
+                    source_published_at: null,
+                    source_type: 'news',
+                    tags: ['queued'],
+                    status: 'pending',
+                    review_notes: null,
+                    linked_market_id: null,
+                    reviewed_at: null,
+                    created_at: new Date('2026-03-16T00:00:00.000Z'),
+                    updated_at: new Date('2026-03-16T00:00:00.000Z'),
+                    author_handle: 'beta',
+                    author_display_name: 'Beta',
+                  },
+                ],
+              }),
+          } as never,
+          1,
+        ),
+      ).resolves.toEqual({
+        pendingCount: 1,
+        items: [
+          expect.objectContaining({
+            sourceLabel: 'example.com',
+            submittedBy: expect.objectContaining({
+              handle: 'beta',
+            }),
+          }),
+        ],
+      })
+    } finally {
+      vi.doUnmock('./database')
+      vi.resetModules()
     }
+  })
+
+  it('marks submissions as failed when review queue dispatch fails', async () => {
+    const context = await setupApiContext()
+    const reviewEvents = await import('./review-events')
+    const queue = await import('./submission-queue')
+
+    const registration = await registerAgent(
+      context,
+      'queue_failure_bot',
+      'Queue Failure Bot',
+    )
+    await context.store.ensureStore()
+
+    const enqueue = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        throw new Error('queue transport down')
+      })
+      .mockImplementationOnce(async () => {
+        throw 'queue transport down'
+      })
+    reviewEvents.__setReviewEventStoreForTests({ enqueue })
 
     await expect(
-      queue.enqueuePredictionSubmission(agent, {
-        headline: 'Coverage enqueue reload branch',
-        subject: 'Queue reload',
+      queue.enqueuePredictionSubmission(registration.agent, {
+        headline: 'Queued failure branch coverage by December 31, 2027',
+        subject: 'Queue failure branch coverage',
         category: 'vehicle',
         promisedDate: '2027-12-31T23:59:59.000Z',
         summary:
-          'This submission exists only to cover the enqueue reload guard.',
-        sourceUrl: 'https://example.com/source',
-        tags: [],
+          'This submission should fail after persistence because the review queue transport is down.',
+        sourceUrl: 'https://example.com/queue-failure',
+        tags: ['coverage'],
       }),
-    ).rejects.toThrow('Queued submission could not be reloaded.')
+    ).rejects.toThrow('Could not queue submission for review.')
 
-    await expect(
-      queue.reviewPredictionSubmission({
-        submissionId: 'submission_1',
-        decision: 'rejected',
-      }),
-    ).rejects.toThrow('Reviewed submission could not be reloaded.')
-
-    await expect(
-      queue.readPredictionSubmissionQueueFromClient(
-        {
-          query: vi
-            .fn()
-            .mockResolvedValueOnce({ rows: [] })
-            .mockResolvedValueOnce({ rows: [] }),
-        } as never,
-        3,
-      ),
-    ).resolves.toEqual({
+    expect(await queue.readPredictionSubmissionQueue()).toEqual({
       pendingCount: 0,
       items: [],
     })
 
-    await expect(
-      queue.readPredictionSubmissionQueueFromClient(
-        {
-          query: vi
-            .fn()
-            .mockResolvedValueOnce({ rows: [{ count: 1 }] })
-            .mockResolvedValueOnce({
-              rows: [
-                {
-                  id: 'submission_2',
-                  submitted_by_agent_id: 'agent_2',
-                  headline: 'Queued queue read branch',
-                  subject: 'Queue read',
-                  category: 'vehicle',
-                  summary: 'Queue read branch coverage.',
-                  promised_date: new Date('2027-12-31T23:59:59.000Z'),
-                  source_url: 'https://example.com/source',
-                  source_label: null,
-                  source_note: null,
-                  source_published_at: null,
-                  source_type: 'news',
-                  tags: ['queued'],
-                  status: 'pending',
-                  review_notes: null,
-                  linked_market_id: null,
-                  reviewed_at: null,
-                  created_at: new Date('2026-03-16T00:00:00.000Z'),
-                  updated_at: new Date('2026-03-16T00:00:00.000Z'),
-                  author_handle: 'beta',
-                  author_display_name: 'Beta',
-                },
-              ],
-            }),
-        } as never,
-        1,
-      ),
-    ).resolves.toEqual({
-      pendingCount: 1,
-      items: [
-        expect.objectContaining({
-          sourceLabel: 'example.com',
-          submittedBy: expect.objectContaining({
-            handle: 'beta',
-          }),
-        }),
-      ],
+    const failedRows = await context.pool.query<{
+      status: string
+      review_notes: string | null
+    }>(
+      `
+        SELECT status, review_notes
+        FROM agent_prediction_submissions
+        WHERE submitted_by_agent_id = $1
+      `,
+      [registration.agent.id],
+    )
+    expect(failedRows.rows[0]).toEqual({
+      status: 'failed',
+      review_notes: 'queue transport down',
     })
+
+    const secondRegistration = await registerAgent(
+      context,
+      'queue_failure_bot_two',
+      'Queue Failure Bot Two',
+    )
+
+    await expect(
+      queue.enqueuePredictionSubmission(secondRegistration.agent, {
+        headline: 'Queued failure fallback branch by December 31, 2027',
+        subject: 'Queue failure fallback branch',
+        category: 'vehicle',
+        promisedDate: '2027-12-31T23:59:59.000Z',
+        summary:
+          'This submission should hit the non-Error queue failure fallback branch.',
+        sourceUrl: 'https://example.com/queue-failure-fallback',
+        tags: ['coverage'],
+      }),
+    ).rejects.toThrow('Could not queue submission for review.')
+
+    const failedFallbackRows = await context.pool.query<{
+      status: string
+      review_notes: string | null
+    }>(
+      `
+        SELECT status, review_notes
+        FROM agent_prediction_submissions
+        WHERE submitted_by_agent_id = $1
+      `,
+      [secondRegistration.agent.id],
+    )
+    expect(failedFallbackRows.rows[0]).toEqual({
+      status: 'failed',
+      review_notes: 'Could not queue submission for review.',
+    })
+
+    await context.pool.end()
   })
 })

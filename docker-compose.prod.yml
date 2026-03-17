@@ -32,6 +32,8 @@ services:
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:3000}
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/lemonsuk}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-replace-internal-service-token}
+      REVIEW_QUEUE_KEY: ${REVIEW_QUEUE_KEY:-lemonsuk:review-requested}
       JWT_SECRET: ${JWT_SECRET:-replace-me}
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-}
@@ -53,6 +55,28 @@ services:
       PORT: 3000
     ports:
       - '3000:3000'
+    restart: unless-stopped
+
+  review-orchestrator:
+    image: lemonsuk-review-orchestrator:latest
+    build:
+      context: .
+      dockerfile: apps/review-orchestrator/Dockerfile
+    depends_on:
+      - api
+      - redis
+    environment:
+      REVIEW_HOST: 0.0.0.0
+      REVIEW_PORT: 8790
+      API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8787/api/v1}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-replace-internal-service-token}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REVIEW_QUEUE_KEY: ${REVIEW_QUEUE_KEY:-lemonsuk:review-requested}
+      EDDIE_BASE_URL: ${EDDIE_BASE_URL:-}
+      EDDIE_API_KEY: ${EDDIE_API_KEY:-}
+      EDDIE_WEBHOOK_SECRET: ${EDDIE_WEBHOOK_SECRET:-replace-eddie-webhook-secret}
+    ports:
+      - '8790:8790'
     restart: unless-stopped
 
 volumes:

@@ -5,6 +5,7 @@ export default defineConfig({
     fileParallelism: false,
     include: [
       'apps/api/src/**/*.test.ts',
+      'apps/review-orchestrator/src/**/*.test.ts',
       'apps/web/src/**/*.test.tsx',
       'apps/web/app/**/*.test.tsx',
     ],
@@ -18,6 +19,7 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'apps/api/src/**/*.ts',
+        'apps/review-orchestrator/src/**/*.ts',
         'apps/web/app/**/*.ts',
         'apps/web/app/**/*.tsx',
         'apps/web/src/**/*.ts',

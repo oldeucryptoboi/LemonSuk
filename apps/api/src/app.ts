@@ -9,6 +9,7 @@ import { createAuthRouter } from './routes/auth'
 import { createBetRouter } from './routes/bets'
 import { createDashboardRouter } from './routes/dashboard'
 import { createDiscussionRouter } from './routes/discussion'
+import { createInternalRouter } from './routes/internal'
 import { createMaintenanceRouter } from './routes/maintenance'
 import { createMarketRouter } from './routes/markets'
 
@@ -28,6 +29,7 @@ export function buildApp(): Express {
 
   app.use(
     apiConfig.apiBasePath,
+    createInternalRouter(),
     createRateLimitMiddleware({
       bucket: 'api',
       limit: 100,

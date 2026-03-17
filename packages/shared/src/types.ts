@@ -27,9 +27,18 @@ export const notificationTypeSchema = z.enum(['bet_won', 'bet_lost', 'system'])
 export const discussionVoteDirectionSchema = z.enum(['up', 'down'])
 export const predictionSubmissionStatusSchema = z.enum([
   'pending',
+  'in_review',
   'accepted',
   'rejected',
+  'escalated',
+  'failed',
 ])
+export const predictionReviewVerdictSchema = z.enum([
+  'accept',
+  'reject',
+  'escalate',
+])
+export const reviewQueuePrioritySchema = z.enum(['normal', 'high'])
 export const companySchema = z.enum([
   'tesla',
   'spacex',
@@ -402,6 +411,61 @@ export const predictionSubmissionQueueSchema = z.object({
   items: z.array(queuedPredictionSubmissionSchema),
 })
 
+export const reviewRequestedEventSchema = z.object({
+  eventType: z.literal('review.requested'),
+  submissionId: z.string(),
+  submittedUrl: z.url(),
+  agentId: z.string(),
+  createdAt: z.string(),
+  priority: reviewQueuePrioritySchema.default('normal'),
+})
+
+export const internalPredictionSubmissionSchema =
+  queuedPredictionSubmissionSchema.extend({
+    sourceNote: z.string().nullable(),
+    sourcePublishedAt: z.string().nullable(),
+  })
+
+export const predictionReviewEvidenceSchema = z.object({
+  url: z.url(),
+  excerpt: z.string().min(1).max(500),
+})
+
+export const predictionReviewResultSchema = z.object({
+  runId: z.string(),
+  submissionId: z.string(),
+  reviewer: z.string().min(2).max(80),
+  verdict: predictionReviewVerdictSchema,
+  confidence: z.number().min(0).max(1),
+  summary: z.string().min(12).max(500),
+  evidence: z.array(predictionReviewEvidenceSchema).max(12),
+  needsHumanReview: z.boolean(),
+  snapshotRef: z.string().min(1).max(280).nullable(),
+  linkedMarketId: z.string().nullable().optional(),
+  providerRunId: z.string().min(1).max(120).nullable().optional(),
+  createdAt: z.string(),
+})
+
+export const internalPredictionSubmissionStatusInputSchema = z.object({
+  runId: z.string().min(1).max(120).optional(),
+  providerRunId: z.string().min(1).max(120).optional(),
+  status: z.enum(['in_review', 'failed', 'escalated']),
+  note: z.string().min(3).max(500).optional(),
+})
+
+export const internalPredictionSubmissionReviewResultInputSchema = z.object({
+  runId: z.string().min(1).max(120),
+  reviewer: z.string().min(2).max(80),
+  verdict: predictionReviewVerdictSchema,
+  confidence: z.number().min(0).max(1),
+  summary: z.string().min(12).max(500),
+  evidence: z.array(predictionReviewEvidenceSchema).max(12),
+  needsHumanReview: z.boolean().default(false),
+  snapshotRef: z.string().min(1).max(280).nullable().optional(),
+  linkedMarketId: z.string().optional(),
+  providerRunId: z.string().min(1).max(120).optional(),
+})
+
 export const agentPredictionSubmissionResponseSchema = z.object({
   queued: z.literal(true),
   submission: queuedPredictionSubmissionSchema,
@@ -525,6 +589,25 @@ export type QueuedPredictionSubmission = z.infer<
 >
 export type PredictionSubmissionQueue = z.infer<
   typeof predictionSubmissionQueueSchema
+>
+export type ReviewRequestedEvent = z.infer<typeof reviewRequestedEventSchema>
+export type InternalPredictionSubmission = z.infer<
+  typeof internalPredictionSubmissionSchema
+>
+export type PredictionReviewVerdict = z.infer<
+  typeof predictionReviewVerdictSchema
+>
+export type PredictionReviewEvidence = z.infer<
+  typeof predictionReviewEvidenceSchema
+>
+export type PredictionReviewResult = z.infer<
+  typeof predictionReviewResultSchema
+>
+export type InternalPredictionSubmissionStatusInput = z.infer<
+  typeof internalPredictionSubmissionStatusInputSchema
+>
+export type InternalPredictionSubmissionReviewResultInput = z.infer<
+  typeof internalPredictionSubmissionReviewResultInputSchema
 >
 export type AgentPredictionSubmissionResponse = z.infer<
   typeof agentPredictionSubmissionResponseSchema

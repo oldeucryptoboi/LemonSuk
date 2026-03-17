@@ -12,6 +12,8 @@ describe('apiConfig', () => {
     delete process.env.DATABASE_URL
     delete process.env.PGSSLMODE
     delete process.env.REDIS_URL
+    delete process.env.INTERNAL_SERVICE_TOKEN
+    delete process.env.REVIEW_QUEUE_KEY
     delete process.env.JWT_SECRET
     delete process.env.SENDGRID_API_KEY
     delete process.env.SENDGRID_FROM_EMAIL
@@ -33,6 +35,8 @@ describe('apiConfig', () => {
       databaseUrl: 'postgresql://localhost:5432/lemonsuk',
       databaseSsl: false,
       redisUrl: '',
+      internalServiceToken: 'lemonsuk-dev-internal-service-token',
+      reviewQueueKey: 'lemonsuk:review-requested',
       jwtSecret: 'lemonsuk-dev-jwt-secret',
       sendGridApiKey: '',
       sendGridFromEmail: '',
@@ -48,6 +52,8 @@ describe('apiConfig', () => {
     process.env.DATABASE_URL = 'postgresql://example/test'
     process.env.PGSSLMODE = 'require'
     process.env.REDIS_URL = 'redis://localhost:6379'
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-secret'
+    process.env.REVIEW_QUEUE_KEY = 'review-queue'
     process.env.JWT_SECRET = 'secret'
     process.env.SENDGRID_API_KEY = 'sg-key'
     process.env.SENDGRID_FROM_EMAIL = 'alerts@lemonsuk.example'
@@ -62,6 +68,8 @@ describe('apiConfig', () => {
     expect(apiConfig.databaseUrl).toBe('postgresql://example/test')
     expect(apiConfig.databaseSsl).toBe(true)
     expect(apiConfig.redisUrl).toBe('redis://localhost:6379')
+    expect(apiConfig.internalServiceToken).toBe('internal-secret')
+    expect(apiConfig.reviewQueueKey).toBe('review-queue')
     expect(apiConfig.jwtSecret).toBe('secret')
     expect(apiConfig.sendGridApiKey).toBe('sg-key')
     expect(apiConfig.sendGridFromEmail).toBe('alerts@lemonsuk.example')

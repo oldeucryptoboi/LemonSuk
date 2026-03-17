@@ -11,10 +11,12 @@ import type {
 } from '../shared'
 import {
   agentPredictionSubmissionResponseSchema,
+  reviewRequestedEventSchema,
   predictionSubmissionQueueSchema,
   queuedPredictionSubmissionSchema,
 } from '../shared'
 import { withDatabaseClient, withDatabaseTransaction } from './database'
+import { enqueueReviewRequestedEvent } from './review-events'
 import { inferSourceType } from './source-type'
 import {
   domainFromUrl,
@@ -58,6 +60,40 @@ type ReviewPredictionSubmissionInput = {
   decision: 'accepted' | 'rejected'
   linkedMarketId?: string
   reviewNotes?: string
+}
+
+async function appendAuditLog(
+  client: PoolClient,
+  submissionId: string,
+  eventType: string,
+  actorType: string,
+  actorId: string,
+  payload: unknown,
+  createdAt: string,
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO prediction_review_audit_log (
+        id,
+        submission_id,
+        event_type,
+        actor_type,
+        actor_id,
+        payload_json,
+        created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+    `,
+    [
+      `audit_${randomUUID().replace(/-/g, '')}`,
+      submissionId,
+      eventType,
+      actorType,
+      actorId,
+      JSON.stringify(payload),
+      createdAt,
+    ],
+  )
 }
 
 function mapSubmission(row: PredictionSubmissionRow): QueuedPredictionSubmission {
@@ -222,6 +258,7 @@ export async function enqueuePredictionSubmission(
   const sourceType = inferSourceType(input.sourceUrl)
   const normalizedSourceUrl = normalizeSourceUrl(input.sourceUrl)
   const sourceLabel = input.sourceLabel?.trim() || domainFromUrl(input.sourceUrl)
+  const createdAtIso = now.toISOString()
 
   const submission = await withDatabaseTransaction(async (client) => {
     await assertNoPendingAgentSubmissionDuplicate(client, normalizedSourceUrl)
@@ -273,8 +310,21 @@ export async function enqueuePredictionSubmission(
         input.sourcePublishedAt ? toIso(input.sourcePublishedAt) : null,
         sourceType,
         input.tags.map((tag) => tag.trim()).filter(Boolean),
-        now.toISOString(),
+        createdAtIso,
       ],
+    )
+
+    await appendAuditLog(
+      client,
+      submissionId,
+      'submission.queued',
+      'agent',
+      agent.id,
+      {
+        sourceUrl: input.sourceUrl,
+        normalizedSourceUrl,
+      },
+      createdAtIso,
     )
 
     const row = await readSubmissionRowById(client, submissionId)
@@ -284,6 +334,63 @@ export async function enqueuePredictionSubmission(
 
     return mapSubmission(row)
   })
+
+  const reviewEvent = reviewRequestedEventSchema.parse({
+    eventType: 'review.requested',
+    submissionId,
+    submittedUrl: input.sourceUrl,
+    agentId: agent.id,
+    createdAt: createdAtIso,
+    priority: 'normal',
+  })
+
+  try {
+    await enqueueReviewRequestedEvent(reviewEvent)
+    await withDatabaseTransaction((client) =>
+      appendAuditLog(
+        client,
+        submissionId,
+        'review.requested',
+        'system',
+        'api',
+        reviewEvent,
+        new Date().toISOString(),
+      ),
+    )
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Could not queue submission for review.'
+
+    await withDatabaseTransaction(async (client) => {
+      const nowIso = new Date().toISOString()
+      await client.query(
+        `
+          UPDATE agent_prediction_submissions
+          SET
+            status = 'failed',
+            review_notes = $2,
+            reviewed_at = $3,
+            updated_at = $3
+          WHERE id = $1
+        `,
+        [submissionId, message, nowIso],
+      )
+
+      await appendAuditLog(
+        client,
+        submissionId,
+        'review.request.failed',
+        'system',
+        'api',
+        { message },
+        nowIso,
+      )
+    })
+
+    throw new Error('Could not queue submission for review.')
+  }
 
   return agentPredictionSubmissionResponseSchema.parse({
     queued: true,
@@ -320,7 +427,7 @@ export async function reviewPredictionSubmission(
       throw new Error('Prediction submission not found.')
     }
 
-    if (current.status !== 'pending') {
+    if (current.status === 'accepted' || current.status === 'rejected') {
       throw new Error('Prediction submission has already been reviewed.')
     }
 
@@ -352,6 +459,20 @@ export async function reviewPredictionSubmission(
         input.linkedMarketId ?? null,
         nowIso,
       ],
+    )
+
+    await appendAuditLog(
+      client,
+      input.submissionId,
+      'submission.review.manually_completed',
+      'operator',
+      'manual-review',
+      {
+        decision: input.decision,
+        linkedMarketId: input.linkedMarketId ?? null,
+        reviewNotes: input.reviewNotes?.trim() || null,
+      },
+      nowIso,
     )
 
     const reviewed = await readSubmissionRowById(client, input.submissionId)
