@@ -2,7 +2,7 @@ import express from 'express'
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
 
-describe('createDiscussionRouter', () => {
+describe.sequential('createDiscussionRouter', () => {
   it('loads threads, creates posts, and casts votes', async () => {
     vi.resetModules()
 
@@ -49,17 +49,18 @@ describe('createDiscussionRouter', () => {
     const app = express()
     app.use(express.json())
     app.use('/api/v1', createDiscussionRouter())
+    const api = request.agent(app)
 
-    const getResponse = await request(app)
+    const getResponse = await api
       .get('/api/v1/markets/market-1/discussion')
       .set('x-agent-api-key', 'lsk_live_123456')
-    const postResponse = await request(app)
+    const postResponse = await api
       .post('/api/v1/markets/market-1/discussion/posts')
       .set('x-agent-api-key', 'lsk_live_123456')
       .send({
         body: 'A thread opener',
       })
-    const voteResponse = await request(app)
+    const voteResponse = await api
       .post('/api/v1/discussion/posts/post-1/vote')
       .set('x-agent-api-key', 'lsk_live_123456')
       .send({
@@ -67,7 +68,7 @@ describe('createDiscussionRouter', () => {
         captchaChallengeId: 'captcha-1',
         captchaAnswer: 'hedge-deadline-9',
       })
-    const flagResponse = await request(app)
+    const flagResponse = await api
       .post('/api/v1/discussion/posts/post-1/flag')
       .set('x-agent-api-key', 'lsk_live_123456')
       .send({})
@@ -138,32 +139,33 @@ describe('createDiscussionRouter', () => {
     const app = express()
     app.use(express.json())
     app.use('/api/v1', createDiscussionRouter())
+    const api = request.agent(app)
 
-    const getResponse = await request(app)
+    const getResponse = await api
       .get('/api/v1/markets/missing/discussion')
       .set('x-agent-api-key', 'bad-key')
-    const getMissingResponse = await request(app).get(
+    const getMissingResponse = await api.get(
       '/api/v1/markets/missing/discussion',
     )
-    const postUnauthorizedResponse = await request(app)
+    const postUnauthorizedResponse = await api
       .post('/api/v1/markets/market-1/discussion/posts')
       .send({
         body: 'post body',
       })
-    const postResponse = await request(app)
+    const postResponse = await api
       .post('/api/v1/markets/market-1/discussion/posts')
       .set('x-agent-api-key', 'good-key')
       .send({
         body: 'post body',
       })
-    const voteUnauthorizedResponse = await request(app)
+    const voteUnauthorizedResponse = await api
       .post('/api/v1/discussion/posts/missing/vote')
       .send({
         value: 'down',
         captchaChallengeId: 'captcha-1',
         captchaAnswer: 'wrong-answer',
       })
-    const voteResponse = await request(app)
+    const voteResponse = await api
       .post('/api/v1/discussion/posts/missing/vote')
       .set('x-agent-api-key', 'good-key')
       .send({
@@ -171,10 +173,10 @@ describe('createDiscussionRouter', () => {
         captchaChallengeId: 'captcha-1',
         captchaAnswer: 'wrong-answer',
       })
-    const flagUnauthorizedResponse = await request(app)
+    const flagUnauthorizedResponse = await api
       .post('/api/v1/discussion/posts/missing/flag')
       .send({})
-    const flagResponse = await request(app)
+    const flagResponse = await api
       .post('/api/v1/discussion/posts/missing/flag')
       .set('x-agent-api-key', 'good-key')
       .send({})
@@ -231,23 +233,21 @@ describe('createDiscussionRouter', () => {
     }))
 
     const { createDiscussionRouter } = await import('./discussion')
-    const buildTestApp = () => {
-      const app = express()
-      app.use(express.json())
-      app.use('/api/v1', createDiscussionRouter())
-      return app
-    }
+    const app = express()
+    app.use(express.json())
+    app.use('/api/v1', createDiscussionRouter())
+    const api = request.agent(app)
 
-    const getResponse = await request(buildTestApp()).get(
+    const getResponse = await api.get(
       '/api/v1/markets/missing/discussion',
     )
-    const postResponse = await request(buildTestApp())
+    const postResponse = await api
       .post('/api/v1/markets/missing/discussion/posts')
       .set('x-agent-api-key', 'lsk_live_123456')
       .send({
         body: 'post body',
       })
-    const voteResponse = await request(buildTestApp())
+    const voteResponse = await api
       .post('/api/v1/discussion/posts/post-1/vote')
       .set('x-agent-api-key', 'lsk_live_123456')
       .send({
@@ -255,7 +255,7 @@ describe('createDiscussionRouter', () => {
         captchaChallengeId: 'captcha-1',
         captchaAnswer: 'hedge-deadline-9',
       })
-    const flagResponse = await request(buildTestApp())
+    const flagResponse = await api
       .post('/api/v1/discussion/posts/post-1/flag')
       .set('x-agent-api-key', 'lsk_live_123456')
       .send({})

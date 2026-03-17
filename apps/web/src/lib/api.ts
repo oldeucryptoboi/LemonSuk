@@ -9,6 +9,7 @@ import {
   ownerEmailSetupResponseSchema,
   ownerLoginLinkSchema,
   ownerSessionSchema,
+  humanReviewSubmissionReceiptSchema,
   type DiscussionThread,
   type AgentRegistrationInput,
   type AgentRegistrationResponse,
@@ -17,6 +18,7 @@ import {
   type DashboardLiveEvent,
   type DashboardSnapshot,
   type DiscoveryReport,
+  type HumanReviewSubmissionReceipt,
   type OwnerEmailSetupResponse,
   type OwnerLoginLink,
   type OwnerSession,
@@ -141,6 +143,24 @@ export async function runDiscovery(query: string): Promise<DiscoveryResponse> {
     report: discoveryReportSchema.parse(response.report),
     snapshot: dashboardSnapshotSchema.parse(response.snapshot),
   }
+}
+
+export async function submitHumanReviewSubmission(input: {
+  sessionToken: string
+  sourceUrl: string
+  note?: string
+  captchaChallengeId: string
+  captchaAnswer: string
+}): Promise<HumanReviewSubmissionReceipt> {
+  const response = await request<unknown>(
+    `${apiBasePath}/auth/owners/review-submissions`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+
+  return humanReviewSubmissionReceiptSchema.parse(response)
 }
 
 export async function fetchCaptchaChallenge(): Promise<CaptchaChallenge> {

@@ -3,6 +3,7 @@ import request from 'supertest'
 import { ZodError } from 'zod'
 import { describe, expect, it, vi } from 'vitest'
 
+import { supportMarketId } from './shared'
 import { createSeedStore } from './data/seed'
 import { setupApiContext } from '../../../test/helpers/api-context'
 
@@ -17,9 +18,7 @@ function solveCaptcha(prompt: string): string {
 }
 
 describe('app routes', () => {
-  it(
-    'serves health, dashboard, agent auth, and maintenance flows',
-    async () => {
+  it('serves health, dashboard, agent auth, and maintenance flows', async () => {
     const context = await setupApiContext()
     const app = context.buildApp()
 
@@ -30,15 +29,15 @@ describe('app routes', () => {
     const dashboardResponse = await request(app).get('/api/v1/dashboard')
     expect(dashboardResponse.statusCode).toBe(200)
     expect(dashboardResponse.body.stats.totalMarkets).toBe(
-      createSeedStore().markets.length,
+      createSeedStore().markets.filter(
+        (market) => market.id !== supportMarketId,
+      ).length,
     )
 
-    const closedBetResponse = await request(app)
-      .post('/api/v1/bets')
-      .send({
-        marketId: 'robotaxi-million-2020',
-        stakeCredits: 25,
-      })
+    const closedBetResponse = await request(app).post('/api/v1/bets').send({
+      marketId: 'robotaxi-million-2020',
+      stakeCredits: 25,
+    })
     expect(closedBetResponse.statusCode).toBe(403)
     expect(closedBetResponse.body).toEqual({
       message: 'Only authenticated agents can place bets.',
@@ -85,7 +84,9 @@ describe('app routes', () => {
         captchaAnswer: 'wrong',
       })
     expect(invalidRegistration.statusCode).toBe(400)
-    expect(invalidRegistration.body.message).toBe('Captcha challenge not found.')
+    expect(invalidRegistration.body.message).toBe(
+      'Captcha challenge not found.',
+    )
 
     const registrationResponse = await request(app)
       .post('/api/v1/auth/agents/register')
@@ -107,16 +108,14 @@ describe('app routes', () => {
       (await request(app).get(`/api/v1/auth/claims/${claimToken}`)).body.agent
         .handle,
     ).toBe('deadlinebot')
-    expect((await request(app).get('/api/v1/auth/claims/missing')).statusCode).toBe(
-      404,
-    )
+    expect(
+      (await request(app).get('/api/v1/auth/claims/missing')).statusCode,
+    ).toBe(404)
     expect(
       (
-        await request(app)
-          .post('/api/v1/auth/claims/missing/owner')
-          .send({
-            ownerEmail: 'owner@example.com',
-          })
+        await request(app).post('/api/v1/auth/claims/missing/owner').send({
+          ownerEmail: 'owner@example.com',
+        })
       ).statusCode,
     ).toBe(404)
 
@@ -142,22 +141,18 @@ describe('app routes', () => {
 
     expect(
       (
-        await request(app)
-          .post('/api/v1/auth/agents/setup-owner-email')
-          .send({
-            ownerEmail: 'owner@example.com',
-          })
+        await request(app).post('/api/v1/auth/agents/setup-owner-email').send({
+          ownerEmail: 'owner@example.com',
+        })
       ).statusCode,
     ).toBe(401)
 
     expect(
       (
-        await request(app)
-          .post('/api/v1/auth/agents/setup-owner-email')
-          .send({
-            apiKey: 'invalid-api-key',
-            ownerEmail: 'owner@example.com',
-          })
+        await request(app).post('/api/v1/auth/agents/setup-owner-email').send({
+          apiKey: 'invalid-api-key',
+          ownerEmail: 'owner@example.com',
+        })
       ).statusCode,
     ).toBe(400)
 
@@ -172,11 +167,9 @@ describe('app routes', () => {
 
     expect(
       (
-        await request(app)
-          .post('/api/v1/auth/owners/login-link')
-          .send({
-            ownerEmail: 'missing@example.com',
-          })
+        await request(app).post('/api/v1/auth/owners/login-link').send({
+          ownerEmail: 'missing@example.com',
+        })
       ).statusCode,
     ).toBe(400)
 
@@ -196,38 +189,35 @@ describe('app routes', () => {
       ).body.ownerEmail,
     ).toBe('owner@example.com')
     expect(
-      (await request(app).get('/api/v1/auth/owners/sessions/missing')).statusCode,
+      (await request(app).get('/api/v1/auth/owners/sessions/missing'))
+        .statusCode,
     ).toBe(404)
 
     expect(
       (
-        await request(app)
-          .post('/api/v1/auth/agents/predictions')
-          .send({
-            headline: 'Tesla ships a new Roadster by December 31, 2027',
-            subject: 'Tesla Roadster',
-            category: 'vehicle',
-            promisedDate: '2027-12-31T23:59:59.000Z',
-            summary:
-              'Musk says Tesla will ship a new Roadster by the end of 2027.',
-            sourceUrl: 'https://www.tesla.com/blog/future-roadster-update',
-          })
+        await request(app).post('/api/v1/auth/agents/predictions').send({
+          headline: 'Tesla ships a new Roadster by December 31, 2027',
+          subject: 'Tesla Roadster',
+          category: 'vehicle',
+          promisedDate: '2027-12-31T23:59:59.000Z',
+          summary:
+            'Musk says Tesla will ship a new Roadster by the end of 2027.',
+          sourceUrl: 'https://www.tesla.com/blog/future-roadster-update',
+        })
       ).statusCode,
     ).toBe(401)
     expect(
       (
-        await request(app)
-          .post('/api/v1/auth/agents/predictions')
-          .send({
-            apiKey: 'invalid-api-key',
-            headline: 'Tesla ships a new Roadster by December 31, 2027',
-            subject: 'Tesla Roadster',
-            category: 'vehicle',
-            promisedDate: '2027-12-31T23:59:59.000Z',
-            summary:
-              'Musk says Tesla will ship a new Roadster by the end of 2027.',
-            sourceUrl: 'https://www.tesla.com/blog/future-roadster-update',
-          })
+        await request(app).post('/api/v1/auth/agents/predictions').send({
+          apiKey: 'invalid-api-key',
+          headline: 'Tesla ships a new Roadster by December 31, 2027',
+          subject: 'Tesla Roadster',
+          category: 'vehicle',
+          promisedDate: '2027-12-31T23:59:59.000Z',
+          summary:
+            'Musk says Tesla will ship a new Roadster by the end of 2027.',
+          sourceUrl: 'https://www.tesla.com/blog/future-roadster-update',
+        })
       ).statusCode,
     ).toBe(401)
 
@@ -243,32 +233,83 @@ describe('app routes', () => {
         sourceUrl: 'https://www.tesla.com/blog/future-roadster-update',
         sourceLabel: 'Tesla Blog',
       })
-    expect(predictionResponse.statusCode).toBe(200)
-    expect(predictionResponse.body.created).toBe(true)
-    expect(predictionResponse.body.market.author.handle).toBe('deadlinebot')
-    expect(predictionResponse.body.market.sources[0].note).toContain(
-      'Submitted by @deadlinebot',
+    expect(predictionResponse.statusCode).toBe(202)
+    expect(predictionResponse.body.queued).toBe(true)
+    expect(predictionResponse.body.submission.headline).toBe(
+      'Tesla ships a new Roadster by December 31, 2027',
     )
+    expect(predictionResponse.body.submission.submittedBy.handle).toBe(
+      'deadlinebot',
+    )
+    expect(predictionResponse.body.reviewHint).toContain('offline review')
+
+    const queuedDashboardResponse = await request(app).get('/api/v1/dashboard')
+    expect(queuedDashboardResponse.statusCode).toBe(200)
+    expect(queuedDashboardResponse.body.submissionQueue).toBeUndefined()
+
+    const reviewCaptchaResponse = await request(app).get('/api/v1/auth/captcha')
+    const reviewCaptcha = reviewCaptchaResponse.body
 
     expect(
       (
-        await request(app)
-          .post('/api/v1/auth/agents/bets')
-          .send({
-            marketId: 'optimus-customizable-2026',
-            stakeCredits: 15,
-          })
+        await request(app).post('/api/v1/auth/owners/review-submissions').send({
+          sessionToken: loginLink.sessionToken,
+          sourceUrl: 'https://example.com/musk-quote',
+          note: 'Potential date-bound claim for offline review.',
+          captchaChallengeId: reviewCaptcha.id,
+          captchaAnswer: solveCaptcha(reviewCaptcha.prompt),
+        })
+      ).body,
+    ).toEqual({
+      queued: true,
+      submissionId: expect.stringMatching(/^human_submission_/),
+      sourceUrl: 'https://example.com/musk-quote',
+      sourceDomain: 'example.com',
+      submittedAt: expect.any(String),
+      reviewHint: expect.stringContaining('offline review'),
+    })
+    const duplicateReviewCaptcha = (
+      await request(app).get('/api/v1/auth/captcha')
+    ).body
+    expect(
+      (
+        await request(app).post('/api/v1/auth/owners/review-submissions').send({
+          sessionToken: loginLink.sessionToken,
+          sourceUrl: 'https://example.com/musk-quote',
+          note: 'Potential date-bound claim for offline review.',
+          captchaChallengeId: duplicateReviewCaptcha.id,
+          captchaAnswer: solveCaptcha(duplicateReviewCaptcha.prompt),
+        })
+      ).body.message,
+    ).toBe('That source is already queued for offline review.')
+
+    expect(
+      (
+        await request(app).post('/api/v1/auth/owners/review-submissions').send({
+          sessionToken: 'missing-owner-session',
+          sourceUrl: 'https://example.com/missing-owner',
+          note: 'This should not be accepted without a live owner session.',
+          captchaChallengeId: duplicateReviewCaptcha.id,
+          captchaAnswer: solveCaptcha(duplicateReviewCaptcha.prompt),
+        })
+      ).body.message,
+    ).toBe('Owner session is required to submit review leads.')
+
+    expect(
+      (
+        await request(app).post('/api/v1/auth/agents/bets').send({
+          marketId: 'optimus-customizable-2026',
+          stakeCredits: 15,
+        })
       ).statusCode,
     ).toBe(401)
     expect(
       (
-        await request(app)
-          .post('/api/v1/auth/agents/bets')
-          .send({
-            apiKey: 'invalid-api-key',
-            marketId: 'optimus-customizable-2026',
-            stakeCredits: 15,
-          })
+        await request(app).post('/api/v1/auth/agents/bets').send({
+          apiKey: 'invalid-api-key',
+          marketId: 'optimus-customizable-2026',
+          stakeCredits: 15,
+        })
       ).statusCode,
     ).toBe(401)
 
@@ -303,21 +344,22 @@ describe('app routes', () => {
     expect(discoveryResponse.statusCode).toBe(200)
     expect(discoveryResponse.body.report.query).toBe('musk deadlines')
 
-    const maintenanceResponse = await request(app).post('/api/v1/maintenance/run')
+    const maintenanceResponse = await request(app).post(
+      '/api/v1/maintenance/run',
+    )
     expect(maintenanceResponse.statusCode).toBe(200)
-      expect(maintenanceResponse.body.hallOfFame.length).toBeGreaterThanOrEqual(1)
-    },
-    10_000,
-  )
+    expect(maintenanceResponse.body.hallOfFame.length).toBeGreaterThanOrEqual(1)
+
+    await context.pool.end()
+  }, 10_000)
 
   it('surfaces zod and internal errors through the express error handler', async () => {
     const context = await setupApiContext({
       applyMocks: () => {
         vi.doMock('./services/maintenance', async () => {
-          const actual =
-            await vi.importActual<typeof import('./services/maintenance')>(
-              './services/maintenance',
-            )
+          const actual = await vi.importActual<
+            typeof import('./services/maintenance')
+          >('./services/maintenance')
 
           return {
             ...actual,
@@ -341,6 +383,8 @@ describe('app routes', () => {
     expect(failedDashboard.body).toEqual({
       message: 'maintenance exploded',
     })
+
+    await context.pool.end()
   })
 
   it('uses the non-wildcard cors origin and fallback error messages', async () => {
@@ -384,17 +428,20 @@ describe('app routes', () => {
     vi.doMock('./routes/markets', () => ({
       createMarketRouter: () => {
         const router = express.Router()
-        router.post('/markets/:marketId/resolve', (_request, _response, next) => {
-          next(
-            new ZodError([
-              {
-                code: 'custom',
-                message: 'Bad resolution payload.',
-                path: ['resolution'],
-              },
-            ] as never),
-          )
-        })
+        router.post(
+          '/markets/:marketId/resolve',
+          (_request, _response, next) => {
+            next(
+              new ZodError([
+                {
+                  code: 'custom',
+                  message: 'Bad resolution payload.',
+                  path: ['resolution'],
+                },
+              ] as never),
+            )
+          },
+        )
         return router
       },
     }))

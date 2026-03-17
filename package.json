@@ -8,6 +8,7 @@
     "dev:api": "npm run migrate && tsx watch apps/api/src/server.ts",
     "dev:web": "NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8787} next dev apps/web -p 5173",
     "migrate": "tsx scripts/migrate.ts",
+    "review-submission": "tsx scripts/review-submission.ts",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && npm run build:api && npm run build:web",
     "build:api": "tsup apps/api/src/server.ts --format esm --platform node --out-dir dist/api --clean",

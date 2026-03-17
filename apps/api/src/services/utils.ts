@@ -18,6 +18,25 @@ export function domainFromUrl(url: string): string {
   return new URL(url).hostname.replace(/^www\./, '')
 }
 
+export function normalizeSourceUrl(input: string): string {
+  const url = new URL(input)
+  const sortedParams = [...url.searchParams.entries()].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )
+
+  url.protocol = url.protocol.toLowerCase()
+  url.hostname = url.hostname.toLowerCase()
+  url.hash = ''
+  url.search = ''
+  url.pathname = url.pathname.replace(/\/+$/, '') || '/'
+
+  for (const [key, value] of sortedParams) {
+    url.searchParams.append(key, value)
+  }
+
+  return url.toString()
+}
+
 export function sortByDateDescending<T>(
   items: T[],
   pick: (item: T) => string,
@@ -29,6 +48,20 @@ export function sortByDateDescending<T>(
 
 export function createSourceId(label: string, url: string): string {
   return slugify(`${label}-${url}`)
+}
+
+export function createStoredSourceId(
+  marketId: string,
+  sourceId: string,
+): string {
+  const normalizedMarketId = slugify(marketId)
+  const scopedPrefix = `${normalizedMarketId}__`
+
+  if (sourceId.startsWith(scopedPrefix)) {
+    return sourceId
+  }
+
+  return `${scopedPrefix}${sourceId}`
 }
 
 export function createMarketId(subject: string, promisedDate: string): string {

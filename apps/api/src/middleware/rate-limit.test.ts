@@ -57,25 +57,28 @@ describe('createRateLimitMiddleware', () => {
     }))
     __setRateLimitStoreForTests({ consume })
 
-    const app = express()
-    app.get(
-      '/blocked',
-      createRateLimitMiddleware({
-        bucket: 'auth',
-        limit: 1,
-        windowMs: 60_000,
-      }),
-      (_request, response) => {
-        response.json({ ok: true })
-      },
+    const middleware = createRateLimitMiddleware({
+      bucket: 'auth',
+      limit: 1,
+      windowMs: 60_000,
+    })
+    const response = {
+      json: vi.fn(),
+      setHeader: vi.fn(),
+      status: vi.fn(() => response),
+    }
+
+    await middleware(
+      {
+        header: () => '203.0.113.11, 10.0.0.1',
+        ip: '127.0.0.1',
+      } as never,
+      response as never,
+      vi.fn(),
     )
 
-    const response = await request(app)
-      .get('/blocked')
-      .set('x-forwarded-for', '203.0.113.11, 10.0.0.1')
-
-    expect(response.statusCode).toBe(429)
-    expect(response.body).toEqual({ message: 'Rate limit exceeded.' })
+    expect(response.status).toHaveBeenCalledWith(429)
+    expect(response.json).toHaveBeenCalledWith({ message: 'Rate limit exceeded.' })
     expect(consume).toHaveBeenCalledWith('auth:203.0.113.11', 1, 60_000)
   })
 

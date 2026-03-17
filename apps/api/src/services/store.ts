@@ -10,6 +10,7 @@ import type {
 import { storeSchema } from '../shared'
 import { createSeedStore } from '../data/seed'
 import { withDatabaseClient, withDatabaseTransaction } from './database'
+import { createStoredSourceId } from './utils'
 import { applyAgentSettlementCredits } from './wallet'
 
 type MetadataRow = {
@@ -348,7 +349,7 @@ async function replaceStoreFromClient(
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
         [
-          source.id,
+          createStoredSourceId(market.id, source.id),
           market.id,
           source.label,
           source.url,
@@ -511,7 +512,7 @@ async function insertMarketFromClient(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `,
       [
-        source.id,
+        createStoredSourceId(market.id, source.id),
         market.id,
         source.label,
         source.url,

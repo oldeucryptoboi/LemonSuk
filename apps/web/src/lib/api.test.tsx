@@ -15,6 +15,7 @@ import {
   requestOwnerLoginLink,
   runDiscovery,
   setupAgentOwnerEmail,
+  submitHumanReviewSubmission,
   subscribeToDashboard,
   voteOnDiscussionPost,
 } from './api'
@@ -67,6 +68,19 @@ describe('web api client', () => {
             expiresAt: '2026-03-16T00:20:00.000Z',
           }),
           { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            queued: true,
+            submissionId: 'human_submission_1',
+            sourceUrl: 'https://example.com/human-tip',
+            sourceDomain: 'example.com',
+            submittedAt: '2026-03-16T00:00:00.000Z',
+            reviewHint: 'Queued for offline review.',
+          }),
+          { status: 202 },
         ),
       )
       .mockResolvedValueOnce(
@@ -215,6 +229,17 @@ describe('web api client', () => {
     expect((await fetchCaptchaChallenge()).id).toBe('captcha-1')
     expect(
       (
+        await submitHumanReviewSubmission({
+          sessionToken: 'owner_1',
+          sourceUrl: 'https://example.com/human-tip',
+          note: 'This source has a precise date.',
+          captchaChallengeId: 'captcha-1',
+          captchaAnswer: 'solved',
+        })
+      ).submissionId,
+    ).toBe('human_submission_1')
+    expect(
+      (
         await registerAgentIdentity({
           handle: 'deadlinebot',
           displayName: 'Deadline Bot',
@@ -263,7 +288,21 @@ describe('web api client', () => {
     ).toBe(1)
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      4,
+      '/api/v1/auth/owners/review-submissions',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          sessionToken: 'owner_1',
+          sourceUrl: 'https://example.com/human-tip',
+          note: 'This source has a precise date.',
+          captchaChallengeId: 'captcha-1',
+          captchaAnswer: 'solved',
+        }),
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
       '/api/v1/auth/agents/setup-owner-email',
       expect.objectContaining({
         method: 'POST',
@@ -274,7 +313,7 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      9,
+      10,
       '/api/v1/auth/claims/claim_1/owner',
       expect.objectContaining({
         method: 'POST',
@@ -284,12 +323,12 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      10,
+      11,
       '/api/v1/markets/cybercab-volume-2026/discussion',
       expect.anything(),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      11,
+      12,
       '/api/v1/markets/cybercab-volume-2026/discussion/posts',
       expect.objectContaining({
         method: 'POST',
@@ -300,7 +339,7 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      12,
+      13,
       '/api/v1/discussion/posts/post-1/vote',
       expect.objectContaining({
         method: 'POST',

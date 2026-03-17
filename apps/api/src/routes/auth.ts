@@ -5,18 +5,20 @@ import {
   agentPredictionSubmissionInputSchema,
   agentRegistrationInputSchema,
   claimOwnerInputSchema,
+  ownerReviewSubmissionInputSchema,
   ownerEmailSetupInputSchema,
   ownerLoginLinkRequestSchema,
 } from '../shared'
-import { reconcileCandidates } from '../agent/reconcile'
 import { asyncHandler } from '../middleware/async-handler'
 import { createRateLimitMiddleware } from '../middleware/rate-limit'
 import { placeAgainstBetForUser } from '../services/betting'
-import { buildCandidateFromAgentSubmission } from '../services/agent-predictions'
+import { createHumanReviewSubmission } from '../services/human-review-submissions'
 import { runMaintenance } from '../services/maintenance'
+import { enqueuePredictionSubmission } from '../services/submission-queue'
 import { debitAgentCredits } from '../services/wallet'
 import {
   authenticateAgentApiKey,
+  authenticateOwnerSession,
   claimOwnerByClaimToken,
   createCaptchaChallenge,
   createOwnerLoginLink,
@@ -57,6 +59,19 @@ function readApiKeyFromBody(body: unknown): string | undefined {
     typeof body.apiKey === 'string'
   ) {
     return body.apiKey
+  }
+
+  return undefined
+}
+
+function readSessionTokenFromBody(body: unknown): string | undefined {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'sessionToken' in body &&
+    typeof body.sessionToken === 'string'
+  ) {
+    return body.sessionToken
   }
 
   return undefined
@@ -245,6 +260,48 @@ export function createAuthRouter(): Router {
   )
 
   router.post(
+    '/owners/review-submissions',
+    createRateLimitMiddleware({
+      bucket: 'owner-review-submissions',
+      limit: 12,
+      windowMs: 60 * 60 * 1_000,
+      key: (request) =>
+        readSessionTokenFromBody(request.body) ?? request.ip ?? 'anonymous',
+    }),
+    asyncHandler(async (request, response) => {
+      const body = ownerReviewSubmissionInputSchema.parse(request.body)
+      const ownerSession = await authenticateOwnerSession(body.sessionToken)
+
+      if (!ownerSession) {
+        response.status(401).json({
+          message: 'Owner session is required to submit review leads.',
+        })
+        return
+      }
+
+      try {
+        const receipt = await createHumanReviewSubmission(
+          {
+            sourceUrl: body.sourceUrl,
+            note: body.note,
+            captchaChallengeId: body.captchaChallengeId,
+            captchaAnswer: body.captchaAnswer,
+          },
+          ownerSession.ownerEmail,
+        )
+        response.status(202).json(receipt)
+      } catch (error) {
+        response.status(400).json({
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Could not queue this review lead.',
+        })
+      }
+    }),
+  )
+
+  router.post(
     '/agents/predictions',
     createRateLimitMiddleware({
       bucket: 'agent-predictions',
@@ -273,32 +330,17 @@ export function createAuthRouter(): Router {
         return
       }
 
-      const now = new Date()
-      const payload = await withStoreTransaction(async (store, persist, client) => {
-        const candidate = buildCandidateFromAgentSubmission(agent, body)
-        const reconciled = reconcileCandidates(store, [candidate], now.toISOString())
-        // Reconcile always returns one created or updated market for a valid agent submission.
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-        const marketId = [
-          ...reconciled.createdMarketIds,
-          ...reconciled.updatedMarketIds,
-        ][0]!
-        const created = reconciled.createdMarketIds.includes(marketId)
-
-        const savedStore = await persist(reconciled.store)
-        // Persisted reconciliation keeps the target market in the saved store.
-        const market = savedStore.markets.find((entry) => entry.id === marketId)!
-
-        return {
-          created,
-          market,
-          snapshot: await createOperationalSnapshot(savedStore, now, client),
-        }
-      })
-
-      if (payload) {
-        publishOperationalSnapshot(payload.snapshot)
-        response.json(payload)
+      try {
+        const payload = await enqueuePredictionSubmission(agent, body)
+        await publishCurrentOperationalSnapshot(new Date())
+        response.status(202).json(payload)
+      } catch (error) {
+        response.status(400).json({
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Could not queue this claim packet.',
+        })
       }
     }),
   )

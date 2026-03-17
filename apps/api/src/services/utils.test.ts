@@ -4,6 +4,7 @@ import {
   clamp,
   createMarketId,
   createSourceId,
+  createStoredSourceId,
   daysBetween,
   domainFromUrl,
   similarityScore,
@@ -22,6 +23,18 @@ describe('utils', () => {
     expect(createSourceId('Title', 'https://example.com/item')).toContain(
       'title-https-example-com-item',
     )
+    expect(
+      createStoredSourceId(
+        'optimus-customizable-2026',
+        'title-https-example-com-item',
+      ),
+    ).toBe('optimus-customizable-2026__title-https-example-com-item')
+    expect(
+      createStoredSourceId(
+        'optimus-customizable-2026',
+        'optimus-customizable-2026__title-https-example-com-item',
+      ),
+    ).toBe('optimus-customizable-2026__title-https-example-com-item')
     expect(createMarketId('Tesla Robotaxi', '2026-12-31')).toContain(
       'tesla-robotaxi-2026-12-31',
     )
@@ -32,7 +45,9 @@ describe('utils', () => {
       2 / 3,
     )
     expect(similarityScore('', 'robotaxi')).toBe(0)
-    expect(daysBetween('2026-01-01T00:00:00.000Z', '2026-01-10T00:00:00.000Z')).toBe(9)
+    expect(
+      daysBetween('2026-01-01T00:00:00.000Z', '2026-01-10T00:00:00.000Z'),
+    ).toBe(9)
     expect(clamp(10, 0, 5)).toBe(5)
     expect(clamp(-1, 0, 5)).toBe(0)
     expect(clamp(3, 0, 5)).toBe(3)

@@ -89,42 +89,45 @@ export default function App() {
   const [, startTransition] = useTransition()
   const secondCardRef = useRef<HTMLDivElement | null>(null)
 
-  const applySnapshot = useCallback((
-    nextSnapshot: DashboardSnapshot,
-    options: {
-      preserveSelection?: boolean
-    } = {},
-  ) => {
-    startTransition(() => {
-      setSnapshot(nextSnapshot)
-      setSelectedMarketId((current) => {
-        const boardMarkets = nextSnapshot.markets.filter(isBoardMarket)
-        if (
-          options.preserveSelection !== false &&
-          current &&
-          boardMarkets.some((market) => market.id === current)
-        ) {
-          return current
-        }
+  const applySnapshot = useCallback(
+    (
+      nextSnapshot: DashboardSnapshot,
+      options: {
+        preserveSelection?: boolean
+      } = {},
+    ) => {
+      startTransition(() => {
+        setSnapshot(nextSnapshot)
+        setSelectedMarketId((current) => {
+          const boardMarkets = nextSnapshot.markets.filter(isBoardMarket)
+          if (
+            options.preserveSelection !== false &&
+            current &&
+            boardMarkets.some((market) => market.id === current)
+          ) {
+            return current
+          }
 
-        return (
-          boardMarkets.find((market) => market.status === 'open')?.id ??
-          boardMarkets[0]?.id ??
-          null
-        )
-      })
-      setTopicMarketId((current) => {
-        if (
-          current &&
-          nextSnapshot.markets.some((market) => market.id === current)
-        ) {
-          return current
-        }
+          return (
+            boardMarkets.find((market) => market.status === 'open')?.id ??
+            boardMarkets[0]?.id ??
+            null
+          )
+        })
+        setTopicMarketId((current) => {
+          if (
+            current &&
+            nextSnapshot.markets.some((market) => market.id === current)
+          ) {
+            return current
+          }
 
-        return null
+          return null
+        })
       })
-    })
-  }, [])
+    },
+    [],
+  )
 
   const refreshDashboard = useCallback(async () => {
     setLoading(true)
@@ -190,18 +193,17 @@ export default function App() {
   const boardMarkets = snapshot?.markets.filter(isBoardMarket) ?? []
   const supportTopicMarket =
     snapshot?.markets.find((market) => market.id === supportMarketId) ?? null
-  const visibleMarkets =
-    boardMarkets.filter((market) => {
-      if (companyFilter !== 'all' && market.company !== companyFilter) {
-        return false
-      }
+  const visibleMarkets = boardMarkets.filter((market) => {
+    if (companyFilter !== 'all' && market.company !== companyFilter) {
+      return false
+    }
 
-      if (filter === 'all') {
-        return true
-      }
+    if (filter === 'all') {
+      return true
+    }
 
-      return market.status === filter
-    }) ?? []
+    return market.status === filter
+  })
   const renderedMarkets = visibleMarkets.slice(0, visibleMarketCount)
   const hasMoreMarkets = renderedMarkets.length < visibleMarkets.length
 
@@ -353,9 +355,11 @@ export default function App() {
                       <div className="eyebrow">The book</div>
                       <h2>Deadline cards</h2>
                       <p className="feed-status">
-                        Showing {renderedMarkets.length} of {visibleMarkets.length}{' '}
-                        cards in the{' '}
-                        {companyFilter === 'all' ? 'full' : companyLabel(companyFilter)}{' '}
+                        Showing {renderedMarkets.length} of{' '}
+                        {visibleMarkets.length} cards in the{' '}
+                        {companyFilter === 'all'
+                          ? 'full'
+                          : companyLabel(companyFilter)}{' '}
                         feed.
                       </p>
                     </div>
@@ -373,30 +377,35 @@ export default function App() {
                         </button>
                       ) : null}
                       <div className="filter-row">
-                        {(['all', 'open', 'busted'] as MarketFilter[]).map((entry) => (
-                          <button
-                            key={entry}
-                            type="button"
-                            className={`filter-button ${filter === entry ? 'active' : ''}`}
-                            onClick={() => {
-                              setFilter(entry)
-                              setSelectedMarketId(
-                                pickFirstVisibleMarketIdFromSnapshot(
-                                  snapshot,
-                                  entry,
-                                  companyFilter,
-                                ),
-                              )
-                            }}
-                          >
-                            {entry}
-                          </button>
-                        ))}
+                        {(['all', 'open', 'busted'] as MarketFilter[]).map(
+                          (entry) => (
+                            <button
+                              key={entry}
+                              type="button"
+                              className={`filter-button ${filter === entry ? 'active' : ''}`}
+                              onClick={() => {
+                                setFilter(entry)
+                                setSelectedMarketId(
+                                  pickFirstVisibleMarketIdFromSnapshot(
+                                    snapshot,
+                                    entry,
+                                    companyFilter,
+                                  ),
+                                )
+                              }}
+                            >
+                              {entry}
+                            </button>
+                          ),
+                        )}
                       </div>
                     </div>
                   </section>
 
-                  <section className="company-tab-row" aria-label="Company lanes">
+                  <section
+                    className="company-tab-row"
+                    aria-label="Company lanes"
+                  >
                     {companyTabs.map((entry) => (
                       <button
                         key={entry.value}
@@ -487,8 +496,14 @@ export default function App() {
                   query={agentQuery}
                   report={report}
                   running={runningAgent}
+                  ownerSessionToken={ownerSession?.sessionToken ?? null}
+                  ownerEmail={ownerSession?.ownerEmail ?? null}
                   onQueryChange={setAgentQuery}
                   onRun={handleRunDiscovery}
+                  onOpenOwnerModal={() => {
+                    setLoginModalMode('owner')
+                    setLoginModalOpen(true)
+                  }}
                 />
               </div>
             </section>
@@ -500,7 +515,9 @@ export default function App() {
           {snapshot ? <HallOfFame entries={snapshot.hallOfFame} /> : null}
 
           <BetSlipPanel
-            activeBets={snapshot?.bets.filter((bet) => bet.status === 'open') ?? []}
+            activeBets={
+              snapshot?.bets.filter((bet) => bet.status === 'open') ?? []
+            }
             bonusPercent={bonusPercent}
             selectedMarket={selectedMarket}
           />

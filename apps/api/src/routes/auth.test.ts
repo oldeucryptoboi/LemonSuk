@@ -6,10 +6,27 @@ describe('createAuthRouter fallback errors', () => {
   it('uses fallback messages when non-Error values are thrown', async () => {
     vi.resetModules()
 
+    const enqueuePredictionSubmission = vi.fn(async () => {
+      throw 'prediction-queue'
+    })
+
+    vi.doMock('../services/human-review-submissions', () => ({
+      createHumanReviewSubmission: vi.fn(async () => {
+        throw 'owner-review'
+      }),
+    }))
+    vi.doMock('../services/submission-queue', () => ({
+      enqueuePredictionSubmission,
+    }))
     vi.doMock('../services/identity', () => ({
       authenticateAgentApiKey: vi.fn(async () => ({
         id: 'agent-1',
         handle: 'deadlinebot',
+      })),
+      authenticateOwnerSession: vi.fn(async () => ({
+        sessionToken: 'owner_1',
+        ownerEmail: 'owner@example.com',
+        expiresAt: '2026-03-18T00:00:00.000Z',
       })),
       claimOwnerByClaimToken: vi.fn(async () => {
         throw 'claim-owner'
@@ -128,6 +145,59 @@ describe('createAuthRouter fallback errors', () => {
     expect(
       (
         await request(app)
+          .post('/api/v1/auth/owners/review-submissions')
+          .send({
+            sessionToken: 'owner_1',
+            sourceUrl: 'https://example.com/review',
+            note: 'Forward this source to Eddie.',
+            captchaChallengeId: 'captcha-1',
+            captchaAnswer: 'solved',
+          })
+      ).body.message,
+    ).toBe('Could not queue this review lead.')
+
+    const predictionResponse = await request(app)
+      .post('/api/v1/auth/agents/predictions')
+      .send({
+        apiKey: 'lsk_live_1234567890',
+        headline: 'Queued headline',
+        subject: 'Queued subject',
+        category: 'social',
+        promisedDate: '2027-12-31T23:59:59.000Z',
+        summary:
+          'Queued summary long enough to exercise the fallback branch.',
+        sourceUrl: 'https://example.com/queued',
+        tags: [],
+      })
+
+    expect(predictionResponse.statusCode).toBe(400)
+    expect(predictionResponse.text).toContain('Could not queue this claim packet.')
+
+    enqueuePredictionSubmission.mockImplementationOnce(async () => {
+      throw new Error('Queue validation failed.')
+    })
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/auth/agents/predictions')
+          .send({
+            apiKey: 'lsk_live_1234567890',
+            headline: 'Queued headline two',
+            subject: 'Queued subject two',
+            category: 'social',
+            promisedDate: '2027-12-31T23:59:59.000Z',
+            summary:
+              'Queued summary long enough to exercise the error-message branch.',
+            sourceUrl: 'https://example.com/queued-two',
+            tags: [],
+          })
+      ).body.message,
+    ).toBe('Queue validation failed.')
+
+    expect(
+      (
+        await request(app)
           .post('/api/v1/auth/agents/bets')
           .send({
             apiKey: 'lsk_live_1234567890',
@@ -143,6 +213,11 @@ describe('createAuthRouter fallback errors', () => {
 
     const capturedKeys: string[] = []
 
+    vi.doMock('../services/human-review-submissions', () => ({
+      createHumanReviewSubmission: vi.fn(async () => ({
+        queued: true,
+      })),
+    }))
     vi.doMock('../middleware/rate-limit', () => ({
       createRateLimitMiddleware:
         (options: {
@@ -176,6 +251,7 @@ describe('createAuthRouter fallback errors', () => {
         id: 'agent-1',
         handle: 'deadlinebot',
       })),
+      authenticateOwnerSession: vi.fn(async () => null),
       claimOwnerByClaimToken: vi.fn(async () => ({
         sessionToken: 'owner_1',
         ownerEmail: 'owner@example.com',

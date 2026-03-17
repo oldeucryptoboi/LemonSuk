@@ -66,6 +66,12 @@ type OwnerSessionRow = {
   expires_at: Date
 }
 
+type AuthenticatedOwnerSession = {
+  sessionToken: string
+  ownerEmail: string
+  expiresAt: string
+}
+
 type BetRow = {
   id: string
   user_id: string
@@ -624,11 +630,7 @@ export async function readOwnerSession(
     )
     const session = sessionResult.rows[0]
 
-    if (!session) {
-      return null
-    }
-
-    if (session.expires_at.getTime() <= now.getTime()) {
+    if (!session || session.expires_at.getTime() <= now.getTime()) {
       return null
     }
 
@@ -685,6 +687,43 @@ export async function readOwnerSession(
       bets: betsResult.rows.map(mapBet),
       notifications: notificationsResult.rows.map(mapNotification),
     })
+  })
+}
+
+export async function authenticateOwnerSession(
+  sessionToken: string,
+): Promise<AuthenticatedOwnerSession | null> {
+  const now = new Date()
+
+  return withDatabaseTransaction(async (client) => {
+    const sessionResult = await client.query<OwnerSessionRow>(
+      `
+        SELECT token, owner_email, expires_at
+        FROM owner_sessions
+        WHERE token = $1
+      `,
+      [sessionToken],
+    )
+    const session = sessionResult.rows[0]
+
+    if (!session || session.expires_at.getTime() <= now.getTime()) {
+      return null
+    }
+
+    await client.query(
+      `
+        UPDATE owner_sessions
+        SET last_seen_at = $2
+        WHERE token = $1
+      `,
+      [sessionToken, now.toISOString()],
+    )
+
+    return {
+      sessionToken: session.token,
+      ownerEmail: session.owner_email,
+      expiresAt: session.expires_at.toISOString(),
+    }
   })
 }
 

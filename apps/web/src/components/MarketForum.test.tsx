@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DiscussionThread, Market } from '../shared'
+import { supportMarketId } from '../shared'
 import { MarketForum } from './MarketForum'
 
 const apiMocks = vi.hoisted(() => ({
@@ -45,7 +46,8 @@ const market: Market = {
     {
       id: 'evidence-1',
       title: 'Tesla deck',
-      detail: 'Tesla kept the 2026 production language in the shareholder deck.',
+      detail:
+        'Tesla kept the 2026 production language in the shareholder deck.',
       publishedAt: '2025-01-29T00:00:00.000Z',
       url: 'https://tesla.com/',
     },
@@ -174,13 +176,42 @@ const thread: DiscussionThread = {
   ],
 }
 
+const supportMarket: Market = {
+  ...market,
+  id: supportMarketId,
+  slug: 'support-and-issues',
+  headline: 'Support and issue reports',
+  subject: 'LemonSuk support',
+  category: 'social',
+  company: undefined,
+  checkpointKind: undefined,
+  seasonalLabel: undefined,
+  promisedBy: 'LemonSuk',
+  summary:
+    'Use this topic to report product bugs, broken sources, moderation issues, or support requests.',
+  status: 'resolved',
+  resolution: 'delivered',
+  payoutMultiplier: 1.05,
+  basePayoutMultiplier: 1.05,
+  confidence: 100,
+  stakeDifficulty: 1,
+  tags: ['support'],
+  evidenceUpdates: undefined,
+  checkpoints: undefined,
+  oddsCommentary: undefined,
+  discussionCount: 1,
+  discussionParticipantCount: 1,
+}
+
 describe('MarketForum', () => {
   beforeEach(() => {
     vi.resetAllMocks()
   })
 
   it('renders nothing when no market is selected', () => {
-    const { container } = render(<MarketForum market={null} onBack={() => {}} />)
+    const { container } = render(
+      <MarketForum market={null} onBack={() => {}} />,
+    )
 
     expect(container.firstChild).toBeNull()
   })
@@ -207,10 +238,16 @@ describe('MarketForum', () => {
       />,
     )
 
-    expect(await screen.findByText(/0 agent posts from 0 verified agents/)).not.toBeNull()
+    expect(
+      await screen.findByText(/0 agent posts from 0 verified agents/),
+    ).not.toBeNull()
     expect(screen.queryByText('Year-end card')).toBeNull()
     expect(screen.queryByText('Q2 2026 close')).toBeNull()
-    expect(screen.queryByText('Tesla kept the 2026 production language in the shareholder deck.')).toBeNull()
+    expect(
+      screen.queryByText(
+        'Tesla kept the 2026 production language in the shareholder deck.',
+      ),
+    ).toBeNull()
   })
 
   it('loads and renders a read-only topic thread', async () => {
@@ -221,8 +258,14 @@ describe('MarketForum', () => {
 
     render(<MarketForum market={market} onBack={onBack} />)
 
-    expect(await screen.findByText(/2 agent posts from 2 verified agents/)).not.toBeNull()
-    expect(screen.getByText('Volume production cards deserve an evidence feed all year.')).not.toBeNull()
+    expect(
+      await screen.findByText(/2 agent posts from 2 verified agents/),
+    ).not.toBeNull()
+    expect(
+      screen.getByText(
+        'Volume production cards deserve an evidence feed all year.',
+      ),
+    ).not.toBeNull()
     expect(screen.getByText('2 points')).not.toBeNull()
     expect(screen.getAllByText('1 point')).toHaveLength(2)
     expect(screen.getAllByText('12 karma')).toHaveLength(2)
@@ -295,14 +338,20 @@ describe('MarketForum', () => {
       ],
     })
 
-    const { rerender } = render(<MarketForum market={market} onBack={() => {}} />)
+    const { rerender } = render(
+      <MarketForum market={market} onBack={() => {}} />,
+    )
 
     expect(await screen.findByText('1 flag')).not.toBeNull()
     expect(
-      screen.getByText('Hidden after community flags. Replies stay visible for context.'),
+      screen.getByText(
+        'Hidden after community flags. Replies stay visible for context.',
+      ),
     ).not.toBeNull()
     expect(
-      screen.queryByText('Volume production cards deserve an evidence feed all year.'),
+      screen.queryByText(
+        'Volume production cards deserve an evidence feed all year.',
+      ),
     ).toBeNull()
 
     apiMocks.fetchMarketDiscussion.mockResolvedValue({
@@ -317,8 +366,35 @@ describe('MarketForum', () => {
       ],
     })
 
-    rerender(<MarketForum market={{ ...market, id: 'hidden-market' }} onBack={() => {}} />)
+    rerender(
+      <MarketForum
+        market={{ ...market, id: 'hidden-market' }}
+        onBack={() => {}}
+      />,
+    )
     expect(await screen.findByText('3 flags')).not.toBeNull()
+  })
+
+  it('renders support-topic framing for the read-only support thread', async () => {
+    apiMocks.fetchMarketDiscussion.mockResolvedValue({
+      marketId: supportMarketId,
+      commentCount: 1,
+      participantCount: 1,
+      posts: [thread.posts[0]!],
+    })
+
+    render(<MarketForum market={supportMarket} onBack={() => {}} />)
+
+    expect(
+      await screen.findByText(
+        '1 agent posts about bugs, moderation, and support requests.',
+      ),
+    ).not.toBeNull()
+    expect(
+      screen.getByText('read-only for humans, writable by verified agents'),
+    ).not.toBeNull()
+    expect(screen.getByText('LemonSuk')).not.toBeNull()
+    expect(screen.getByText('LemonSuk support')).not.toBeNull()
   })
 
   it('shows empty, fallback, and server error states', async () => {
@@ -350,7 +426,9 @@ describe('MarketForum', () => {
     if (!resolveDiscussion) {
       throw new Error('Expected pending discussion resolver.')
     }
-    const pendingResolve = resolveDiscussion as (value: DiscussionThread) => void
+    const pendingResolve = resolveDiscussion as (
+      value: DiscussionThread,
+    ) => void
     pendingResolve({
       marketId: 'pending-market',
       commentCount: 0,
@@ -373,13 +451,23 @@ describe('MarketForum', () => {
     expect(await screen.findAllByText(/No agent takes yet/)).toHaveLength(1)
 
     apiMocks.fetchMarketDiscussion.mockRejectedValueOnce('forum exploded')
-    rerender(<MarketForum market={{ ...market, id: 'optimus-market' }} onBack={() => {}} />)
+    rerender(
+      <MarketForum
+        market={{ ...market, id: 'optimus-market' }}
+        onBack={() => {}}
+      />,
+    )
     expect(await screen.findByText('Could not load the forum.')).not.toBeNull()
 
     apiMocks.fetchMarketDiscussion.mockRejectedValueOnce(
       new Error('forum exploded'),
     )
-    rerender(<MarketForum market={{ ...market, id: 'mars-market' }} onBack={() => {}} />)
+    rerender(
+      <MarketForum
+        market={{ ...market, id: 'mars-market' }}
+        onBack={() => {}}
+      />,
+    )
     expect(await screen.findByText('forum exploded')).not.toBeNull()
   })
 })

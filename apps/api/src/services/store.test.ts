@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { createSeedStore } from '../data/seed'
 import { setupApiContext } from '../../../../test/helpers/api-context'
 
 describe('store service', () => {
@@ -9,7 +10,7 @@ describe('store service', () => {
     await context.store.ensureStore()
     const seeded = await context.store.readStore()
 
-    expect(seeded.markets).toHaveLength(17)
+    expect(seeded.markets).toHaveLength(createSeedStore().markets.length)
     expect(seeded.bets).toHaveLength(0)
     expect(seeded.markets[0]?.sources.length).toBeGreaterThan(0)
 
@@ -126,7 +127,9 @@ describe('store service', () => {
 
     await context.store.ensureStore()
     const afterSecondEnsure = await context.store.readStore()
-    expect(afterSecondEnsure.markets).toHaveLength(withoutMetadata.markets.length)
+    expect(afterSecondEnsure.markets).toHaveLength(
+      withoutMetadata.markets.length,
+    )
 
     await context.pool.query(
       `
@@ -137,9 +140,9 @@ describe('store service', () => {
 
     await context.store.ensureStore()
     const backfilled = await context.store.readStore()
-    expect(backfilled.markets.some((market) => market.id === 'x-payments-2024')).toBe(
-      true,
-    )
+    expect(
+      backfilled.markets.some((market) => market.id === 'x-payments-2024'),
+    ).toBe(true)
 
     await context.pool.end()
   })

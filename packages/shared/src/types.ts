@@ -25,6 +25,11 @@ export const categorySchema = z.enum([
 export const betStatusSchema = z.enum(['open', 'won', 'lost'])
 export const notificationTypeSchema = z.enum(['bet_won', 'bet_lost', 'system'])
 export const discussionVoteDirectionSchema = z.enum(['up', 'down'])
+export const predictionSubmissionStatusSchema = z.enum([
+  'pending',
+  'accepted',
+  'rejected',
+])
 export const companySchema = z.enum([
   'tesla',
   'spacex',
@@ -371,10 +376,57 @@ export const agentPredictionSubmissionInputSchema = z.object({
   tags: z.array(z.string().min(2).max(32)).max(8).default([]),
 })
 
+export const queuedPredictionSubmissionSchema = z.object({
+  id: z.string(),
+  headline: z.string(),
+  subject: z.string(),
+  category: categorySchema,
+  summary: z.string(),
+  promisedDate: z.string(),
+  sourceUrl: z.url(),
+  sourceLabel: z.string(),
+  sourceDomain: z.string(),
+  sourceType: sourceTypeSchema,
+  tags: z.array(z.string()),
+  status: predictionSubmissionStatusSchema,
+  reviewNotes: z.string().nullable(),
+  linkedMarketId: z.string().nullable(),
+  submittedAt: z.string(),
+  updatedAt: z.string(),
+  reviewedAt: z.string().nullable(),
+  submittedBy: marketAuthorSchema,
+})
+
+export const predictionSubmissionQueueSchema = z.object({
+  pendingCount: z.number().int().nonnegative(),
+  items: z.array(queuedPredictionSubmissionSchema),
+})
+
 export const agentPredictionSubmissionResponseSchema = z.object({
-  created: z.boolean(),
-  market: marketSchema,
-  snapshot: z.lazy(() => dashboardSnapshotSchema),
+  queued: z.literal(true),
+  submission: queuedPredictionSubmissionSchema,
+  reviewHint: z.string(),
+})
+
+export const humanReviewSubmissionInputSchema = z.object({
+  sourceUrl: z.url(),
+  note: z.string().min(6).max(280).optional(),
+  captchaChallengeId: z.string(),
+  captchaAnswer: z.string().min(1).max(120),
+})
+
+export const ownerReviewSubmissionInputSchema =
+  humanReviewSubmissionInputSchema.extend({
+    sessionToken: z.string().min(1),
+  })
+
+export const humanReviewSubmissionReceiptSchema = z.object({
+  queued: z.literal(true),
+  submissionId: z.string(),
+  sourceUrl: z.url(),
+  sourceDomain: z.string(),
+  submittedAt: z.string(),
+  reviewHint: z.string(),
 })
 
 export const discoveryReportSchema = z.object({
@@ -468,8 +520,23 @@ export type AgentRegistrationResponse = z.infer<
 export type AgentPredictionSubmissionInput = z.infer<
   typeof agentPredictionSubmissionInputSchema
 >
+export type QueuedPredictionSubmission = z.infer<
+  typeof queuedPredictionSubmissionSchema
+>
+export type PredictionSubmissionQueue = z.infer<
+  typeof predictionSubmissionQueueSchema
+>
 export type AgentPredictionSubmissionResponse = z.infer<
   typeof agentPredictionSubmissionResponseSchema
+>
+export type HumanReviewSubmissionInput = z.infer<
+  typeof humanReviewSubmissionInputSchema
+>
+export type OwnerReviewSubmissionInput = z.infer<
+  typeof ownerReviewSubmissionInputSchema
+>
+export type HumanReviewSubmissionReceipt = z.infer<
+  typeof humanReviewSubmissionReceiptSchema
 >
 export type OwnerEmailSetupInput = z.infer<typeof ownerEmailSetupInputSchema>
 export type OwnerEmailSetupResponse = z.infer<

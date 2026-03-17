@@ -444,6 +444,11 @@ input {
   color: #ff8d95;
 }
 
+.success-text {
+  margin: 0;
+  color: #9cf7be;
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(320px, 420px);
@@ -924,6 +929,45 @@ input {
   color: #9cf7be;
   display: grid;
   gap: 8px;
+}
+
+.review-lead-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.review-lead-copy {
+  margin: 0;
+}
+
+.review-lead-field {
+  display: grid;
+  gap: 8px;
+}
+
+.review-lead-field span {
+  color: rgba(247, 236, 215, 0.74);
+}
+
+.review-lead-field input,
+.review-lead-field textarea {
+  border-radius: 18px;
+  border: 1px solid rgba(246, 200, 107, 0.18);
+  background: rgba(4, 18, 14, 0.82);
+  color: var(--ivory);
+  padding: 14px 16px;
+  font: inherit;
+}
+
+.review-lead-field textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.review-lead-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .captcha-block,

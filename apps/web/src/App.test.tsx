@@ -1,5 +1,11 @@
 import React from 'react'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -23,22 +29,33 @@ vi.mock('./components/AgentConsole', () => ({
   AgentConsole: ({
     query,
     report,
+    ownerSessionToken,
+    ownerEmail,
     onQueryChange,
     onRun,
+    onOpenOwnerModal,
   }: {
     query: string
     report: { query: string } | null
+    ownerSessionToken: string | null
+    ownerEmail: string | null
     onQueryChange: (query: string) => void
     onRun: () => void
+    onOpenOwnerModal: () => void
   }) => (
     <div>
       <span>{query}</span>
       <span>{report?.query ?? 'no-report'}</span>
+      <span>{ownerSessionToken ?? 'no-owner-session'}</span>
+      <span>{ownerEmail ?? 'no-owner-email'}</span>
       <button type="button" onClick={() => onQueryChange('fresh query')}>
         set query
       </button>
       <button type="button" onClick={onRun}>
         run discovery
+      </button>
+      <button type="button" onClick={onOpenOwnerModal}>
+        open owner modal
       </button>
     </div>
   ),
@@ -62,11 +79,7 @@ vi.mock('./components/HallOfFame', () => ({
 }))
 
 vi.mock('./components/HeroBanner', () => ({
-  HeroBanner: ({
-    onOpenOwnerModal,
-  }: {
-    onOpenOwnerModal: () => void
-  }) => (
+  HeroBanner: ({ onOpenOwnerModal }: { onOpenOwnerModal: () => void }) => (
     <div>
       <span>hero banner</span>
       <button type="button" onClick={onOpenOwnerModal}>
@@ -344,7 +357,9 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'run discovery' }))
 
     expect(apiMocks.runDiscovery).toHaveBeenCalledWith('fresh query')
-    expect(await screen.findByText(/Discovery scanned 3 results/)).not.toBeNull()
+    expect(
+      await screen.findByText(/Discovery scanned 3 results/),
+    ).not.toBeNull()
     expect(screen.getAllByText('fresh query')).toHaveLength(2)
 
     await user.click(screen.getByRole('button', { name: 'busted' }))
@@ -355,7 +370,9 @@ describe('App', () => {
     expect(screen.getByText('Support and issue reports')).not.toBeNull()
     await user.click(
       within(
-        screen.getByText('Support and issue reports').closest('section') as HTMLElement,
+        screen
+          .getByText('Support and issue reports')
+          .closest('section') as HTMLElement,
       ).getByRole('button', { name: 'Open topic' }),
     )
     expect(screen.getByText(supportMarketId)).not.toBeNull()
@@ -385,15 +402,18 @@ describe('App', () => {
     expect(screen.getByText('owner')).not.toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'close modal' }))
+    await user.click(screen.getByRole('button', { name: 'open owner modal' }))
+    expect(screen.getByTestId('login-modal')).not.toBeNull()
+    expect(screen.getByText('owner')).not.toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'close modal' }))
     await user.click(screen.getByRole('button', { name: 'hero owner' }))
     expect(screen.getByTestId('login-modal')).not.toBeNull()
     expect(screen.getByText('claim')).not.toBeNull()
   })
 
   it('picks the first visible market from a snapshot or returns null', () => {
-    expect(
-      pickFirstVisibleMarketIdFromSnapshot(null, 'all', 'all'),
-    ).toBeNull()
+    expect(pickFirstVisibleMarketIdFromSnapshot(null, 'all', 'all')).toBeNull()
     expect(
       pickFirstVisibleMarketIdFromSnapshot(baseSnapshot, 'open', 'spacex'),
     ).toBe(
@@ -422,6 +442,44 @@ describe('App', () => {
     expect(screen.getByText('market-fallback')).not.toBeNull()
   })
 
+  it('filters the board down to open cards when requested', async () => {
+    const user = userEvent.setup()
+    const filteredSnapshot = {
+      ...baseSnapshot,
+      markets: baseSnapshot.markets.map((market, index) =>
+        index === 0
+          ? {
+              ...market,
+              status: 'busted' as const,
+              betWindowOpen: false,
+            }
+          : market,
+      ),
+    }
+    const openMarket = filteredSnapshot.markets.find(
+      (market) => market.id !== supportMarketId && market.status === 'open',
+    )!
+    const bustedMarket = filteredSnapshot.markets[0]!
+
+    apiMocks.fetchDashboard.mockResolvedValue(filteredSnapshot)
+
+    render(<App />)
+
+    expect(await screen.findByText('hero banner')).not.toBeNull()
+    await user.click(screen.getByRole('button', { name: 'open' }))
+
+    expect(
+      screen.getByRole('button', {
+        name: openMarket.headline,
+      }),
+    ).not.toBeNull()
+    expect(
+      screen.queryByRole('button', {
+        name: bustedMarket.headline,
+      }),
+    ).toBeNull()
+  })
+
   it('opens the login modal when scrolling into the second card without an owner session', async () => {
     apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
 
@@ -431,7 +489,9 @@ describe('App', () => {
       name: baseSnapshot.markets[0]?.headline ?? '',
     })
 
-    const secondCard = document.querySelectorAll('.market-card-slot')[1] as HTMLDivElement
+    const secondCard = document.querySelectorAll(
+      '.market-card-slot',
+    )[1] as HTMLDivElement
 
     setPageMetrics({
       scrollHeight: 2400,

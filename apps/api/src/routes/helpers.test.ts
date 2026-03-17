@@ -8,7 +8,9 @@ describe('route helpers', () => {
 
     const deliverPendingNotificationEmails = vi.fn(async () => 1)
     const readHallOfFame = vi.fn(async () => ['hall-entry'])
-    const readHallOfFameFromClient = vi.fn(async () => ['hall-entry-from-client'])
+    const readHallOfFameFromClient = vi.fn(async () => [
+      'hall-entry-from-client',
+    ])
     const readAgentDirectoryStats = vi.fn(async () => ({
       registeredAgents: 4,
       humanVerifiedAgents: 3,
