@@ -1,5 +1,5 @@
 import type { Market, Source, StoreData } from '../shared'
-import { storeSchema } from '../shared'
+import { storeSchema, supportMarketId } from '../shared'
 import { createSourceId, domainFromUrl } from '../services/utils'
 
 const seededAt = '2026-03-16T00:00:00.000Z'
@@ -49,6 +49,35 @@ function market(
 export function createSeedStore(): StoreData {
   return storeSchema.parse({
     markets: [
+      market({
+        id: supportMarketId,
+        slug: 'support-and-issues',
+        headline: 'Support and issue reports',
+        subject: 'LemonSuk support',
+        category: 'social',
+        announcedOn: seededAt,
+        promisedDate: '2099-12-31T23:59:59.000Z',
+        promisedBy: 'LemonSuk',
+        summary:
+          'Use this topic to report product bugs, source issues, moderation problems, or support requests about the board itself.',
+        status: 'resolved',
+        resolution: 'delivered',
+        resolutionNotes: null,
+        payoutMultiplier: 1.05,
+        confidence: 100,
+        stakeDifficulty: 1,
+        tags: ['support', 'issues', 'forum', 'lemonsuk'],
+        linkedMarketIds: [],
+        sources: [
+          source(
+            'LemonSuk',
+            'https://lemonsuk.com',
+            'official',
+            'Support topic for bugs, moderation reports, and product feedback.',
+            seededAt,
+          ),
+        ],
+      }),
       market({
         id: 'fsd-coast-to-coast-2017',
         slug: 'fsd-coast-to-coast-2017',
@@ -271,6 +300,27 @@ export function createSeedStore(): StoreData {
             'Tesla shareholder deck stating Cybercab is scheduled for volume production starting in 2026.',
             '2025-01-29T00:00:00.000Z',
           ),
+          source(
+            'ElonMusk.today promise tracker',
+            'https://elonmusk.today/',
+            'reference',
+            'Independent tracker listing Musk promises across Tesla, SpaceX, and other ventures with elapsed time since each predicted deadline passed.',
+            null,
+          ),
+          source(
+            'Clearer Thinking -- Musk prediction accuracy',
+            'https://www.clearerthinking.org/post/how-good-is-elon-musk-at-predicting-the-future-and-what-would-it-take-to-become-an-accurate-predict',
+            'reference',
+            'Spencer Greenberg tracked 50+ confirmable Musk predictions and found he was right only about 16% of the time on deadlines, suggesting systematic overconfidence.',
+            null,
+          ),
+          source(
+            'Metaculus Musk prediction community',
+            'https://www.metaculus.com/',
+            'reference',
+            'Forecasting platform with community-aggregated probabilities on Musk claims ranging from Neuralink timelines to Tesla market growth.',
+            null,
+          ),
         ],
       }),
       market({
@@ -300,6 +350,27 @@ export function createSeedStore(): StoreData {
             'news',
             'Same shareholder meeting coverage also notes the 2026 “fully software customizable” Optimus claim.',
             '2024-06-13T00:00:00.000Z',
+          ),
+          source(
+            'ElonMusk.today promise tracker',
+            'https://elonmusk.today/',
+            'reference',
+            'Independent tracker listing Musk promises across Tesla, SpaceX, and other ventures with elapsed time since each predicted deadline passed.',
+            null,
+          ),
+          source(
+            'Clearer Thinking -- Musk prediction accuracy',
+            'https://www.clearerthinking.org/post/how-good-is-elon-musk-at-predicting-the-future-and-what-would-it-take-to-become-an-accurate-predict',
+            'reference',
+            'Spencer Greenberg tracked 50+ confirmable Musk predictions and found he was right only about 16% of the time on deadlines, suggesting systematic overconfidence.',
+            null,
+          ),
+          source(
+            'Metaculus Musk prediction community',
+            'https://www.metaculus.com/',
+            'reference',
+            'Forecasting platform with community-aggregated probabilities on Musk claims ranging from Neuralink timelines to Tesla market growth.',
+            null,
           ),
         ],
       }),
@@ -359,6 +430,27 @@ export function createSeedStore(): StoreData {
             'news',
             'Space.com reporting Musk saying the first uncrewed Starships should launch to Mars in 2026.',
             '2024-09-07T00:00:00.000Z',
+          ),
+          source(
+            'ElonMusk.today promise tracker',
+            'https://elonmusk.today/',
+            'reference',
+            'Independent tracker listing Musk promises across Tesla, SpaceX, and other ventures with elapsed time since each predicted deadline passed.',
+            null,
+          ),
+          source(
+            'Clearer Thinking -- Musk prediction accuracy',
+            'https://www.clearerthinking.org/post/how-good-is-elon-musk-at-predicting-the-future-and-what-would-it-take-to-become-an-accurate-predict',
+            'reference',
+            'Spencer Greenberg tracked 50+ confirmable Musk predictions and found he was right only about 16% of the time on deadlines, suggesting systematic overconfidence.',
+            null,
+          ),
+          source(
+            'Metaculus Musk prediction community',
+            'https://www.metaculus.com/',
+            'reference',
+            'Forecasting platform with community-aggregated probabilities on Musk claims ranging from Neuralink timelines to Tesla market growth.',
+            null,
           ),
         ],
       }),
@@ -620,6 +712,27 @@ export function createSeedStore(): StoreData {
             'news',
             'AP later summarized how Musk’s DOGE savings targets kept falling, framing the FY2026 number as the most modest surviving goal.',
             '2025-05-30T00:00:00.000Z',
+          ),
+          source(
+            'ElonMusk.today promise tracker',
+            'https://elonmusk.today/',
+            'reference',
+            'Independent tracker listing Musk promises across Tesla, SpaceX, and other ventures with elapsed time since each predicted deadline passed.',
+            null,
+          ),
+          source(
+            'Clearer Thinking -- Musk prediction accuracy',
+            'https://www.clearerthinking.org/post/how-good-is-elon-musk-at-predicting-the-future-and-what-would-it-take-to-become-an-accurate-predict',
+            'reference',
+            'Spencer Greenberg tracked 50+ confirmable Musk predictions and found he was right only about 16% of the time on deadlines, suggesting systematic overconfidence.',
+            null,
+          ),
+          source(
+            'Metaculus Musk prediction community',
+            'https://www.metaculus.com/',
+            'reference',
+            'Forecasting platform with community-aggregated probabilities on Musk claims ranging from Neuralink timelines to Tesla market growth.',
+            null,
           ),
         ],
       }),

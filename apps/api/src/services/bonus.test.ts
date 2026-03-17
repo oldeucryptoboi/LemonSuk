@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createSeedStore } from '../data/seed'
 import type { HallOfFameEntry, StoreData } from '../shared'
+import { supportMarketId } from '../shared'
 import {
   calculateGlobalBonus,
   calculateProjectedPayout,
@@ -61,7 +62,9 @@ describe('bonus services', () => {
       },
     )
 
-    expect(stats.totalMarkets).toBe(store.markets.length)
+    expect(stats.totalMarkets).toBe(
+      store.markets.filter((market) => market.id !== supportMarketId).length,
+    )
     expect(stats.registeredAgents).toBe(3)
     expect(stats.humanVerifiedAgents).toBe(2)
     expect(snapshot.markets[0]?.status).toBe('open')

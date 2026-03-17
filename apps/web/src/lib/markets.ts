@@ -1,3 +1,4 @@
+import { isSupportMarketId } from '../shared'
 import type { Company, Market } from '../shared'
 
 export type CompanyFilter = 'all' | Company
@@ -14,6 +15,10 @@ export type SeasonalSurface = {
   count: number
   description: string
   leadMarketId: string | null
+}
+
+export function isBoardMarket(market: Market): boolean {
+  return !isSupportMarketId(market.id)
 }
 
 const companyOrder: Company[] = [
@@ -71,16 +76,18 @@ export function marketCompany(market: Market): Company {
 }
 
 export function createCompanyTabs(markets: Market[]): CompanyTab[] {
+  const boardMarkets = markets.filter(isBoardMarket)
+
   return [
     {
       value: 'all',
       label: 'All',
-      count: markets.length,
+      count: boardMarkets.length,
     },
     ...companyOrder.map((company) => ({
       value: company,
       label: companyLabel(company),
-      count: markets.filter((market) => marketCompany(market) === company).length,
+      count: boardMarkets.filter((market) => marketCompany(market) === company).length,
     })),
   ]
 }
@@ -89,17 +96,18 @@ export function createSeasonalSurfaces(
   markets: Market[],
   nowIso: string,
 ): SeasonalSurface[] {
+  const boardMarkets = markets.filter(isBoardMarket)
   const now = new Date(nowIso)
   const currentYear = now.getUTCFullYear()
 
-  const q2CheckpointMarkets = markets.filter(
+  const q2CheckpointMarkets = boardMarkets.filter(
     (market) =>
       market.status === 'open' &&
       market.checkpoints?.some((checkpoint) =>
         checkpoint.label.startsWith(`Q2 ${currentYear}`),
       ),
   )
-  const q4Markets = markets.filter((market) => {
+  const q4Markets = boardMarkets.filter((market) => {
     const promised = new Date(market.promisedDate)
     return (
       market.status === 'open' &&
@@ -107,7 +115,7 @@ export function createSeasonalSurfaces(
       promised.getUTCMonth() >= 9
     )
   })
-  const yearEndGraveyard = markets.filter((market) => {
+  const yearEndGraveyard = boardMarkets.filter((market) => {
     const promised = new Date(market.promisedDate)
     return (
       promised.getUTCMonth() === 11 &&

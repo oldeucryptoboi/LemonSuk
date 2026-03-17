@@ -493,6 +493,27 @@ input {
   color: rgba(247, 236, 215, 0.74);
 }
 
+.support-topic-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(246, 200, 107, 0.14);
+  background:
+    linear-gradient(180deg, rgba(7, 20, 16, 0.94), rgba(4, 15, 11, 0.9));
+}
+
+.support-topic-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.support-topic-copy {
+  margin: 0;
+  color: rgba(247, 236, 215, 0.78);
+  line-height: 1.55;
+}
+
 .viewer-pill {
   border-radius: 999px;
   padding: 8px 12px;

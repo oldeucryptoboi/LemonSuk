@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSeedStore } from '../../api/src/data/seed'
 import { createDashboardSnapshot } from '../../api/src/services/bonus'
 import App from './App'
+import { supportMarketId } from './shared'
 import { pickFirstVisibleMarketIdFromSnapshot } from './lib/board'
 
 const apiMocks = vi.hoisted(() => ({
@@ -182,6 +183,9 @@ describe('App', () => {
     createSeedStore(),
     new Date('2026-03-16T00:00:00.000Z'),
   )
+  const boardMarketCount = baseSnapshot.markets.filter(
+    (market) => market.id !== supportMarketId,
+  ).length
 
   beforeEach(() => {
     vi.resetAllMocks()
@@ -348,6 +352,13 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'all' }))
     expect(screen.getByText('End of the current feed.')).not.toBeNull()
+    expect(screen.getByText('Support and issue reports')).not.toBeNull()
+    await user.click(
+      within(
+        screen.getByText('Support and issue reports').closest('section') as HTMLElement,
+      ).getByRole('button', { name: 'Open topic' }),
+    )
+    expect(screen.getByText(supportMarketId)).not.toBeNull()
   })
 
   it('opens manual login and clears rejected session tokens', async () => {
@@ -483,7 +494,7 @@ describe('App', () => {
 
     expect(
       await screen.findByText(
-        `Showing 12 of ${baseSnapshot.markets.length} cards in the full feed.`,
+        `Showing 12 of ${boardMarketCount} cards in the full feed.`,
       ),
     ).not.toBeNull()
 

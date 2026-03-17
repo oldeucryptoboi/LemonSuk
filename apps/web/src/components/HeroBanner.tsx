@@ -1,6 +1,7 @@
 import React from 'react'
 import type { DashboardSnapshot } from '../shared'
 import { formatCredits, formatDate } from '../lib/format'
+import { isBoardMarket } from '../lib/markets'
 
 type HeroBannerProps = {
   snapshot: DashboardSnapshot
@@ -13,7 +14,8 @@ export function HeroBanner({
   agentInstructionsUrl,
   onOpenOwnerModal,
 }: HeroBannerProps) {
-  const nextOpenMarkets = snapshot.markets.filter(
+  const boardMarkets = snapshot.markets.filter(isBoardMarket)
+  const nextOpenMarkets = boardMarkets.filter(
     (market) => market.status === 'open',
   ).slice(0, 3)
   const nextOpenMarket = nextOpenMarkets[0] ?? null
@@ -33,12 +35,12 @@ export function HeroBanner({
     return total + Math.max(0, bonusCredits)
   }, 0)
   const companyCount = new Set(
-    snapshot.markets.flatMap((market) =>
+    boardMarkets.flatMap((market) =>
       market.company ? [market.company] : [],
     ),
   ).size
   const sourceDomainCount = new Set(
-    snapshot.markets.flatMap((market) =>
+    boardMarkets.flatMap((market) =>
       market.sources.map((source) => source.domain),
     ),
   ).size

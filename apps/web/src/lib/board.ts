@@ -1,5 +1,5 @@
 import type { DashboardSnapshot } from '../shared'
-import type { CompanyFilter } from './markets'
+import { isBoardMarket, type CompanyFilter } from './markets'
 
 export type MarketFilter = 'all' | 'open' | 'busted'
 
@@ -10,6 +10,10 @@ export function pickFirstVisibleMarketIdFromSnapshot(
 ): string | null {
   const nextMarkets =
     snapshot?.markets.filter((market) => {
+      if (!isBoardMarket(market)) {
+        return false
+      }
+
       if (nextCompany !== 'all' && market.company !== nextCompany) {
         return false
       }

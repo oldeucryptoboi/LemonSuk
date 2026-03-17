@@ -6,7 +6,11 @@ import type {
   Market,
   StoreData,
 } from '../shared'
-import { dashboardSnapshotSchema, dashboardStatsSchema } from '../shared'
+import {
+  dashboardSnapshotSchema,
+  dashboardStatsSchema,
+  isSupportMarketId,
+} from '../shared'
 import { enrichMarketForBoard } from './market-structure'
 import { clamp, sortByDateDescending } from './utils'
 
@@ -16,14 +20,15 @@ type AgentDirectoryStats = {
 }
 
 export function calculateGlobalBonus(markets: Market[]): number {
-  const bustedMarkets = markets.filter(
+  const boardMarkets = markets.filter((market) => !isSupportMarketId(market.id))
+  const bustedMarkets = boardMarkets.filter(
     (market) => market.status === 'busted',
   ).length
-  const openMarkets = markets.filter(
+  const openMarkets = boardMarkets.filter(
     (market) => market.status === 'open',
   ).length
   const ratioBoost =
-    markets.length === 0 ? 0 : (bustedMarkets / markets.length) * 18
+    boardMarkets.length === 0 ? 0 : (bustedMarkets / boardMarkets.length) * 18
   const streakBoost = bustedMarkets > openMarkets ? 6 : 0
 
   return Math.round(clamp(8 + ratioBoost + streakBoost, 8, 36))
@@ -46,20 +51,23 @@ export function createDashboardStats(
     humanVerifiedAgents: 0,
   },
 ): DashboardStats {
-  const totalMarkets = store.markets.length
-  const openMarkets = store.markets.filter(
+  const boardMarkets = store.markets.filter(
+    (market) => !isSupportMarketId(market.id),
+  )
+  const totalMarkets = boardMarkets.length
+  const openMarkets = boardMarkets.filter(
     (market) => market.status === 'open',
   ).length
-  const bustedMarkets = store.markets.filter(
+  const bustedMarkets = boardMarkets.filter(
     (market) => market.status === 'busted',
   ).length
-  const resolvedMarkets = store.markets.filter(
+  const resolvedMarkets = boardMarkets.filter(
     (market) => market.status === 'resolved',
   ).length
   const activeBets = store.bets.filter((bet) => bet.status === 'open').length
   const wonBets = store.bets.filter((bet) => bet.status === 'won').length
   const lostBets = store.bets.filter((bet) => bet.status === 'lost').length
-  const globalBonusPercent = calculateGlobalBonus(store.markets)
+  const globalBonusPercent = calculateGlobalBonus(boardMarkets)
   const bustedRatePercent =
     totalMarkets === 0 ? 0 : Math.round((bustedMarkets / totalMarkets) * 100)
 

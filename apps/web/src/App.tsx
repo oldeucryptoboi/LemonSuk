@@ -3,7 +3,13 @@
 import React from 'react'
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 
-import type { ClaimView, DashboardSnapshot, DiscoveryReport, OwnerSession } from './shared'
+import {
+  supportMarketId,
+  type ClaimView,
+  type DashboardSnapshot,
+  type DiscoveryReport,
+  type OwnerSession,
+} from './shared'
 import { AgentConsole } from './components/AgentConsole'
 import { BetSlipPanel } from './components/BetSlipPanel'
 import { HallOfFame } from './components/HallOfFame'
@@ -13,6 +19,7 @@ import { MarketForum } from './components/MarketForum'
 import { MarketCard } from './components/MarketCard'
 import { NotificationRail } from './components/NotificationRail'
 import { OwnerObservatory } from './components/OwnerObservatory'
+import { SupportTopicCard } from './components/SupportTopicCard'
 import {
   fetchClaimView,
   fetchDashboard,
@@ -24,6 +31,7 @@ import {
   companyLabel,
   createCompanyTabs,
   createSeasonalSurfaces,
+  isBoardMarket,
   type CompanyFilter,
 } from './lib/markets'
 import {
@@ -90,17 +98,18 @@ export default function App() {
     startTransition(() => {
       setSnapshot(nextSnapshot)
       setSelectedMarketId((current) => {
+        const boardMarkets = nextSnapshot.markets.filter(isBoardMarket)
         if (
           options.preserveSelection !== false &&
           current &&
-          nextSnapshot.markets.some((market) => market.id === current)
+          boardMarkets.some((market) => market.id === current)
         ) {
           return current
         }
 
         return (
-          nextSnapshot.markets.find((market) => market.status === 'open')?.id ??
-          nextSnapshot.markets[0]?.id ??
+          boardMarkets.find((market) => market.status === 'open')?.id ??
+          boardMarkets[0]?.id ??
           null
         )
       })
@@ -178,8 +187,11 @@ export default function App() {
     }
   }, [applySnapshot, refreshDashboard])
 
+  const boardMarkets = snapshot?.markets.filter(isBoardMarket) ?? []
+  const supportTopicMarket =
+    snapshot?.markets.find((market) => market.id === supportMarketId) ?? null
   const visibleMarkets =
-    snapshot?.markets.filter((market) => {
+    boardMarkets.filter((market) => {
       if (companyFilter !== 'all' && market.company !== companyFilter) {
         return false
       }
@@ -194,14 +206,14 @@ export default function App() {
   const hasMoreMarkets = renderedMarkets.length < visibleMarkets.length
 
   const selectedMarket =
-    snapshot?.markets.find((market) => market.id === selectedMarketId) ??
-    snapshot?.markets.find((market) => market.status === 'open') ??
+    boardMarkets.find((market) => market.id === selectedMarketId) ??
+    boardMarkets.find((market) => market.status === 'open') ??
     null
   const topicMarket =
     snapshot?.markets.find((market) => market.id === topicMarketId) ?? null
-  const companyTabs = createCompanyTabs(snapshot?.markets ?? [])
+  const companyTabs = createCompanyTabs(boardMarkets)
   const seasonalSurfaces = createSeasonalSurfaces(
-    snapshot?.markets ?? [],
+    boardMarkets,
     snapshot?.now ?? new Date().toISOString(),
   )
 
@@ -460,6 +472,16 @@ export default function App() {
                       : 'End of the current feed.'}
                   </span>
                 </div>
+
+                {supportTopicMarket ? (
+                  <SupportTopicCard
+                    market={supportTopicMarket}
+                    onOpenForum={(marketId) => {
+                      setSelectedMarketId(null)
+                      setTopicMarketId(marketId)
+                    }}
+                  />
+                ) : null}
 
                 <AgentConsole
                   query={agentQuery}

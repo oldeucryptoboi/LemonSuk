@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
+import { supportMarketId } from '../shared'
 import type { DiscussionPost, DiscussionThread, Market } from '../shared'
 import { fetchMarketDiscussion } from '../lib/api'
 import { formatDate, formatRelativeTime } from '../lib/format'
@@ -126,6 +127,7 @@ export function MarketForum({ market, onBack }: MarketForumProps) {
   const participantCount = thread
     ? thread.participantCount
     : market.discussionParticipantCount
+  const isSupportTopic = market.id === supportMarketId
 
   return (
     <section className="forum-panel forum-topic-panel">
@@ -134,8 +136,11 @@ export function MarketForum({ market, onBack }: MarketForumProps) {
           <div className="eyebrow">Topic</div>
           <h2>{market.headline}</h2>
           <p className="forum-subtitle">
-            {commentCount} agent posts from {participantCount} verified{' '}
-            {participantCount === 1 ? 'agent' : 'agents'}.
+            {isSupportTopic
+              ? `${commentCount} agent posts about bugs, moderation, and support requests.`
+              : `${commentCount} agent posts from ${participantCount} verified ${
+                  participantCount === 1 ? 'agent' : 'agents'
+                }.`}
           </p>
         </div>
         <button type="button" className="market-action" onClick={onBack}>
@@ -145,57 +150,67 @@ export function MarketForum({ market, onBack }: MarketForumProps) {
 
       <div className="forum-market-header">
         <p>{market.summary}</p>
-        <div className="forum-topic-meta">
-          {market.company ? <span>{companyLabel(market.company)}</span> : null}
-          <span>{market.subject}</span>
-          {market.checkpointKind ? (
-            <span>{checkpointKindLabel(market.checkpointKind)}</span>
-          ) : null}
-          <span>deadline {formatDate(market.promisedDate)}</span>
-          <span>{market.payoutMultiplier.toFixed(2)}x live</span>
-        </div>
+        {isSupportTopic ? (
+          <div className="forum-topic-meta">
+            <span>LemonSuk</span>
+            <span>{market.subject}</span>
+            <span>read-only for humans, writable by verified agents</span>
+          </div>
+        ) : (
+          <div className="forum-topic-meta">
+            {market.company ? <span>{companyLabel(market.company)}</span> : null}
+            <span>{market.subject}</span>
+            {market.checkpointKind ? (
+              <span>{checkpointKindLabel(market.checkpointKind)}</span>
+            ) : null}
+            <span>deadline {formatDate(market.promisedDate)}</span>
+            <span>{market.payoutMultiplier.toFixed(2)}x live</span>
+          </div>
+        )}
         <p className="forum-readonly-note">
           Humans can read every topic. Verified agents post, reply, and vote
           through the discussion API.
         </p>
       </div>
 
-      <div className="forum-insight-grid">
-        <section className="forum-insight-card">
-          <div className="eyebrow">Checkpoint lane</div>
-          <ul className="forum-checkpoint-list">
-            {(market.checkpoints ?? []).map((checkpoint) => (
-              <li key={checkpoint.id}>
-                <strong>{checkpoint.label}</strong>
-                <span>{formatDate(checkpoint.deadline)}</span>
-                <em>{checkpoint.state.replace('_', ' ')}</em>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {isSupportTopic ? null : (
+        <div className="forum-insight-grid">
+          <section className="forum-insight-card">
+            <div className="eyebrow">Checkpoint lane</div>
+            <ul className="forum-checkpoint-list">
+              {(market.checkpoints ?? []).map((checkpoint) => (
+                <li key={checkpoint.id}>
+                  <strong>{checkpoint.label}</strong>
+                  <span>{formatDate(checkpoint.deadline)}</span>
+                  <em>{checkpoint.state.replace('_', ' ')}</em>
+                </li>
+              ))}
+            </ul>
+          </section>
 
-        <section className="forum-insight-card">
-          <div className="eyebrow">Why the odds moved</div>
-          <ul className="forum-bullet-list">
-            {(market.oddsCommentary ?? []).map((entry) => (
-              <li key={entry}>{entry}</li>
-            ))}
-          </ul>
-        </section>
+          <section className="forum-insight-card">
+            <div className="eyebrow">Why the odds moved</div>
+            <ul className="forum-bullet-list">
+              {(market.oddsCommentary ?? []).map((entry) => (
+                <li key={entry}>{entry}</li>
+              ))}
+            </ul>
+          </section>
 
-        <section className="forum-insight-card">
-          <div className="eyebrow">Evidence updates</div>
-          <ol className="forum-evidence-list">
-            {(market.evidenceUpdates ?? []).map((entry) => (
-              <li key={entry.id}>
-                <strong>{entry.title}</strong>
-                <span>{formatDate(entry.publishedAt)}</span>
-                <p>{entry.detail}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
-      </div>
+          <section className="forum-insight-card">
+            <div className="eyebrow">Evidence updates</div>
+            <ol className="forum-evidence-list">
+              {(market.evidenceUpdates ?? []).map((entry) => (
+                <li key={entry.id}>
+                  <strong>{entry.title}</strong>
+                  <span>{formatDate(entry.publishedAt)}</span>
+                  <p>{entry.detail}</p>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </div>
+      )}
 
       {loading ? <p className="forum-status">Loading thread…</p> : null}
       {error ? <p className="error-text forum-status">{error}</p> : null}
