@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: lemonsuk
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - lemonsuk-postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - lemonsuk-redis:/data
+
+  api:
+    image: lemonsuk-api:latest
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      PORT: ${PORT:-8787}
+      HOST: ${HOST:-0.0.0.0}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:3000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/lemonsuk}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-replace-me}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-}
+    ports:
+      - '8787:8787'
+    restart: unless-stopped
+
+  web:
+    image: lemonsuk-web:latest
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+      PORT: 3000
+    ports:
+      - '3000:3000'
+    restart: unless-stopped
+
+volumes:
+  lemonsuk-postgres:
+  lemonsuk-redis:

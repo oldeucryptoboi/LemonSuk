@@ -1,0 +1,4 @@
+ALTER TABLE agent_accounts
+  ADD COLUMN IF NOT EXISTS promo_credits_balance NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS earned_credits_balance NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS signup_bonus_granted_at TIMESTAMPTZ;
