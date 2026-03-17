@@ -11,6 +11,8 @@ node_modules
 dist
 coverage
 dist-ssr
+.next
+apps/web/.next
 *.local
 .env
 .env.*
