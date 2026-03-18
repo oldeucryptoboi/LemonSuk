@@ -155,6 +155,8 @@ Use [infra/production.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk
 - Internal operator reads are also available through `/api/v1/internal/leads` and `/api/v1/internal/leads/:leadId` with the internal bearer token.
 - The web review desk lives at `/review` and should be protected with `REVIEW_CONSOLE_ACCESS_KEY`.
 - Playwright route tests live in `tests/e2e` and can target local or deployed environments through `PLAYWRIGHT_BASE_URL`.
+- Additional Playwright auth/review smoke is env-gated through `PLAYWRIGHT_OWNER_EMAIL`, `PLAYWRIGHT_OWNER_SESSION_TOKEN`, `PLAYWRIGHT_CLAIM_TOKEN`, `PLAYWRIGHT_REVIEW_KEY`, and `PLAYWRIGHT_REVIEW_LEAD_ID`.
+- `PLAYWRIGHT_OWNER_EMAIL` triggers a real owner-login email send, so point it at a controlled inbox.
 - The live dashboard channel depends on the API process staying up; there is no separate realtime worker.
 - Rate limiting depends on Redis when configured; in production that should be treated as required, not optional.
 - The review orchestrator consumes queued submissions, dispatches them to Eddie, and posts signed callback results back into the API.
