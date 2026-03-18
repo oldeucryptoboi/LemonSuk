@@ -9,7 +9,9 @@
     "dev:web": "NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8787} next dev apps/web -p 5173",
     "dev:review": "tsx watch apps/review-orchestrator/src/server.ts",
     "migrate": "tsx scripts/migrate.ts",
-    "review-submission": "tsx scripts/review-submission.ts",
+    "review-lead": "tsx scripts/review-lead.ts",
+    "list-pending-leads": "tsx scripts/list-pending-leads.ts",
+    "inspect-lead": "tsx scripts/inspect-lead.ts",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && npm run build:api && npm run build:web && npm run build:review",
     "build:api": "tsup apps/api/src/server.ts --format esm --platform node --out-dir dist/api --clean",
@@ -21,6 +23,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
     "format": "prettier --check .",
     "format:write": "prettier --write ."
   },
@@ -41,6 +46,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.58.2",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/cors": "^2.8.19",

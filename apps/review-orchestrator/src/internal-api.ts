@@ -1,12 +1,14 @@
 import {
+  predictionLeadQueueSchema,
+  internalPredictionLeadSchema,
   internalPredictionSubmissionReviewResultInputSchema,
-  internalPredictionSubmissionSchema,
   internalPredictionSubmissionStatusInputSchema,
 } from '../../../packages/shared/src/types'
 import type {
-  InternalPredictionSubmission,
+  InternalPredictionLead,
   InternalPredictionSubmissionReviewResultInput,
   InternalPredictionSubmissionStatusInput,
+  PredictionLeadQueue,
 } from '../../../packages/shared/src/types'
 
 import { reviewOrchestratorConfig } from './config'
@@ -49,27 +51,45 @@ async function requestInternalApi<T>(
   return parse(payload)
 }
 
-export async function readInternalPredictionSubmission(
-  submissionId: string,
+export async function readInternalPredictionLead(
+  leadId: string,
   fetchImpl?: typeof fetch,
-): Promise<InternalPredictionSubmission> {
+): Promise<InternalPredictionLead> {
   return requestInternalApi(
-    `/internal/prediction-submissions/${submissionId}`,
-    (payload) => internalPredictionSubmissionSchema.parse(payload),
+    `/internal/leads/${leadId}`,
+    (payload) => internalPredictionLeadSchema.parse(payload),
     {
       fetchImpl,
     },
   )
 }
 
-export async function updateInternalPredictionSubmissionStatus(
-  submissionId: string,
+export async function readPendingInternalPredictionLeads(
+  limit?: number,
+  fetchImpl?: typeof fetch,
+): Promise<PredictionLeadQueue> {
+  const params = new URLSearchParams()
+  if (typeof limit === 'number') {
+    params.set('limit', String(limit))
+  }
+
+  return requestInternalApi(
+    `/internal/leads${params.size > 0 ? `?${params.toString()}` : ''}`,
+    (payload) => predictionLeadQueueSchema.parse(payload),
+    {
+      fetchImpl,
+    },
+  )
+}
+
+export async function updateInternalPredictionLeadStatus(
+  leadId: string,
   input: InternalPredictionSubmissionStatusInput,
   fetchImpl?: typeof fetch,
-): Promise<InternalPredictionSubmission> {
+): Promise<InternalPredictionLead> {
   return requestInternalApi(
-    `/internal/prediction-submissions/${submissionId}/status`,
-    (payload) => internalPredictionSubmissionSchema.parse(payload),
+    `/internal/leads/${leadId}/status`,
+    (payload) => internalPredictionLeadSchema.parse(payload),
     {
       method: 'POST',
       body: internalPredictionSubmissionStatusInputSchema.parse(input),
@@ -78,23 +98,23 @@ export async function updateInternalPredictionSubmissionStatus(
   )
 }
 
-export async function submitInternalPredictionReviewResult(
-  submissionId: string,
+export async function submitInternalPredictionLeadReviewResult(
+  leadId: string,
   input: InternalPredictionSubmissionReviewResultInput,
   fetchImpl?: typeof fetch,
 ): Promise<{
-  submission: InternalPredictionSubmission
+  lead: InternalPredictionLead
 }> {
   return requestInternalApi(
-    `/internal/prediction-submissions/${submissionId}/review-result`,
+    `/internal/leads/${leadId}/review-result`,
     (payload) => {
       const parsed = payload as {
-        submission: unknown
+        lead: unknown
         reviewResult: unknown
       }
 
       return {
-        submission: internalPredictionSubmissionSchema.parse(parsed.submission),
+        lead: internalPredictionLeadSchema.parse(parsed.lead),
         reviewResult:
           internalPredictionSubmissionReviewResultInputSchema.parse({
             runId:

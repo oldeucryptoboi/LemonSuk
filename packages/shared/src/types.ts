@@ -14,6 +14,9 @@ export const categorySchema = z.enum([
   'robotaxi',
   'robotics',
   'vehicle',
+  'consumer_hardware',
+  'software_release',
+  'developer_tool',
   'transport',
   'space',
   'social',
@@ -49,6 +52,10 @@ export const companySchema = z.enum([
   'solarcity',
   'hyperloop',
   'doge',
+  'apple',
+  'openai',
+  'anthropic',
+  'meta',
 ])
 export const checkpointKindSchema = z.enum([
   'year_end',
@@ -62,6 +69,39 @@ export const checkpointStateSchema = z.enum([
   'missed',
   'delivered',
 ])
+export const entityTypeSchema = z.enum([
+  'company',
+  'person',
+  'product_line',
+  'government_body',
+  'creator',
+  'publication',
+])
+export const entityStatusSchema = z.enum(['active', 'legacy', 'archived'])
+export const predictionFamilySlugSchema = z.enum([
+  'ai_launch',
+  'product_ship_date',
+  'earnings_guidance',
+  'policy_promise',
+  'ceo_claim',
+])
+export const predictionFamilyStatusSchema = z.enum(['active', 'archived'])
+export const leadTypeSchema = z.enum([
+  'structured_agent_lead',
+  'human_url_lead',
+  'system_discovery_lead',
+])
+export const predictionLeadStatusSchema = z.enum([
+  'pending',
+  'in_review',
+  'accepted',
+  'rejected',
+  'duplicate',
+  'merged',
+  'escalated',
+  'failed',
+])
+export const eventGroupStatusSchema = z.enum(['draft', 'active', 'archived'])
 
 export const sourceSchema = z.object({
   id: z.string(),
@@ -99,6 +139,41 @@ export const forumLeaderSchema = marketAuthorSchema.extend({
   karma: z.number().int().nonnegative(),
   authoredClaims: z.number().int().nonnegative(),
   discussionPosts: z.number().int().nonnegative(),
+})
+
+export const entitySchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  displayName: z.string(),
+  entityType: entityTypeSchema,
+  status: entityStatusSchema,
+  description: z.string().nullable().optional(),
+  aliases: z.array(z.string()).default([]),
+})
+
+export const predictionFamilySchema = z.object({
+  id: z.string(),
+  slug: predictionFamilySlugSchema,
+  displayName: z.string(),
+  description: z.string(),
+  defaultResolutionMode: z.string(),
+  defaultTimeHorizon: z.string(),
+  status: predictionFamilyStatusSchema,
+})
+
+export const eventGroupSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  description: z.string().nullable().optional(),
+  familyId: z.string().nullable().optional(),
+  primaryEntityId: z.string().nullable().optional(),
+  status: eventGroupStatusSchema,
+  startAt: z.string().nullable().optional(),
+  endAt: z.string().nullable().optional(),
+  heroMarketId: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 })
 
 export const marketSchema = z.object({
@@ -413,9 +488,11 @@ export const predictionSubmissionQueueSchema = z.object({
 
 export const reviewRequestedEventSchema = z.object({
   eventType: z.literal('review.requested'),
-  submissionId: z.string(),
+  leadId: z.string(),
+  legacySubmissionId: z.string().nullable().optional(),
   submittedUrl: z.url(),
-  agentId: z.string(),
+  agentId: z.string().nullable().optional(),
+  ownerEmail: z.string().email().nullable().optional(),
   createdAt: z.string(),
   priority: reviewQueuePrioritySchema.default('normal'),
 })
@@ -433,7 +510,8 @@ export const predictionReviewEvidenceSchema = z.object({
 
 export const predictionReviewResultSchema = z.object({
   runId: z.string(),
-  submissionId: z.string(),
+  submissionId: z.string().nullable().optional(),
+  leadId: z.string().nullable().optional(),
   reviewer: z.string().min(2).max(80),
   verdict: predictionReviewVerdictSchema,
   confidence: z.number().min(0).max(1),
@@ -468,6 +546,7 @@ export const internalPredictionSubmissionReviewResultInputSchema = z.object({
 
 export const agentPredictionSubmissionResponseSchema = z.object({
   queued: z.literal(true),
+  leadId: z.string(),
   submission: queuedPredictionSubmissionSchema,
   reviewHint: z.string(),
 })
@@ -486,11 +565,66 @@ export const ownerReviewSubmissionInputSchema =
 
 export const humanReviewSubmissionReceiptSchema = z.object({
   queued: z.literal(true),
+  leadId: z.string(),
   submissionId: z.string(),
   sourceUrl: z.url(),
   sourceDomain: z.string(),
   submittedAt: z.string(),
   reviewHint: z.string(),
+})
+
+export const predictionLeadSchema = z.object({
+  id: z.string(),
+  leadType: leadTypeSchema,
+  submittedByAgentId: z.string().nullable(),
+  submittedByOwnerEmail: z.string().email().nullable(),
+  sourceUrl: z.url(),
+  normalizedSourceUrl: z.url(),
+  sourceDomain: z.string(),
+  sourceType: sourceTypeSchema,
+  sourceLabel: z.string().nullable(),
+  sourceNote: z.string().nullable(),
+  sourcePublishedAt: z.string().nullable(),
+  claimedHeadline: z.string().nullable(),
+  claimedSubject: z.string().nullable(),
+  claimedCategory: z.string().nullable(),
+  familyId: z.string().nullable(),
+  familySlug: predictionFamilySlugSchema.nullable(),
+  familyDisplayName: z.string().nullable(),
+  primaryEntityId: z.string().nullable(),
+  primaryEntitySlug: z.string().nullable(),
+  primaryEntityDisplayName: z.string().nullable(),
+  eventGroupId: z.string().nullable(),
+  promisedDate: z.string().nullable(),
+  summary: z.string().nullable(),
+  tags: z.array(z.string()),
+  status: predictionLeadStatusSchema,
+  spamScore: z.number().nonnegative(),
+  duplicateOfLeadId: z.string().nullable(),
+  duplicateOfMarketId: z.string().nullable(),
+  reviewNotes: z.string().nullable().optional(),
+  linkedMarketId: z.string().nullable().optional(),
+  reviewedAt: z.string().nullable().optional(),
+  legacyAgentSubmissionId: z.string().nullable(),
+  legacyHumanSubmissionId: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export const internalPredictionLeadSchema = predictionLeadSchema.extend({
+  submittedBy: marketAuthorSchema.nullable(),
+})
+
+export const internalPredictionLeadDetailSchema = z.object({
+  lead: internalPredictionLeadSchema,
+  relatedPendingLeads: z.array(predictionLeadSchema),
+  recentReviewedLeads: z.array(predictionLeadSchema),
+  recentReviewResults: z.array(predictionReviewResultSchema),
+})
+
+export const predictionLeadQueueSchema = z.object({
+  pendingCount: z.number().int().nonnegative(),
+  items: z.array(predictionLeadSchema),
 })
 
 export const discoveryReportSchema = z.object({
@@ -539,6 +673,37 @@ export const dashboardSnapshotSchema = z.object({
   metadata: storeMetadataSchema,
 })
 
+export const boardFamilySummarySchema = z.object({
+  family: predictionFamilySchema,
+  totalMarkets: z.number().int().nonnegative(),
+  openMarkets: z.number().int().nonnegative(),
+  activeGroups: z.number().int().nonnegative(),
+  primaryEntities: z.array(entitySchema),
+  heroMarket: marketSchema.nullable(),
+})
+
+export const boardEventGroupSummarySchema = z.object({
+  group: eventGroupSchema,
+  family: predictionFamilySchema.nullable(),
+  primaryEntity: entitySchema.nullable(),
+  totalMarkets: z.number().int().nonnegative(),
+  openMarkets: z.number().int().nonnegative(),
+  heroMarket: marketSchema.nullable(),
+})
+
+export const eventGroupDetailSchema = z.object({
+  summary: boardEventGroupSummarySchema,
+  markets: z.array(marketSchema),
+})
+
+export const marketDetailSchema = z.object({
+  market: marketSchema,
+  family: predictionFamilySchema.nullable(),
+  primaryEntity: entitySchema.nullable(),
+  eventGroups: z.array(boardEventGroupSummarySchema),
+  relatedMarkets: z.array(marketSchema),
+})
+
 export const dashboardLiveEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('snapshot'),
@@ -551,6 +716,9 @@ export type Source = z.infer<typeof sourceSchema>
 export type EvidenceUpdate = z.infer<typeof evidenceUpdateSchema>
 export type Checkpoint = z.infer<typeof checkpointSchema>
 export type CheckpointState = z.infer<typeof checkpointStateSchema>
+export type Entity = z.infer<typeof entitySchema>
+export type PredictionFamily = z.infer<typeof predictionFamilySchema>
+export type EventGroup = z.infer<typeof eventGroupSchema>
 export type MarketAuthor = z.infer<typeof marketAuthorSchema>
 export type ForumLeader = z.infer<typeof forumLeaderSchema>
 export type MarketStatus = z.infer<typeof marketStatusSchema>
@@ -576,6 +744,10 @@ export type DashboardStats = z.infer<typeof dashboardStatsSchema>
 export type HallOfFameEntry = z.infer<typeof hallOfFameEntrySchema>
 export type MarketResolutionInput = z.infer<typeof marketResolutionInputSchema>
 export type DashboardSnapshot = z.infer<typeof dashboardSnapshotSchema>
+export type BoardFamilySummary = z.infer<typeof boardFamilySummarySchema>
+export type BoardEventGroupSummary = z.infer<typeof boardEventGroupSummarySchema>
+export type EventGroupDetail = z.infer<typeof eventGroupDetailSchema>
+export type MarketDetail = z.infer<typeof marketDetailSchema>
 export type DashboardLiveEvent = z.infer<typeof dashboardLiveEventSchema>
 export type AgentRegistrationInput = z.infer<typeof agentRegistrationInputSchema>
 export type AgentRegistrationResponse = z.infer<
@@ -593,6 +765,12 @@ export type PredictionSubmissionQueue = z.infer<
 export type ReviewRequestedEvent = z.infer<typeof reviewRequestedEventSchema>
 export type InternalPredictionSubmission = z.infer<
   typeof internalPredictionSubmissionSchema
+>
+export type InternalPredictionLead = z.infer<
+  typeof internalPredictionLeadSchema
+>
+export type InternalPredictionLeadDetail = z.infer<
+  typeof internalPredictionLeadDetailSchema
 >
 export type PredictionReviewVerdict = z.infer<
   typeof predictionReviewVerdictSchema
@@ -618,9 +796,9 @@ export type HumanReviewSubmissionInput = z.infer<
 export type OwnerReviewSubmissionInput = z.infer<
   typeof ownerReviewSubmissionInputSchema
 >
-export type HumanReviewSubmissionReceipt = z.infer<
-  typeof humanReviewSubmissionReceiptSchema
->
+export type PredictionLead = z.infer<typeof predictionLeadSchema>
+export type PredictionLeadQueue = z.infer<typeof predictionLeadQueueSchema>
+export type HumanReviewSubmissionReceipt = z.infer<typeof humanReviewSubmissionReceiptSchema>
 export type OwnerEmailSetupInput = z.infer<typeof ownerEmailSetupInputSchema>
 export type OwnerEmailSetupResponse = z.infer<
   typeof ownerEmailSetupResponseSchema

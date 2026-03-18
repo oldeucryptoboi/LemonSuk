@@ -1,4 +1,6 @@
 import {
+  boardEventGroupSummarySchema,
+  boardFamilySummarySchema,
   agentRegistrationResponseSchema,
   captchaChallengeSchema,
   claimViewSchema,
@@ -13,6 +15,8 @@ import {
   type DiscussionThread,
   type AgentRegistrationInput,
   type AgentRegistrationResponse,
+  type BoardEventGroupSummary,
+  type BoardFamilySummary,
   type CaptchaChallenge,
   type ClaimView,
   type DashboardLiveEvent,
@@ -54,6 +58,16 @@ async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
 export async function fetchDashboard(): Promise<DashboardSnapshot> {
   const response = await request<unknown>(`${apiBasePath}/dashboard`)
   return dashboardSnapshotSchema.parse(response)
+}
+
+export async function fetchBoardFamilies(): Promise<BoardFamilySummary[]> {
+  const response = await request<unknown>(`${apiBasePath}/families`)
+  return boardFamilySummarySchema.array().parse(response)
+}
+
+export async function fetchBoardGroups(): Promise<BoardEventGroupSummary[]> {
+  const response = await request<unknown>(`${apiBasePath}/groups`)
+  return boardEventGroupSummarySchema.array().parse(response)
 }
 
 export function createDashboardLiveUrl(locationOrigin?: string): string {

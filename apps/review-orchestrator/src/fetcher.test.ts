@@ -81,7 +81,7 @@ describe('fetchReviewSnapshot', () => {
             get: () => null,
           },
           text: async () => 'plain body from a null header response',
-        }) as Response,
+        }) as unknown as Response,
     )
 
     expect(nullHeaderSnapshot).toEqual({

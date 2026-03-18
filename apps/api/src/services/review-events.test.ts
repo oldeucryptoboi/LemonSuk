@@ -12,7 +12,8 @@ describe('review event publisher', () => {
     await expect(
       reviewEvents.enqueueReviewRequestedEvent({
         eventType: 'review.requested',
-        submissionId: 'submission_1',
+        leadId: 'lead_1',
+        legacySubmissionId: 'submission_1',
         submittedUrl: 'https://example.com/claim',
         agentId: 'agent_1',
         createdAt: '2026-03-17T00:00:00.000Z',
@@ -22,7 +23,8 @@ describe('review event publisher', () => {
 
     expect(reviewEvents.__readReviewEventsForTests()).toEqual([
       expect.objectContaining({
-        submissionId: 'submission_1',
+        leadId: 'lead_1',
+        legacySubmissionId: 'submission_1',
       }),
     ])
     expect(reviewEvents.__readReviewEventsForTests('missing-queue')).toEqual([])
@@ -33,7 +35,8 @@ describe('review event publisher', () => {
     await expect(
       reviewEvents.enqueueReviewRequestedEvent({
         eventType: 'review.requested',
-        submissionId: 'submission_2',
+        leadId: 'lead_2',
+        legacySubmissionId: 'submission_2',
         submittedUrl: 'https://example.com/claim-2',
         agentId: 'agent_2',
         createdAt: '2026-03-17T00:05:00.000Z',
@@ -44,7 +47,8 @@ describe('review event publisher', () => {
     expect(enqueue).toHaveBeenCalledWith(
       'lemonsuk:review-requested',
       expect.objectContaining({
-        submissionId: 'submission_2',
+        leadId: 'lead_2',
+        legacySubmissionId: 'submission_2',
         priority: 'high',
       }),
     )
@@ -75,7 +79,8 @@ describe('review event publisher', () => {
       await expect(
         reviewEvents.enqueueReviewRequestedEvent({
           eventType: 'review.requested',
-          submissionId: 'submission_redis',
+          leadId: 'lead_redis',
+          legacySubmissionId: 'submission_redis',
           submittedUrl: 'https://example.com/redis',
           agentId: 'agent_redis',
           createdAt: '2026-03-17T00:10:00.000Z',
@@ -85,7 +90,7 @@ describe('review event publisher', () => {
 
       expect(lpush).toHaveBeenCalledWith(
         'lemonsuk:review-custom',
-        expect.stringContaining('"submissionId":"submission_redis"'),
+        expect.stringContaining('"leadId":"lead_redis"'),
       )
     } finally {
       vi.doUnmock('ioredis')
@@ -105,7 +110,8 @@ describe('review event publisher', () => {
       await expect(
         reviewEvents.enqueueReviewRequestedEvent({
           eventType: 'review.requested',
-          submissionId: 'submission_fallback',
+          leadId: 'lead_fallback',
+          legacySubmissionId: 'submission_fallback',
           submittedUrl: 'https://example.com/fallback',
           agentId: 'agent_fallback',
           createdAt: '2026-03-17T00:15:00.000Z',
@@ -115,7 +121,8 @@ describe('review event publisher', () => {
 
       expect(reviewEvents.__readReviewEventsForTests('lemonsuk:review-custom')).toEqual([
         expect.objectContaining({
-          submissionId: 'submission_fallback',
+          leadId: 'lead_fallback',
+          legacySubmissionId: 'submission_fallback',
         }),
       ])
     } finally {

@@ -1,10 +1,12 @@
 'use client'
 
 import React from 'react'
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
 
 import {
   supportMarketId,
+  type BoardEventGroupSummary,
+  type BoardFamilySummary,
   type ClaimView,
   type DashboardSnapshot,
   type DiscoveryReport,
@@ -21,6 +23,8 @@ import { NotificationRail } from './components/NotificationRail'
 import { OwnerObservatory } from './components/OwnerObservatory'
 import { SupportTopicCard } from './components/SupportTopicCard'
 import {
+  fetchBoardFamilies,
+  fetchBoardGroups,
   fetchClaimView,
   fetchDashboard,
   fetchOwnerSession,
@@ -41,7 +45,6 @@ import {
 
 const feedPageSize = 4
 const pageScrollLoadAhead = 280
-const secondCardPromptOffset = 160
 const ownerSessionStorageKey = 'lemonsuk.ownerSessionToken'
 
 function replaceUrlWithoutParams(keys: string[]) {
@@ -68,10 +71,16 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null)
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null)
   const [topicMarketId, setTopicMarketId] = useState<string | null>(null)
+  const [familySummaries, setFamilySummaries] = useState<BoardFamilySummary[]>(
+    [],
+  )
+  const [groupSummaries, setGroupSummaries] = useState<BoardEventGroupSummary[]>(
+    [],
+  )
   const [filter, setFilter] = useState<MarketFilter>('all')
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>('all')
   const [agentQuery, setAgentQuery] = useState(
-    'Elon Musk Tesla SpaceX X xAI Neuralink Boring SolarCity Hyperloop DOGE deadline promises',
+    'AI launches product ship dates CEO claims Apple OpenAI Anthropic Meta Tesla Musk deadlines',
   )
   const [report, setReport] = useState<DiscoveryReport | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -83,11 +92,9 @@ export default function App() {
   const [loginModalMode, setLoginModalMode] = useState<'claim' | 'owner'>(
     'claim',
   )
-  const [loginPromptShown, setLoginPromptShown] = useState(false)
   const [ownerSession, setOwnerSession] = useState<OwnerSession | null>(null)
   const [claimView, setClaimView] = useState<ClaimView | null>(null)
   const [, startTransition] = useTransition()
-  const secondCardRef = useRef<HTMLDivElement | null>(null)
 
   const applySnapshot = useCallback(
     (
@@ -132,9 +139,16 @@ export default function App() {
   const refreshDashboard = useCallback(async () => {
     setLoading(true)
     try {
-      applySnapshot(await fetchDashboard(), {
+      const [nextSnapshot, nextFamilies, nextGroups] = await Promise.all([
+        fetchDashboard(),
+        fetchBoardFamilies(),
+        fetchBoardGroups(),
+      ])
+      applySnapshot(nextSnapshot, {
         preserveSelection: false,
       })
+      setFamilySummaries(nextFamilies)
+      setGroupSummaries(nextGroups)
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -150,6 +164,12 @@ export default function App() {
     void refreshDashboard()
     const unsubscribe = subscribeToDashboard((nextSnapshot) => {
       applySnapshot(nextSnapshot)
+      void Promise.all([fetchBoardFamilies(), fetchBoardGroups()])
+        .then(([nextFamilies, nextGroups]) => {
+          setFamilySummaries(nextFamilies)
+          setGroupSummaries(nextGroups)
+        })
+        .catch(() => undefined)
       setLoading(false)
       setError(null)
     })
@@ -218,9 +238,37 @@ export default function App() {
     boardMarkets,
     snapshot?.now ?? new Date().toISOString(),
   )
+  const featuredFamilies = familySummaries.filter(
+    (summary) => summary.totalMarkets > 0,
+  )
+  const featuredGroups = groupSummaries.filter(
+    (summary) => summary.totalMarkets > 0,
+  )
+  const spotlightGroup = featuredGroups[0] ?? null
+  const followupGroups = featuredGroups.slice(1, 4)
 
   const bonusPercent = snapshot?.stats.globalBonusPercent ?? 0
   const agentInstructionsUrl = '/agent.md'
+
+  const openOwnerLogin = useCallback(() => {
+    setLoginModalMode('owner')
+    setLoginModalOpen(true)
+  }, [])
+
+  const openClaimLookup = useCallback(() => {
+    setLoginModalMode('claim')
+    setLoginModalOpen(true)
+  }, [])
+
+  const handleOwnerLogout = useCallback(() => {
+    setOwnerSession(null)
+    setLoginModalOpen(false)
+    setClaimView(null)
+    setMessage('Signed out.')
+    setError(null)
+    window.localStorage.removeItem(ownerSessionStorageKey)
+    replaceUrlWithoutParams(['owner_session'])
+  }, [])
 
   useEffect(() => {
     setVisibleMarketCount(Math.min(feedPageSize, visibleMarkets.length))
@@ -245,54 +293,6 @@ export default function App() {
     loginModalOpen,
     topicMarket,
     renderedMarkets.length,
-    visibleMarkets.length,
-  ])
-
-  useEffect(() => {
-    function handlePageScroll() {
-      const remainingDistance =
-        document.documentElement.scrollHeight -
-        (window.scrollY + window.innerHeight)
-
-      if (hasMoreMarkets && remainingDistance < pageScrollLoadAhead) {
-        setVisibleMarketCount((current) =>
-          Math.min(current + feedPageSize, visibleMarkets.length),
-        )
-      }
-
-      if (
-        loginPromptShown ||
-        ownerSession ||
-        loginModalOpen ||
-        topicMarket ||
-        window.scrollY < 36
-      ) {
-        return
-      }
-
-      const secondCard = secondCardRef.current
-      if (!secondCard) {
-        return
-      }
-
-      if (secondCard.getBoundingClientRect().top <= secondCardPromptOffset) {
-        setLoginPromptShown(true)
-        setLoginModalMode('owner')
-        setLoginModalOpen(true)
-      }
-    }
-
-    window.addEventListener('scroll', handlePageScroll, { passive: true })
-
-    return () => {
-      window.removeEventListener('scroll', handlePageScroll)
-    }
-  }, [
-    hasMoreMarkets,
-    loginModalOpen,
-    loginPromptShown,
-    ownerSession,
-    topicMarket,
     visibleMarkets.length,
   ])
 
@@ -326,18 +326,70 @@ export default function App() {
         <HeroBanner
           snapshot={snapshot}
           agentInstructionsUrl={agentInstructionsUrl}
-          onOpenOwnerModal={() => {
-            setLoginModalMode('claim')
-            setLoginModalOpen(true)
-          }}
+          onOpenOwnerModal={openOwnerLogin}
+          onOpenClaimModal={openClaimLookup}
         />
       ) : null}
 
       <div className="message-strip">
-        {loading ? <span>Loading the board…</span> : null}
-        {message ? <span>{message}</span> : null}
-        {error ? <span className="error-text">{error}</span> : null}
+        <div className="message-strip-copy">
+          {loading ? <span>Loading the board…</span> : null}
+          {message ? <span>{message}</span> : null}
+          {error ? <span className="error-text">{error}</span> : null}
+        </div>
+        <div className="session-status" aria-live="polite">
+          {ownerSession ? (
+            <>
+              <span className="session-status-label">
+                Signed in as <strong>{ownerSession.ownerEmail}</strong>
+              </span>
+              <button
+                type="button"
+                className="session-status-action"
+                onClick={handleOwnerLogout}
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="session-status-label">Not signed in</span>
+              <button
+                type="button"
+                className="session-status-action"
+                onClick={openOwnerLogin}
+              >
+                Owner login
+              </button>
+              <button
+                type="button"
+                className="session-status-action session-status-action-secondary"
+                onClick={openClaimLookup}
+              >
+                Claim agent
+              </button>
+            </>
+          )}
+        </div>
       </div>
+
+      <nav className="board-nav-strip" aria-label="Board navigation">
+        <a className="board-nav-link active" href="/">
+          Board
+        </a>
+        <a className="board-nav-link" href="/groups">
+          Groups
+        </a>
+        <a className="board-nav-link" href="/standings">
+          Standings
+        </a>
+        <a className="board-nav-link" href="/owner">
+          Owner deck
+        </a>
+        <a className="board-nav-link" href="/review">
+          Review desk
+        </a>
+      </nav>
 
       <div className="content-grid">
         <main className="main-column">
@@ -349,18 +401,146 @@ export default function App() {
           ) : (
             <section className="market-feed-panel">
               <div className="market-feed-scroll">
+                {spotlightGroup ? (
+                  <section className="board-surface-panel board-surface-panel-spotlight">
+                    <div className="section-heading compact">
+                      <div>
+                        <div className="eyebrow">Flagship boards</div>
+                        <h2>Start from a board, not a single card</h2>
+                      </div>
+                      <a className="surface-link" href="/groups">
+                        Browse all boards
+                      </a>
+                    </div>
+                    <div className="board-spotlight-grid">
+                      <a
+                        className="surface-card spotlight-card spotlight-card-primary"
+                        href={`/groups/${spotlightGroup.group.slug}`}
+                      >
+                        <span className="surface-kicker">
+                          {spotlightGroup.family?.displayName ?? 'Mixed board'}
+                        </span>
+                        <strong>{spotlightGroup.group.title}</strong>
+                        <p>
+                          {spotlightGroup.heroMarket?.headline ??
+                            spotlightGroup.group.description ??
+                            'Reviewed board collecting accepted predictions.'}
+                        </p>
+                        <span className="surface-meta">
+                          {spotlightGroup.openMarkets} open /{' '}
+                          {spotlightGroup.totalMarkets} tracked
+                        </span>
+                      </a>
+                      <div className="spotlight-card-stack">
+                        {followupGroups.map((summary) => (
+                          <a
+                            key={summary.group.id}
+                            className="surface-card spotlight-card spotlight-card-secondary"
+                            href={`/groups/${summary.group.slug}`}
+                          >
+                            <span className="surface-kicker">
+                              {summary.primaryEntity?.displayName ??
+                                summary.family?.displayName ??
+                                'Mixed board'}
+                            </span>
+                            <strong>{summary.group.title}</strong>
+                            <p>
+                              {summary.heroMarket?.headline ??
+                                summary.group.description ??
+                                'Reviewed prediction lane.'}
+                            </p>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
+
+                {featuredFamilies.length > 0 ? (
+                  <section className="board-surface-panel">
+                    <div className="section-heading compact">
+                      <div>
+                        <div className="eyebrow">Prediction families</div>
+                        <h2>Live lanes</h2>
+                      </div>
+                      <a className="surface-link" href="/groups">
+                        View all groups
+                      </a>
+                    </div>
+                    <div className="surface-card-grid">
+                      {featuredFamilies.map((summary) => (
+                        <a
+                          key={summary.family.id}
+                          className="surface-card"
+                          href="/groups"
+                        >
+                          <span className="surface-kicker">
+                            {summary.openMarkets} open / {summary.totalMarkets}{' '}
+                            tracked
+                          </span>
+                          <strong>{summary.family.displayName}</strong>
+                          <p>
+                            {summary.heroMarket?.headline ??
+                              summary.family.description}
+                          </p>
+                          <span className="surface-meta">
+                            {summary.activeGroups} live board
+                            {summary.activeGroups === 1 ? '' : 's'}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {featuredGroups.length > 0 ? (
+                  <section className="board-surface-panel">
+                    <div className="section-heading compact">
+                      <div>
+                        <div className="eyebrow">Event groups</div>
+                        <h2>Reviewed boards</h2>
+                      </div>
+                      <a className="surface-link" href="/groups">
+                        Browse groups
+                      </a>
+                    </div>
+                    <div className="surface-card-grid">
+                      {featuredGroups.slice(0, 6).map((summary) => (
+                        <a
+                          key={summary.group.id}
+                          className="surface-card surface-card-group"
+                          href={`/groups/${summary.group.slug}`}
+                        >
+                          <span className="surface-kicker">
+                            {summary.family?.displayName ?? 'Mixed board'}
+                          </span>
+                          <strong>{summary.group.title}</strong>
+                          <p>
+                            {summary.group.description ??
+                              'Reviewed prediction lane.'}
+                          </p>
+                          <span className="surface-meta">
+                            {summary.openMarkets} open / {summary.totalMarkets}{' '}
+                            tracked
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
                 <div className="feed-sticky-chrome">
                   <section className="section-heading">
                     <div>
-                      <div className="eyebrow">The book</div>
-                      <h2>Deadline cards</h2>
+                      <div className="eyebrow">Archive layer</div>
+                      <h2>Full prediction feed</h2>
                       <p className="feed-status">
                         Showing {renderedMarkets.length} of{' '}
                         {visibleMarkets.length} cards in the{' '}
                         {companyFilter === 'all'
                           ? 'full'
                           : companyLabel(companyFilter)}{' '}
-                        feed.
+                        archive.
                       </p>
                     </div>
                     <div className="feed-controls">
@@ -368,12 +548,9 @@ export default function App() {
                         <button
                           type="button"
                           className="filter-button"
-                          onClick={() => {
-                            setLoginModalMode('owner')
-                            setLoginModalOpen(true)
-                          }}
+                          onClick={openOwnerLogin}
                         >
-                          owner deck
+                          Owner login
                         </button>
                       ) : null}
                       <div className="filter-row">
@@ -454,12 +631,8 @@ export default function App() {
                   </p>
                 ) : (
                   <section className="market-grid">
-                    {renderedMarkets.map((market, index) => (
-                      <div
-                        key={market.id}
-                        ref={index === 1 ? secondCardRef : undefined}
-                        className="market-card-slot"
-                      >
+                    {renderedMarkets.map((market) => (
+                      <div key={market.id} className="market-card-slot">
                         <MarketCard
                           market={market}
                           selected={selectedMarketId === market.id}
@@ -500,10 +673,7 @@ export default function App() {
                   ownerEmail={ownerSession?.ownerEmail ?? null}
                   onQueryChange={setAgentQuery}
                   onRun={handleRunDiscovery}
-                  onOpenOwnerModal={() => {
-                    setLoginModalMode('owner')
-                    setLoginModalOpen(true)
-                  }}
+                  onOpenOwnerModal={openOwnerLogin}
                 />
               </div>
             </section>

@@ -1,5 +1,5 @@
 import type {
-  InternalPredictionSubmission,
+  InternalPredictionLead,
   InternalPredictionSubmissionReviewResultInput,
 } from '../../../packages/shared/src/types'
 import type { ReviewRequestedEvent } from '../../../packages/shared/src/types'
@@ -7,24 +7,25 @@ import type { ReviewRequestedEvent } from '../../../packages/shared/src/types'
 import { dispatchToEddie } from './eddie-client'
 import { fetchReviewSnapshot } from './fetcher'
 import {
-  readInternalPredictionSubmission,
-  submitInternalPredictionReviewResult,
-  updateInternalPredictionSubmissionStatus,
+  readInternalPredictionLead,
+  submitInternalPredictionLeadReviewResult,
+  updateInternalPredictionLeadStatus,
 } from './internal-api'
 import { consumeReviewRequestedEvent } from './queue'
 
 type WorkerDependencies = {
   consumeEvent: () => Promise<ReviewRequestedEvent | null>
-  readSubmission: (submissionId: string) => Promise<InternalPredictionSubmission>
+  readLead: (leadId: string) => Promise<InternalPredictionLead>
   updateStatus: (
-    submissionId: string,
+    leadId: string,
     input: { status: 'in_review' | 'failed' | 'escalated'; note?: string; runId?: string; providerRunId?: string },
-  ) => Promise<InternalPredictionSubmission>
+  ) => Promise<InternalPredictionLead>
   fetchSnapshot: (url: string) => Promise<{ snapshotText: string; snapshotRef: string | null }>
   dispatchReview: (
     task: {
       runId: string
-      submissionId: string
+      leadId: string
+      legacySubmissionId?: string | null
       sourceUrl: string
       snapshotText: string
       snapshotRef: string | null
@@ -34,7 +35,7 @@ type WorkerDependencies = {
     | { mode: 'awaiting_callback'; providerRunId: string }
   >
   submitResult: (
-    submissionId: string,
+    leadId: string,
     input: InternalPredictionSubmissionReviewResultInput,
   ) => Promise<unknown>
 }
@@ -44,8 +45,8 @@ type WorkerLoopDependencies = {
   sleep?: (durationMs: number) => Promise<void>
 }
 
-function createRunId(submissionId: string): string {
-  return `run_${submissionId.replace(/^submission_/, '')}`
+function createRunId(leadId: string): string {
+  return `run_${leadId.replace(/^lead_/, '')}`
 }
 
 export async function runReviewWorkerCycle(
@@ -57,40 +58,40 @@ export async function runReviewWorkerCycle(
     return false
   }
 
-  const readSubmission =
-    dependencies.readSubmission ?? readInternalPredictionSubmission
+  const readLead = dependencies.readLead ?? readInternalPredictionLead
   const updateStatus =
-    dependencies.updateStatus ?? updateInternalPredictionSubmissionStatus
+    dependencies.updateStatus ?? updateInternalPredictionLeadStatus
   const fetchSnapshot = dependencies.fetchSnapshot ?? fetchReviewSnapshot
   const dispatchReview = dependencies.dispatchReview ?? dispatchToEddie
   const submitResult =
-    dependencies.submitResult ?? submitInternalPredictionReviewResult
+    dependencies.submitResult ?? submitInternalPredictionLeadReviewResult
 
-  const runId = createRunId(event.submissionId)
+  const runId = createRunId(event.leadId)
 
   try {
-    const submission = await readSubmission(event.submissionId)
-    await updateStatus(event.submissionId, {
+    const lead = await readLead(event.leadId)
+    await updateStatus(event.leadId, {
       status: 'in_review',
       runId,
       note: 'Queued review picked up by the orchestrator worker.',
     })
 
-    const snapshot = await fetchSnapshot(submission.sourceUrl)
+    const snapshot = await fetchSnapshot(lead.sourceUrl)
     const dispatchResult = await dispatchReview({
       runId,
-      submissionId: event.submissionId,
-      sourceUrl: submission.sourceUrl,
+      leadId: event.leadId,
+      legacySubmissionId: event.legacySubmissionId ?? null,
+      sourceUrl: lead.sourceUrl,
       snapshotText: snapshot.snapshotText,
       snapshotRef: snapshot.snapshotRef,
     })
 
     if (dispatchResult.mode === 'completed') {
-      await submitResult(event.submissionId, dispatchResult.result)
+      await submitResult(event.leadId, dispatchResult.result)
       return true
     }
 
-    await updateStatus(event.submissionId, {
+    await updateStatus(event.leadId, {
       status: 'in_review',
       runId,
       providerRunId: dispatchResult.providerRunId,
@@ -98,7 +99,7 @@ export async function runReviewWorkerCycle(
     })
     return true
   } catch (error) {
-    await updateStatus(event.submissionId, {
+    await updateStatus(event.leadId, {
       status: 'failed',
       runId,
       note:

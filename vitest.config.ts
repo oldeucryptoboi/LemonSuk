@@ -6,7 +6,9 @@ export default defineConfig({
     include: [
       'apps/api/src/**/*.test.ts',
       'apps/review-orchestrator/src/**/*.test.ts',
+      'apps/web/src/**/*.test.ts',
       'apps/web/src/**/*.test.tsx',
+      'apps/web/app/**/*.test.ts',
       'apps/web/app/**/*.test.tsx',
     ],
     environment: 'node',

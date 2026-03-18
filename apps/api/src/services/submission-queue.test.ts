@@ -32,7 +32,7 @@ async function registerAgent(
 }
 
 describe('submission queue service', () => {
-  it('queues, reviews, and retires pending submissions', async () => {
+  it('queues and reads pending submissions', async () => {
     const context = await setupApiContext()
     const database = await import('./database')
     const queue = await import('./submission-queue')
@@ -65,6 +65,7 @@ describe('submission queue service', () => {
 
     expect(firstSubmission).toEqual({
       queued: true,
+      leadId: expect.stringMatching(/^lead_/),
       submission: expect.objectContaining({
         headline: 'Tesla ships a refreshed Roadster by December 31, 2027',
         sourceLabel: 'tesla.com',
@@ -77,6 +78,35 @@ describe('submission queue service', () => {
       }),
       reviewHint: expect.stringContaining('offline review'),
     })
+
+    const queuedLeadRows = await context.pool.query<{
+      status: string
+      family_id: string | null
+      primary_entity_id: string | null
+      duplicate_of_market_id: string | null
+      legacy_agent_submission_id: string | null
+    }>(
+      `
+        SELECT
+          status,
+          family_id,
+          primary_entity_id,
+          duplicate_of_market_id,
+          legacy_agent_submission_id
+        FROM prediction_leads
+        WHERE id = $1
+      `,
+      [firstSubmission.leadId],
+    )
+    expect(queuedLeadRows.rows).toEqual([
+      {
+        status: 'pending',
+        family_id: 'family_product_ship_date',
+        primary_entity_id: 'entity_tesla',
+        duplicate_of_market_id: null,
+        legacy_agent_submission_id: null,
+      },
+    ])
 
     await queue.enqueuePredictionSubmission(beta.agent, {
       headline: 'DOGE cuts $100 billion before September 30, 2026',
@@ -109,81 +139,33 @@ describe('submission queue service', () => {
       ],
     })
 
-    await expect(
-      queue.reviewPredictionSubmission({
-        submissionId: 'missing-submission',
-        decision: 'rejected',
-      }),
-    ).rejects.toThrow('Prediction submission not found.')
-
-    await expect(
-      queue.reviewPredictionSubmission({
-        submissionId: firstSubmission.submission.id,
-        decision: 'accepted',
-      }),
-    ).rejects.toThrow('Accepted submissions must be linked to a market.')
-
-    await expect(
-      queue.reviewPredictionSubmission({
-        submissionId: firstSubmission.submission.id,
-        decision: 'accepted',
-        linkedMarketId: 'missing-market',
-      }),
-    ).rejects.toThrow('Linked market not found.')
-
-    const accepted = await queue.reviewPredictionSubmission({
-      submissionId: firstSubmission.submission.id,
-      decision: 'accepted',
-      linkedMarketId: 'optimus-customizable-2026',
-      reviewNotes: 'Validated offline and linked to the existing live market.',
-    })
-    expect(accepted).toEqual(
-      expect.objectContaining({
-        id: firstSubmission.submission.id,
-        status: 'accepted',
-        linkedMarketId: 'optimus-customizable-2026',
-        reviewNotes:
-          'Validated offline and linked to the existing live market.',
-      }),
-    )
-
-    await expect(
-      queue.reviewPredictionSubmission({
-        submissionId: firstSubmission.submission.id,
-        decision: 'rejected',
-      }),
-    ).rejects.toThrow('Prediction submission has already been reviewed.')
-
     const pendingFromClient = await database.withDatabaseTransaction((client) =>
       queue.readPredictionSubmissionQueueFromClient(client, 1),
     )
     expect(pendingFromClient).toEqual({
-      pendingCount: 1,
+      pendingCount: 2,
       items: [
+        expect.objectContaining({
+          id: firstSubmission.submission.id,
+          submittedBy: expect.objectContaining({
+            handle: 'alpha_queue_bot',
+          }),
+        }),
+      ],
+    })
+
+    expect(await queue.readPredictionSubmissionQueue()).toEqual({
+      pendingCount: 2,
+      items: [
+        expect.objectContaining({
+          id: firstSubmission.submission.id,
+        }),
         expect.objectContaining({
           submittedBy: expect.objectContaining({
             handle: 'beta_queue_bot',
           }),
         }),
       ],
-    })
-
-    const rejected = await queue.reviewPredictionSubmission({
-      submissionId: pendingFromClient.items[0]!.id,
-      decision: 'rejected',
-      reviewNotes: 'Rejected offline as weak or duplicate sourcing.',
-    })
-    expect(rejected).toEqual(
-      expect.objectContaining({
-        status: 'rejected',
-        linkedMarketId: null,
-        reviewNotes: 'Rejected offline as weak or duplicate sourcing.',
-      }),
-    )
-
-    expect(await queue.readPredictionSubmissionQueue()).toEqual({
-      pendingCount: 0,
-      items: [],
     })
 
     await context.pool.end()
@@ -327,7 +309,172 @@ describe('submission queue service', () => {
     await context.pool.end()
   })
 
-  it('surfaces reload failures after enqueue and review writes', async () => {
+  it('maps queued rows through source-domain fallbacks and tolerates null prior packets', async () => {
+    vi.resetModules()
+
+    const withDatabaseTransaction = vi.fn(async (run) =>
+      run({
+        query: vi
+          .fn()
+          .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+          .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+          .mockResolvedValueOnce({ rowCount: 1, rows: [{ count: 0 }] })
+          .mockResolvedValueOnce({
+            rowCount: 1,
+            rows: [
+              {
+                claimed_headline: null,
+                claimed_subject: null,
+                summary: null,
+              },
+            ],
+          })
+          .mockResolvedValueOnce({ rowCount: 1, rows: [] })
+          .mockResolvedValueOnce({ rowCount: 1, rows: [] }),
+      } as never),
+    )
+
+    vi.doMock('./database', () => ({
+      withDatabaseTransaction,
+      withDatabaseClient: vi.fn(),
+    }))
+    vi.doMock('./lead-intake', () => ({
+      createAgentLeadFromSubmission: vi.fn(async () => ({
+        id: 'lead_fallback',
+        leadType: 'structured_agent_lead',
+        submittedByAgentId: 'agent_1',
+        submittedByOwnerEmail: null,
+        sourceUrl: 'https://example.com/source',
+        normalizedSourceUrl: 'https://example.com/source',
+        sourceDomain: 'example.com',
+        sourceType: 'news',
+        sourceLabel: null,
+        sourceNote: null,
+        sourcePublishedAt: null,
+        claimedHeadline: 'Fallback headline',
+        claimedSubject: 'Fallback subject',
+        claimedCategory: 'vehicle',
+        familyId: null,
+        familySlug: null,
+        familyDisplayName: null,
+        primaryEntityId: null,
+        primaryEntitySlug: null,
+        primaryEntityDisplayName: null,
+        eventGroupId: null,
+        promisedDate: '2027-12-31T23:59:59.000Z',
+        summary: 'Fallback summary.',
+        tags: [],
+        status: 'pending',
+        spamScore: 0,
+        duplicateOfLeadId: null,
+        duplicateOfMarketId: null,
+        reviewNotes: null,
+        linkedMarketId: null,
+        reviewedAt: null,
+        legacyAgentSubmissionId: null,
+        legacyHumanSubmissionId: null,
+        createdAt: '2026-03-16T00:00:00.000Z',
+        updatedAt: '2026-03-16T00:00:00.000Z',
+      })),
+    }))
+    vi.doMock('./review-events', () => ({
+      enqueueReviewRequestedEvent: vi.fn(async () => undefined),
+    }))
+
+    try {
+      const queue = await import('./submission-queue')
+
+      await expect(
+        queue.enqueuePredictionSubmission(
+          {
+            id: 'agent_1',
+            handle: 'alpha',
+            displayName: 'Alpha',
+            ownerName: 'Owner',
+            modelProvider: 'OpenAI',
+            biography: 'Queue fallback agent.',
+            ownerEmail: null,
+            ownerVerifiedAt: null,
+            promoCredits: 0,
+            earnedCredits: 0,
+            availableCredits: 0,
+            createdAt: '2026-03-16T00:00:00.000Z',
+            claimUrl: '/?claim=claim_1',
+            challengeUrl: '/api/v1/auth/claims/claim_1',
+          },
+          {
+            headline: 'Fallback coverage packet',
+            subject: 'Fallback packet',
+            category: 'vehicle',
+            promisedDate: '2027-12-31T23:59:59.000Z',
+            summary: 'This packet exercises null prior submission text.',
+            sourceUrl: 'https://example.com/source',
+            tags: [],
+          },
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          leadId: 'lead_fallback',
+        }),
+      )
+
+      await expect(
+        queue.readPredictionSubmissionQueueFromClient(
+          {
+            query: vi
+              .fn()
+              .mockResolvedValueOnce({ rows: [{ count: 1 }] })
+              .mockResolvedValueOnce({
+                rows: [
+                  {
+                    id: 'submission_fallback',
+                    submitted_by_agent_id: 'agent_1',
+                    source_url: 'https://example.com/source',
+                    source_domain: 'example.com',
+                    source_type: 'news',
+                    source_label: '   ',
+                    claimed_headline: null,
+                    claimed_subject: null,
+                    claimed_category: null,
+                    promised_date: null,
+                    summary: null,
+                    tags: [],
+                    status: 'pending',
+                    review_notes: null,
+                    linked_market_id: null,
+                    reviewed_at: null,
+                    created_at: new Date('2026-03-16T00:00:00.000Z'),
+                    updated_at: new Date('2026-03-16T00:00:00.000Z'),
+                    author_handle: 'alpha',
+                    author_display_name: 'Alpha',
+                  },
+                ],
+              }),
+          } as never,
+          1,
+        ),
+      ).resolves.toEqual({
+        pendingCount: 1,
+        items: [
+          expect.objectContaining({
+            headline: 'example.com',
+            subject: 'example.com',
+            category: 'social',
+            summary: 'example.com',
+            promisedDate: '2026-03-16T00:00:00.000Z',
+            sourceLabel: 'example.com',
+          }),
+        ],
+      })
+    } finally {
+      vi.doUnmock('./review-events')
+      vi.doUnmock('./lead-intake')
+      vi.doUnmock('./database')
+      vi.resetModules()
+    }
+  })
+
+  it('surfaces reload failures after enqueue writes', async () => {
     vi.resetModules()
 
     const enqueueClient = {
@@ -341,50 +488,18 @@ describe('submission queue service', () => {
         .mockResolvedValueOnce({ rowCount: 1, rows: [] })
         .mockResolvedValueOnce({ rowCount: 0, rows: [] }),
     }
-    const reviewClient = {
-      query: vi
-        .fn()
-        .mockResolvedValueOnce({
-          rowCount: 1,
-          rows: [
-            {
-              id: 'submission_1',
-              submitted_by_agent_id: 'agent_1',
-              headline: 'Queued headline',
-              subject: 'Queued subject',
-              category: 'vehicle',
-              summary: 'Queued summary for reload branch coverage.',
-              promised_date: new Date('2027-12-31T23:59:59.000Z'),
-              normalized_source_url: 'https://example.com/source',
-              source_url: 'https://example.com/source',
-              source_label: null,
-              source_note: null,
-              source_published_at: null,
-              source_type: 'news',
-              tags: ['queued'],
-              status: 'pending',
-              review_notes: null,
-              linked_market_id: null,
-              reviewed_at: null,
-              created_at: new Date('2026-03-16T00:00:00.000Z'),
-              updated_at: new Date('2026-03-16T00:00:00.000Z'),
-              author_handle: 'alpha',
-              author_display_name: 'Alpha',
-            },
-          ],
-        })
-        .mockResolvedValueOnce({ rowCount: 1, rows: [] })
-        .mockResolvedValueOnce({ rowCount: 1, rows: [] })
-        .mockResolvedValueOnce({ rowCount: 0, rows: [] }),
-    }
     const withDatabaseTransaction = vi
       .fn()
       .mockImplementationOnce(async (run) => run(enqueueClient as never))
-      .mockImplementationOnce(async (run) => run(reviewClient as never))
 
     vi.doMock('./database', () => ({
       withDatabaseTransaction,
       withDatabaseClient: vi.fn(),
+    }))
+    vi.doMock('./lead-intake', () => ({
+      createAgentLeadFromSubmission: vi.fn(async () => ({
+        id: 'lead_1',
+      })),
     }))
 
     try {
@@ -420,13 +535,6 @@ describe('submission queue service', () => {
       ).rejects.toThrow('Queued submission could not be reloaded.')
 
       await expect(
-        queue.reviewPredictionSubmission({
-          submissionId: 'submission_1',
-          decision: 'rejected',
-        }),
-      ).rejects.toThrow('Reviewed submission could not be reloaded.')
-
-      await expect(
         queue.readPredictionSubmissionQueueFromClient(
           {
             query: vi
@@ -452,21 +560,20 @@ describe('submission queue service', () => {
                   {
                     id: 'submission_2',
                     submitted_by_agent_id: 'agent_2',
-                    headline: 'Queued queue read branch',
-                    subject: 'Queue read',
-                    category: 'vehicle',
+                    source_domain: 'example.com',
+                    claimed_headline: 'Queued queue read branch',
+                    claimed_subject: 'Queue read',
+                    claimed_category: 'vehicle',
                     summary: 'Queue read branch coverage.',
                     promised_date: new Date('2027-12-31T23:59:59.000Z'),
                     source_url: 'https://example.com/source',
                     source_label: null,
-                    source_note: null,
-                    source_published_at: null,
                     source_type: 'news',
                     tags: ['queued'],
                     status: 'pending',
                     review_notes: null,
                     linked_market_id: null,
-                    reviewed_at: null,
+                    reviewed_at: new Date('2026-03-16T00:05:00.000Z'),
                     created_at: new Date('2026-03-16T00:00:00.000Z'),
                     updated_at: new Date('2026-03-16T00:00:00.000Z'),
                     author_handle: 'beta',
@@ -477,11 +584,12 @@ describe('submission queue service', () => {
           } as never,
           1,
         ),
-      ).resolves.toEqual({
+        ).resolves.toEqual({
         pendingCount: 1,
         items: [
           expect.objectContaining({
             sourceLabel: 'example.com',
+            reviewedAt: '2026-03-16T00:05:00.000Z',
             submittedBy: expect.objectContaining({
               handle: 'beta',
             }),
@@ -489,6 +597,7 @@ describe('submission queue service', () => {
         ],
       })
     } finally {
+      vi.doUnmock('./lead-intake')
       vi.doUnmock('./database')
       vi.resetModules()
     }
@@ -540,10 +649,11 @@ describe('submission queue service', () => {
     }>(
       `
         SELECT status, review_notes
-        FROM agent_prediction_submissions
+        FROM prediction_leads
         WHERE submitted_by_agent_id = $1
+          AND source_url = $2
       `,
-      [registration.agent.id],
+      [registration.agent.id, 'https://example.com/queue-failure'],
     )
     expect(failedRows.rows[0]).toEqual({
       status: 'failed',
@@ -575,10 +685,11 @@ describe('submission queue service', () => {
     }>(
       `
         SELECT status, review_notes
-        FROM agent_prediction_submissions
+        FROM prediction_leads
         WHERE submitted_by_agent_id = $1
+          AND source_url = $2
       `,
-      [secondRegistration.agent.id],
+      [secondRegistration.agent.id, 'https://example.com/queue-failure-fallback'],
     )
     expect(failedFallbackRows.rows[0]).toEqual({
       status: 'failed',

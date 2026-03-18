@@ -84,19 +84,17 @@ describe('LoginModal', () => {
       />,
     )
 
-    expect(screen.getByText('Start with a claim link')).not.toBeNull()
-    await user.click(
-      screen.getByRole('button', { name: 'Find my agent' }),
-    )
+    expect(screen.getByText('Claim a bot')).not.toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Find my agent' }))
     expect(
       await screen.findByText(
         'Paste a claim link or claim token from your agent.',
       ),
     ).not.toBeNull()
     await user.click(
-      screen.getByRole('button', { name: 'I already linked my email' }),
+      screen.getByRole('button', { name: 'I already have owner access' }),
     )
-    expect(screen.getByText('Open the owner deck')).not.toBeNull()
+    expect(screen.getByRole('heading', { name: 'Owner login' })).not.toBeNull()
     await user.click(screen.getByRole('button', { name: 'Claim agent' }))
     await user.type(screen.getByLabelText('Claim link or token'), 'claim_1')
     await user.click(screen.getByRole('button', { name: 'Find my agent' }))
@@ -121,8 +119,8 @@ describe('LoginModal', () => {
       }),
     )
 
-    await user.click(screen.getByRole('button', { name: 'Owner deck' }))
-    expect(screen.getByText('Open the owner deck')).not.toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Owner login' }))
+    expect(screen.getByRole('heading', { name: 'Owner login' })).not.toBeNull()
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
@@ -179,7 +177,9 @@ describe('LoginModal', () => {
     await user.click(
       screen.getByRole('button', { name: 'Claim and open owner deck' }),
     )
-    expect(await screen.findByText('Could not claim this agent.')).not.toBeNull()
+    expect(
+      await screen.findByText('Could not claim this agent.'),
+    ).not.toBeNull()
     expect(screen.getByText('Could not claim this agent.')).not.toBeNull()
 
     await user.click(
@@ -226,7 +226,9 @@ describe('LoginModal', () => {
     await user.click(
       screen.getByRole('button', { name: 'Claim and open owner deck' }),
     )
-    expect(await screen.findByText('This claim link is invalid.')).not.toBeNull()
+    expect(
+      await screen.findByText('This claim link is invalid.'),
+    ).not.toBeNull()
   })
 
   it('supports owner deck login, linked claims, and fallback errors', async () => {
@@ -257,7 +259,7 @@ describe('LoginModal', () => {
       />,
     )
 
-    expect(screen.getByText('Open the owner deck')).not.toBeNull()
+    expect(screen.getByRole('heading', { name: 'Owner login' })).not.toBeNull()
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
     await user.click(
       screen.getByRole('button', { name: 'Email me a login link' }),
@@ -266,7 +268,16 @@ describe('LoginModal', () => {
     expect(apiMocks.requestOwnerLoginLink).toHaveBeenCalledWith(
       'owner@example.com',
     )
-    expect(locationAssignMock).toHaveBeenCalledWith('/?owner_session=owner_2')
+    expect(locationAssignMock).not.toHaveBeenCalled()
+    expect(
+      await screen.findByText((_, element) =>
+        element?.textContent ===
+        'Check owner@example.com for your LemonSuk owner link.',
+      ),
+    ).not.toBeNull()
+    expect(screen.getByText(/Open it in any browser to sign in./)).not.toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Use another email' }))
+    expect(screen.getByLabelText('Owner email')).not.toBeNull()
 
     await user.clear(screen.getByLabelText('Owner email'))
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')

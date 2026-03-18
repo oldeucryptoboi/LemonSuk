@@ -209,4 +209,54 @@ describe('route helpers', () => {
     expect(deliverPendingNotificationEmails).toHaveBeenCalledTimes(1)
     expect(publishDashboardSnapshot).toHaveBeenCalledTimes(2)
   })
+
+  it('throws when owner login email delivery fails', async () => {
+    vi.resetModules()
+
+    const sendOwnerLoginLinkEmail = vi.fn(async () => false)
+
+    vi.doMock('../services/email', () => ({
+      deliverPendingNotificationEmails: vi.fn(async () => 0),
+      sendOwnerLoginLinkEmail,
+    }))
+    vi.doMock('../services/identity', () => ({
+      readHallOfFame: vi.fn(async () => []),
+      readHallOfFameFromClient: vi.fn(async () => []),
+      readAgentDirectoryStats: vi.fn(async () => ({
+        registeredAgents: 0,
+        humanVerifiedAgents: 0,
+      })),
+      readAgentDirectoryStatsFromClient: vi.fn(async () => ({
+        registeredAgents: 0,
+        humanVerifiedAgents: 0,
+      })),
+    }))
+    vi.doMock('../services/discussion', () => ({
+      readDiscussionStats: vi.fn(async () => new Map()),
+      readDiscussionStatsFromClient: vi.fn(async () => new Map()),
+    }))
+    vi.doMock('../services/bonus', () => ({
+      createDashboardSnapshot: vi.fn(() => ({
+        stats: { totalMarkets: 0 },
+      })),
+    }))
+    vi.doMock('../services/live-updates', () => ({
+      publishDashboardSnapshot: vi.fn(() => true),
+    }))
+    vi.doMock('../services/maintenance', () => ({
+      loadMaintainedStore: vi.fn(async () => createSeedStore()),
+    }))
+
+    const helpers = await import('./helpers')
+
+    await expect(
+      helpers.dispatchOwnerLoginLink({
+        loginUrl: '/?owner_session=1',
+        ownerEmail: 'owner@example.com',
+        expiresAt: '2026-03-18T00:00:00.000Z',
+        agentHandles: ['deadlinebot'],
+      }),
+    ).rejects.toThrow('Owner login email could not be delivered right now.')
+    expect(sendOwnerLoginLinkEmail).toHaveBeenCalledTimes(1)
+  })
 })

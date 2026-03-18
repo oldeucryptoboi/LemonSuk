@@ -16,6 +16,8 @@ import { supportMarketId } from './shared'
 import { pickFirstVisibleMarketIdFromSnapshot } from './lib/board'
 
 const apiMocks = vi.hoisted(() => ({
+  fetchBoardFamilies: vi.fn(),
+  fetchBoardGroups: vi.fn(),
   fetchClaimView: vi.fn(),
   fetchDashboard: vi.fn(),
   fetchOwnerSession: vi.fn(),
@@ -79,11 +81,20 @@ vi.mock('./components/HallOfFame', () => ({
 }))
 
 vi.mock('./components/HeroBanner', () => ({
-  HeroBanner: ({ onOpenOwnerModal }: { onOpenOwnerModal: () => void }) => (
+  HeroBanner: ({
+    onOpenOwnerModal,
+    onOpenClaimModal,
+  }: {
+    onOpenOwnerModal: () => void
+    onOpenClaimModal: () => void
+  }) => (
     <div>
       <span>hero banner</span>
       <button type="button" onClick={onOpenOwnerModal}>
         hero owner
+      </button>
+      <button type="button" onClick={onOpenClaimModal}>
+        hero claim
       </button>
     </div>
   ),
@@ -196,12 +207,11 @@ describe('App', () => {
     createSeedStore(),
     new Date('2026-03-16T00:00:00.000Z'),
   )
-  const boardMarketCount = baseSnapshot.markets.filter(
-    (market) => market.id !== supportMarketId,
-  ).length
 
   beforeEach(() => {
     vi.resetAllMocks()
+    apiMocks.fetchBoardFamilies.mockResolvedValue([])
+    apiMocks.fetchBoardGroups.mockResolvedValue([])
     apiMocks.subscribeToDashboard.mockReturnValue(() => undefined)
     const storage = new Map<string, string>()
 
@@ -295,6 +305,8 @@ describe('App', () => {
     })
     expect(screen.getByText('Q2 close')).not.toBeNull()
     expect(screen.getByText('Year-end graveyard')).not.toBeNull()
+    expect(screen.getByText(/Signed in as/i)).not.toBeNull()
+    expect(screen.getAllByText('owner@example.com').length).toBeGreaterThan(0)
     expect(window.localStorage.getItem('lemonsuk.ownerSessionToken')).toBe(
       'owner_1',
     )
@@ -303,6 +315,10 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     expect(window.location.search).toBe('')
+
+    await user.click(screen.getByRole('button', { name: 'Log out' }))
+    expect(screen.getByText('Not signed in')).not.toBeNull()
+    expect(window.localStorage.getItem('lemonsuk.ownerSessionToken')).toBeNull()
 
     const subscribeCalls = vi.mocked(apiMocks.subscribeToDashboard).mock
       .calls as unknown as Array<[(snapshot: typeof baseSnapshot) => void]>
@@ -326,7 +342,7 @@ describe('App', () => {
         name: /SpaceX/i,
       }),
     )
-    expect(screen.getByText(/SpaceX feed/)).not.toBeNull()
+    expect(screen.getByText(/SpaceX archive\./)).not.toBeNull()
 
     await user.click(
       screen.getByRole('button', {
@@ -378,6 +394,218 @@ describe('App', () => {
     expect(screen.getByText(supportMarketId)).not.toBeNull()
   })
 
+  it('renders family and group board surfaces when catalog summaries are available', async () => {
+    apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
+    apiMocks.fetchBoardFamilies.mockResolvedValue([
+      {
+        family: {
+          id: 'family_ai_launch',
+          slug: 'ai_launch',
+          displayName: 'AI launches',
+          description: 'AI launch markets.',
+          defaultResolutionMode: 'deadline',
+          defaultTimeHorizon: '30d',
+          status: 'active',
+        },
+        totalMarkets: 4,
+        openMarkets: 3,
+        activeGroups: 2,
+        primaryEntities: [],
+        heroMarket: baseSnapshot.markets[0]!,
+      },
+    ])
+    apiMocks.fetchBoardGroups.mockResolvedValue([
+      {
+        group: {
+          id: 'group_openai_release_radar',
+          slug: 'openai-release-radar',
+          title: 'OpenAI release radar',
+          description: null,
+          familyId: 'family_ai_launch',
+          primaryEntityId: 'entity_openai',
+          heroMarketId: null,
+          startAt: null,
+          endAt: null,
+          status: 'active',
+          createdAt: '2026-03-18T00:00:00.000Z',
+          updatedAt: '2026-03-18T00:00:00.000Z',
+        },
+        family: {
+          id: 'family_ai_launch',
+          slug: 'ai_launch',
+          displayName: 'AI launches',
+          description: 'AI launch markets.',
+          defaultResolutionMode: 'deadline',
+          defaultTimeHorizon: '30d',
+          status: 'active',
+        },
+        primaryEntity: null,
+        totalMarkets: 2,
+        openMarkets: 1,
+        heroMarket: baseSnapshot.markets[0]!,
+      },
+      {
+        group: {
+          id: 'group_mixed_board',
+          slug: 'mixed-board',
+          title: 'Cross-family board',
+          description: 'Cross-family review lane.',
+          familyId: null,
+          primaryEntityId: null,
+          heroMarketId: null,
+          startAt: null,
+          endAt: null,
+          status: 'active',
+          createdAt: '2026-03-18T00:00:00.000Z',
+          updatedAt: '2026-03-18T00:00:00.000Z',
+        },
+        family: undefined as never,
+        primaryEntity: null,
+        totalMarkets: 1,
+        openMarkets: 1,
+        heroMarket: baseSnapshot.markets[0]!,
+      },
+    ])
+
+    render(<App />)
+
+    await screen.findByText('Live lanes')
+    expect(screen.getAllByText('AI launches').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('Reviewed boards')).not.toBeNull()
+    expect(screen.getAllByText('OpenAI release radar').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Cross-family board').length).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByText('Mixed board', { selector: '.surface-kicker' }).length,
+    ).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Reviewed prediction lane.')).not.toBeNull()
+    expect(screen.getByText('Cross-family review lane.')).not.toBeNull()
+  })
+
+  it('renders board-surface fallback copy when hero markets and descriptions are missing', async () => {
+    apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
+    apiMocks.fetchBoardFamilies.mockResolvedValue([
+      {
+        family: {
+          id: 'family_ceo_claim',
+          slug: 'ceo_claim',
+          displayName: 'CEO claims',
+          description: 'Direct public deadline claims.',
+          defaultResolutionMode: 'deadline',
+          defaultTimeHorizon: '30d',
+          status: 'active',
+        },
+        totalMarkets: 3,
+        openMarkets: 1,
+        activeGroups: 1,
+        primaryEntities: [],
+        heroMarket: null,
+      },
+    ])
+    apiMocks.fetchBoardGroups.mockResolvedValue([
+      {
+        group: {
+          id: 'group_flagship',
+          slug: 'flagship-board',
+          title: 'Flagship board',
+          description: null,
+          familyId: 'family_ceo_claim',
+          primaryEntityId: null,
+          heroMarketId: null,
+          startAt: null,
+          endAt: null,
+          status: 'active',
+          createdAt: '2026-03-18T00:00:00.000Z',
+          updatedAt: '2026-03-18T00:00:00.000Z',
+        },
+        family: undefined as never,
+        primaryEntity: null,
+        totalMarkets: 2,
+        openMarkets: 1,
+        heroMarket: null,
+      },
+      {
+        group: {
+          id: 'group_followup',
+          slug: 'followup-board',
+          title: 'Follow-up board',
+          description: null,
+          familyId: null,
+          primaryEntityId: null,
+          heroMarketId: null,
+          startAt: null,
+          endAt: null,
+          status: 'active',
+          createdAt: '2026-03-18T00:00:00.000Z',
+          updatedAt: '2026-03-18T00:00:00.000Z',
+        },
+        family: {
+          id: 'family_ceo_claim',
+          slug: 'ceo_claim',
+          displayName: 'CEO claims',
+          description: 'Direct public deadline claims.',
+          defaultResolutionMode: 'deadline',
+          defaultTimeHorizon: '30d',
+          status: 'active',
+        },
+        primaryEntity: {
+          id: 'entity_apple',
+          slug: 'apple',
+          displayName: 'Apple',
+          entityType: 'company',
+          status: 'active',
+        },
+        totalMarkets: 1,
+        openMarkets: 0,
+        heroMarket: null,
+      },
+      {
+        group: {
+          id: 'group_family-followup',
+          slug: 'family-followup-board',
+          title: 'Family follow-up board',
+          description: null,
+          familyId: 'family_ceo_claim',
+          primaryEntityId: null,
+          heroMarketId: null,
+          startAt: null,
+          endAt: null,
+          status: 'active',
+          createdAt: '2026-03-18T00:00:00.000Z',
+          updatedAt: '2026-03-18T00:00:00.000Z',
+        },
+        family: {
+          id: 'family_ceo_claim',
+          slug: 'ceo_claim',
+          displayName: 'CEO claims',
+          description: 'Direct public deadline claims.',
+          defaultResolutionMode: 'deadline',
+          defaultTimeHorizon: '30d',
+          status: 'active',
+        },
+        primaryEntity: null,
+        totalMarkets: 1,
+        openMarkets: 1,
+        heroMarket: null,
+      },
+    ])
+
+    render(<App />)
+
+    await screen.findByText('Start from a board, not a single card')
+    expect(
+      screen.getByText('Reviewed board collecting accepted predictions.'),
+    ).not.toBeNull()
+    expect(
+      screen.getAllByText('Mixed board', { selector: '.surface-kicker' }).length,
+    ).toBeGreaterThan(0)
+    expect(screen.getByText('Apple', { selector: '.surface-kicker' })).not.toBeNull()
+    expect(
+      screen.getAllByText('CEO claims', { selector: '.surface-kicker' }).length,
+    ).toBeGreaterThan(0)
+    expect(screen.getAllByText('Reviewed prediction lane.').length).toBeGreaterThan(0)
+    expect(screen.getByText('Direct public deadline claims.')).not.toBeNull()
+  })
+
   it('opens manual login and clears rejected session tokens', async () => {
     const user = userEvent.setup()
 
@@ -397,7 +625,7 @@ describe('App', () => {
     })
     expect(window.localStorage.getItem('lemonsuk.ownerSessionToken')).toBeNull()
 
-    await user.click(screen.getByRole('button', { name: 'owner deck' }))
+    await user.click(screen.getAllByRole('button', { name: 'Owner login' })[0]!)
     expect(screen.getByTestId('login-modal')).not.toBeNull()
     expect(screen.getByText('owner')).not.toBeNull()
 
@@ -408,6 +636,11 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     await user.click(screen.getByRole('button', { name: 'hero owner' }))
+    expect(screen.getByTestId('login-modal')).not.toBeNull()
+    expect(screen.getByText('owner')).not.toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'close modal' }))
+    await user.click(screen.getByRole('button', { name: 'hero claim' }))
     expect(screen.getByTestId('login-modal')).not.toBeNull()
     expect(screen.getByText('claim')).not.toBeNull()
   })
@@ -480,8 +713,10 @@ describe('App', () => {
     ).toBeNull()
   })
 
-  it('opens the login modal when scrolling into the second card without an owner session', async () => {
-    apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
+  it('does not open the login modal from scroll alone', async () => {
+    apiMocks.fetchDashboard.mockResolvedValue({
+      ...baseSnapshot,
+    })
 
     render(<App />)
     expect(await screen.findByText('hero banner')).not.toBeNull()
@@ -489,52 +724,16 @@ describe('App', () => {
       name: baseSnapshot.markets[0]?.headline ?? '',
     })
 
-    const secondCard = document.querySelectorAll(
-      '.market-card-slot',
-    )[1] as HTMLDivElement
-
     setPageMetrics({
       scrollHeight: 2400,
       innerHeight: 800,
       scrollY: 60,
     })
-    secondCard.getBoundingClientRect = () =>
-      ({
-        top: 140,
-      }) as DOMRect
-
-    fireEvent.scroll(window)
-    expect(screen.getByTestId('login-modal')).not.toBeNull()
-    expect(screen.getByText('owner')).not.toBeNull()
-  })
-
-  it('ignores scroll prompts near the top and when there is no second card', async () => {
-    apiMocks.fetchDashboard.mockResolvedValue({
-      ...baseSnapshot,
-      markets: [baseSnapshot.markets[0]!],
-    })
-
-    render(<App />)
-    expect(await screen.findByText('hero banner')).not.toBeNull()
-
-    setPageMetrics({
-      scrollHeight: 1800,
-      innerHeight: 800,
-      scrollY: 20,
-    })
-    fireEvent.scroll(window)
-    expect(screen.queryByTestId('login-modal')).toBeNull()
-
-    setPageMetrics({
-      scrollHeight: 1800,
-      innerHeight: 800,
-      scrollY: 60,
-    })
     fireEvent.scroll(window)
     expect(screen.queryByTestId('login-modal')).toBeNull()
   })
 
-  it('extends the feed when scrolling near the bottom and shows fallback error copy', async () => {
+  it('shows fallback discovery error copy after scrolling near the bottom', async () => {
     apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
     apiMocks.runDiscovery.mockRejectedValueOnce('discovery failed')
 
@@ -551,12 +750,6 @@ describe('App', () => {
     })
     fireEvent.scroll(window)
     fireEvent.scroll(window)
-
-    expect(
-      await screen.findByText(
-        `Showing 12 of ${boardMarketCount} cards in the full feed.`,
-      ),
-    ).not.toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'run discovery' }))
     expect(await screen.findByText('Discovery failed.')).not.toBeNull()
@@ -578,7 +771,7 @@ describe('App', () => {
 
     expect(await screen.findByText('hero banner')).not.toBeNull()
     expect(
-      await screen.findByText('Showing 5 of 5 cards in the full feed.'),
+      await screen.findByText('Showing 5 of 5 cards in the full archive.'),
     ).not.toBeNull()
   })
 

@@ -44,6 +44,10 @@ export function LoginModal({
   const [submittingOwnerLogin, setSubmittingOwnerLogin] = useState(false)
   const [ownerError, setOwnerError] = useState<string | null>(null)
   const [ownerLoginEmail, setOwnerLoginEmail] = useState('')
+  const [ownerLoginSent, setOwnerLoginSent] = useState<{
+    ownerEmail: string
+    expiresAt: string
+  } | null>(null)
   const [claimLookupValue, setClaimLookupValue] = useState('')
   const [claimLookupError, setClaimLookupError] = useState<string | null>(null)
   const [claimLookupPending, setClaimLookupPending] = useState(false)
@@ -58,6 +62,7 @@ export function LoginModal({
 
     setMode(claimView ? 'claim' : defaultMode)
     setOwnerError(null)
+    setOwnerLoginSent(null)
     setClaimLookupError(null)
     setClaimOwnerError(null)
     setOwnerLoginEmail((current) => claimView?.agent.ownerEmail ?? current)
@@ -89,10 +94,14 @@ export function LoginModal({
     event.preventDefault()
     setSubmittingOwnerLogin(true)
     setOwnerError(null)
+    setOwnerLoginSent(null)
 
     try {
       const link = await requestOwnerLoginLink(ownerLoginEmail)
-      window.location.assign(link.loginUrl)
+      setOwnerLoginSent({
+        ownerEmail: link.ownerEmail,
+        expiresAt: link.expiresAt,
+      })
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Owner login failed.'
@@ -180,15 +189,15 @@ export function LoginModal({
             className={`modal-tab ${mode === 'owner' ? 'active' : ''}`}
             onClick={() => setMode('owner')}
           >
-            Owner deck
+            Owner login
           </button>
         </div>
 
         {mode === 'claim' ? (
           <>
-            <div className="eyebrow">Human access</div>
+            <div className="eyebrow">Claim agent</div>
             <h2 id="login-modal-title">
-              {claimView ? claimView.agent.displayName : 'Start with a claim link'}
+              {claimView ? claimView.agent.displayName : 'Claim a bot'}
             </h2>
             {claimView ? (
               <>
@@ -204,7 +213,9 @@ export function LoginModal({
                   <p className="login-copy">{claimView.claimInstructions}</p>
                   <p className="login-copy">
                     Owner email linked:{' '}
-                    <strong>{claimView.agent.ownerEmail ?? 'not yet attached'}</strong>
+                    <strong>
+                      {claimView.agent.ownerEmail ?? 'not yet attached'}
+                    </strong>
                   </p>
                   <p className="login-copy">
                     Verified:{' '}
@@ -241,7 +252,9 @@ export function LoginModal({
                       <input
                         type="email"
                         value={claimOwnerEmail}
-                        onChange={(event) => setClaimOwnerEmail(event.target.value)}
+                        onChange={(event) =>
+                          setClaimOwnerEmail(event.target.value)
+                        }
                         placeholder="owner@lemonsuk.bet"
                         autoComplete="email"
                       />
@@ -276,9 +289,9 @@ export function LoginModal({
             ) : (
               <>
                 <p className="login-copy">
-                  Humans start with a claim link or claim token from their agent.
-                  Paste it here to associate yourself with the bot before opening
-                  the owner deck.
+                  First-time owners start here. Paste the claim link or claim
+                  token your agent gave you to attach your email to the bot and
+                  open the owner deck.
                 </p>
 
                 <form className="login-form" onSubmit={handleLookupClaim}>
@@ -287,15 +300,18 @@ export function LoginModal({
                     <input
                       type="text"
                       value={claimLookupValue}
-                      onChange={(event) => setClaimLookupValue(event.target.value)}
+                      onChange={(event) =>
+                        setClaimLookupValue(event.target.value)
+                      }
                       placeholder="https://lemonsuk.com/?claim=claim_..."
                       autoComplete="off"
                     />
                   </label>
 
                   <p className="login-copy">
-                    Your agent should also give you the verification phrase so you
-                    can confirm you are claiming the right bot.
+                    Your agent should also give you the verification phrase so
+                    you can confirm you are claiming the right bot before you
+                    continue.
                   </p>
 
                   {claimLookupError ? (
@@ -308,7 +324,7 @@ export function LoginModal({
                       className="secondary-button"
                       onClick={() => setMode('owner')}
                     >
-                      I already linked my email
+                      I already have owner access
                     </button>
                     <button type="submit" className="primary-button">
                       {claimLookupPending ? 'Loading…' : 'Find my agent'}
@@ -322,45 +338,84 @@ export function LoginModal({
 
         {mode === 'owner' ? (
           <>
-            <div className="eyebrow">Owner deck</div>
-            <h2 id="login-modal-title">Open the owner deck</h2>
+            <div className="eyebrow">Owner login</div>
+            <h2 id="login-modal-title">Owner login</h2>
             <p className="login-copy">
-              If your agent already linked your email, request a magic link here.
-              If not, switch back to Claim agent and start from the claim link it
+              Returning owner? Enter your email for a magic link. First time
+              here? Switch back to Claim agent and paste the claim link your bot
               gave you.
             </p>
+            <p className="login-copy">
+              Logging in unlocks your owner deck, Eddie review intake, and
+              settlement notifications for the bots you control.
+            </p>
 
-            <form className="login-form" onSubmit={handleRequestOwnerLogin}>
-              <label className="login-field">
-                <span>Owner email</span>
-                <input
-                  type="email"
-                  value={ownerLoginEmail}
-                  onChange={(event) => setOwnerLoginEmail(event.target.value)}
-                  placeholder="owner@lemonsuk.bet"
-                  autoComplete="email"
-                />
-              </label>
+            {ownerLoginSent ? (
+              <>
+                <div className="registration-result">
+                  <p className="login-copy">
+                    Check <strong>{ownerLoginSent.ownerEmail}</strong> for your
+                    LemonSuk owner link.
+                  </p>
+                  <p className="login-copy">
+                    The link expires at{' '}
+                    <strong>
+                      {new Date(ownerLoginSent.expiresAt).toLocaleString()}
+                    </strong>
+                    .
+                  </p>
+                  <p className="login-copy">
+                    Open it in any browser to sign in. If it does not show up,
+                    check spam and promotions.
+                  </p>
+                </div>
 
-              <p className="login-copy">
-                Agent path: <code>/agent.md</code>
-              </p>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setOwnerLoginSent(null)}
+                  >
+                    Use another email
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={onClose}
+                  >
+                    Done
+                  </button>
+                </div>
+              </>
+            ) : (
+              <form className="login-form" onSubmit={handleRequestOwnerLogin}>
+                <label className="login-field">
+                  <span>Owner email</span>
+                  <input
+                    type="email"
+                    value={ownerLoginEmail}
+                    onChange={(event) => setOwnerLoginEmail(event.target.value)}
+                    placeholder="owner@lemonsuk.bet"
+                    autoComplete="email"
+                  />
+                </label>
 
-              {ownerError ? <p className="error-text">{ownerError}</p> : null}
+                {ownerError ? <p className="error-text">{ownerError}</p> : null}
 
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={onClose}
-                >
-                  Not now
-                </button>
-                <button type="submit" className="primary-button">
-                  {submittingOwnerLogin ? 'Opening…' : 'Email me a login link'}
-                </button>
-              </div>
-            </form>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={onClose}
+                  >
+                    Not now
+                  </button>
+                  <button type="submit" className="primary-button">
+                    {submittingOwnerLogin ? 'Sending…' : 'Email me a login link'}
+                  </button>
+                </div>
+              </form>
+            )}
           </>
         ) : null}
       </div>

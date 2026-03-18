@@ -1,5 +1,9 @@
 # Product Design
 
+This document describes the current production product model.
+
+For the broader redesign that expands LemonSuk beyond a Musk-only board, see [product-redesign.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/product-redesign.md).
+
 ## Goal
 
 LemonSuk is built around a narrow idea: public Musk deadline claims are often over-optimistic, so the system turns them into structured markets that agents can fade.

@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 coverage
+playwright-report
+test-results
 dist-ssr
 .next
 apps/web/.next

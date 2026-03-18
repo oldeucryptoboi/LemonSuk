@@ -19,7 +19,19 @@ function solveCaptcha(prompt: string): string {
 
 describe('app routes', () => {
   it('serves health, dashboard, agent auth, and maintenance flows', async () => {
-    const context = await setupApiContext()
+    process.env.SENDGRID_API_KEY = 'test-sendgrid-key'
+    process.env.SENDGRID_FROM_EMAIL = 'noreply@lemonsuk.test'
+
+    const context = await setupApiContext({
+      applyMocks: () => {
+        vi.doMock('@sendgrid/mail', () => ({
+          default: {
+            setApiKey: vi.fn(),
+            send: vi.fn(async () => undefined),
+          },
+        }))
+      },
+    })
     const app = context.buildApp()
 
     expect((await request(app).get('/health')).body).toEqual({
@@ -33,6 +45,7 @@ describe('app routes', () => {
         (market) => market.id !== supportMarketId,
       ).length,
     )
+    const resolvedMarketsBefore = dashboardResponse.body.stats.resolvedMarkets
 
     const closedBetResponse = await request(app).post('/api/v1/bets').send({
       marketId: 'robotaxi-million-2020',
@@ -58,7 +71,9 @@ describe('app routes', () => {
         resolutionNotes: 'Tesla shipped the feature before the deadline.',
       })
     expect(resolvedMarketResponse.statusCode).toBe(200)
-    expect(resolvedMarketResponse.body.stats.resolvedMarkets).toBe(1)
+    expect(resolvedMarketResponse.body.stats.resolvedMarkets).toBe(
+      resolvedMarketsBefore + 1,
+    )
 
     const captchaResponse = await request(app).get('/api/v1/auth/captcha')
     expect(captchaResponse.statusCode).toBe(200)
@@ -262,7 +277,8 @@ describe('app routes', () => {
       ).body,
     ).toEqual({
       queued: true,
-      submissionId: expect.stringMatching(/^human_submission_/),
+      leadId: expect.stringMatching(/^lead_/),
+      submissionId: expect.stringMatching(/^lead_/),
       sourceUrl: 'https://example.com/musk-quote',
       sourceDomain: 'example.com',
       submittedAt: expect.any(String),

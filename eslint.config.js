@@ -6,7 +6,14 @@ import tseslint from 'typescript-eslint'
 
 export default [
   {
-    ignores: ['dist', 'coverage', 'apps/api/data/store.json', 'apps/web/.next'],
+    ignores: [
+      'dist',
+      'coverage',
+      'playwright-report',
+      'test-results',
+      'apps/api/data/store.json',
+      'apps/web/.next',
+    ],
   },
   {
     ...js.configs.recommended,

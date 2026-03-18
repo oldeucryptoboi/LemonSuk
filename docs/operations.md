@@ -49,12 +49,25 @@ Default local endpoints:
 
 - `APP_URL`
 - `ALLOWED_ORIGIN`
+- `INTERNAL_API_BASE_URL`
 
 ### Optional integrations
 
 - `SENDGRID_API_KEY`
 - `SENDGRID_FROM_EMAIL`
 - `NEXT_PUBLIC_API_BASE_URL`
+- `EDDIE_BASE_URL`
+- `EDDIE_API_KEY`
+- `LEMONSUK_REVIEW_TOKEN`
+- `LEMONSUK_REVIEW_WEBHOOK_SECRET`
+- `PLAYWRIGHT_BASE_URL`
+
+### Required for offline review orchestration
+
+- `API_INTERNAL_BASE_URL`
+- `INTERNAL_SERVICE_TOKEN`
+- `REVIEW_CONSOLE_ACCESS_KEY`
+- `REVIEW_QUEUE_KEY`
 
 ## Database And Migrations
 
@@ -69,10 +82,13 @@ The application seeds its initial market set only when the migrated database is 
 ```bash
 npm run dev
 npm run migrate
+npm run list-pending-leads -- --limit 25
+npm run review-lead -- --lead-id <id> --decision <accepted|rejected>
 npm run build
 npm run lint
 npm run test
 npm run test:coverage
+npm run test:e2e
 npm run format
 ```
 
@@ -85,6 +101,7 @@ Typical local verification after a change:
 3. `npm run test` or `npm run test:coverage`
 4. hit `/health`
 5. hit `/api/v1/dashboard`
+6. `npm run test:e2e`
 
 For forum or auth changes, also verify:
 
@@ -106,6 +123,7 @@ This runs:
 
 - `web` on port `3000`
 - `api` on port `8787`
+- `review-orchestrator` on port `8790`
 - `postgres` on port `5432`
 - `redis` on port `6379`
 
@@ -116,12 +134,14 @@ The reference deployment is:
 - one CloudFront distribution
 - one web origin
 - one API origin
-- one Docker host running web, API, PostgreSQL, and Redis
+- one review-orchestrator origin
+- one Docker host running web, API, review-orchestrator, PostgreSQL, and Redis
 
 This repo already includes:
 
 - `apps/api/Dockerfile`
 - `apps/web/Dockerfile`
+- `apps/review-orchestrator/Dockerfile`
 - `docker-compose.prod.yml`
 
 Use [infra/production.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/infra/production.md) for the host- and edge-specific rollout notes.
@@ -130,5 +150,13 @@ Use [infra/production.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk
 
 - The API boots with store initialization and maintenance loading.
 - Pending notification emails can be delivered on boot and during maintenance.
+- `npm run list-pending-leads` reads the unified `prediction_leads` queue for offline review.
+- `npm run review-lead` is the canonical operator command for accepting or rejecting a queued lead.
+- Internal operator reads are also available through `/api/v1/internal/leads` and `/api/v1/internal/leads/:leadId` with the internal bearer token.
+- The web review desk lives at `/review` and should be protected with `REVIEW_CONSOLE_ACCESS_KEY`.
+- Playwright route tests live in `tests/e2e` and can target local or deployed environments through `PLAYWRIGHT_BASE_URL`.
 - The live dashboard channel depends on the API process staying up; there is no separate realtime worker.
 - Rate limiting depends on Redis when configured; in production that should be treated as required, not optional.
+- The review orchestrator consumes queued submissions, dispatches them to Eddie, and posts signed callback results back into the API.
+- `LEMONSUK_REVIEW_TOKEN` is appended to the Eddie dispatch URL as `?review_token=...`.
+- `LEMONSUK_REVIEW_WEBHOOK_SECRET` is used to verify callback HMAC signatures. `EDDIE_WEBHOOK_SECRET` remains a backward-compatible fallback.

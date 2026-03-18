@@ -6,6 +6,8 @@ import {
   claimAgentForOwner,
   createDashboardLiveUrl,
   createMarketDiscussionPost,
+  fetchBoardFamilies,
+  fetchBoardGroups,
   fetchCaptchaChallenge,
   fetchClaimView,
   fetchDashboard,
@@ -44,6 +46,65 @@ describe('web api client', () => {
       )
       .mockResolvedValueOnce(
         new Response(
+          JSON.stringify([
+            {
+              family: {
+                id: 'family_ai_launch',
+                slug: 'ai_launch',
+                displayName: 'AI launches',
+                description: 'AI launch markets.',
+                defaultResolutionMode: 'deadline',
+                defaultTimeHorizon: '30d',
+                status: 'active',
+              },
+              totalMarkets: 4,
+              openMarkets: 3,
+              activeGroups: 2,
+              primaryEntities: [],
+              heroMarket: snapshot.markets[0],
+            },
+          ]),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              group: {
+                id: 'group_openai_release_radar',
+                slug: 'openai-release-radar',
+                title: 'OpenAI release radar',
+                description: 'Reviewed OpenAI board.',
+                familyId: 'family_ai_launch',
+                primaryEntityId: 'entity_openai',
+                heroMarketId: null,
+                startAt: null,
+                endAt: null,
+                status: 'active',
+                createdAt: '2026-03-18T00:00:00.000Z',
+                updatedAt: '2026-03-18T00:00:00.000Z',
+              },
+              family: {
+                id: 'family_ai_launch',
+                slug: 'ai_launch',
+                displayName: 'AI launches',
+                description: 'AI launch markets.',
+                defaultResolutionMode: 'deadline',
+                defaultTimeHorizon: '30d',
+                status: 'active',
+              },
+              primaryEntity: null,
+              totalMarkets: 2,
+              openMarkets: 1,
+              heroMarket: snapshot.markets[0],
+            },
+          ]),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
           JSON.stringify({
             report: {
               query: 'musk deadlines',
@@ -74,6 +135,7 @@ describe('web api client', () => {
         new Response(
           JSON.stringify({
             queued: true,
+            leadId: 'lead_human_1',
             submissionId: 'human_submission_1',
             sourceUrl: 'https://example.com/human-tip',
             sourceDomain: 'example.com',
@@ -223,6 +285,10 @@ describe('web api client', () => {
       )
 
     expect(await fetchDashboard()).toEqual(snapshot)
+    expect((await fetchBoardFamilies())[0]?.family.slug).toBe('ai_launch')
+    expect((await fetchBoardGroups())[0]?.group.slug).toBe(
+      'openai-release-radar',
+    )
     expect((await runDiscovery('musk deadlines')).report.query).toBe(
       'musk deadlines',
     )
@@ -288,7 +354,7 @@ describe('web api client', () => {
     ).toBe(1)
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      6,
       '/api/v1/auth/owners/review-submissions',
       expect.objectContaining({
         method: 'POST',
@@ -302,7 +368,7 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+      8,
       '/api/v1/auth/agents/setup-owner-email',
       expect.objectContaining({
         method: 'POST',
@@ -313,7 +379,7 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      10,
+      12,
       '/api/v1/auth/claims/claim_1/owner',
       expect.objectContaining({
         method: 'POST',
@@ -323,12 +389,12 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      11,
+      13,
       '/api/v1/markets/cybercab-volume-2026/discussion',
       expect.anything(),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      12,
+      14,
       '/api/v1/markets/cybercab-volume-2026/discussion/posts',
       expect.objectContaining({
         method: 'POST',
@@ -339,7 +405,7 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      13,
+      15,
       '/api/v1/discussion/posts/post-1/vote',
       expect.objectContaining({
         method: 'POST',

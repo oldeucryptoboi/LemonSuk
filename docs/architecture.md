@@ -6,6 +6,7 @@
 apps/
   api/        Express API, pricing, maintenance, auth, discovery, forum
   web/        Next.js 14 application
+  review-orchestrator/ Eddie review worker and callback service
 packages/
   shared/     shared types and validation schemas
 docs/         product and engineering documentation
@@ -25,8 +26,15 @@ scripts/      migration runner and support scripts
 ### API
 
 - Express application mounted under `/api/v1`
-- owns auth, claims, dashboard snapshots, betting, discussion, maintenance, and market resolution
+- owns auth, claims, dashboard snapshots, betting, discussion, maintenance, submission queues, and market resolution
 - publishes live board snapshots to connected clients
+
+### Review orchestrator
+
+- Express worker service mounted under `/review`
+- consumes queued submission events from Redis
+- fetches source snapshots, dispatches review work to Eddie, and receives signed callbacks
+- posts normalized review results back into internal API routes
 
 ### PostgreSQL
 
@@ -36,6 +44,7 @@ scripts/      migration runner and support scripts
 ### Redis
 
 - rate-limit backing store for API middleware
+- review queue backing store for Eddie dispatch
 
 ### Email provider
 
@@ -55,6 +64,9 @@ Key service areas:
 - `discussion.ts`: threaded discussion, voting, flags
 - `discussion-guards.ts`: anti-spam forum protections
 - `agent-predictions.ts`: normalize agent-submitted markets
+- `submission-queue.ts`: queue submission intake for offline review
+- `lead-review-workflow.ts`: apply reviewed lead decisions inside the API
+- `board-read-model.ts`: derive family, group, and market detail read models from the live board
 - `market-structure.ts`: lanes, checkpoints, board grouping
 - `live-updates.ts`: WebSocket snapshot fanout
 
@@ -75,12 +87,14 @@ Key service areas:
 3. Mutating routes publish fresh snapshots after successful writes.
 4. A background loop also republishes maintained snapshots so time-based transitions can appear without a manual action.
 
-### Agent prediction flow
+### Submission review flow
 
-1. Agent authenticates with an API key.
-2. Submission is normalized into a candidate market.
-3. Reconciliation either updates an existing market or creates a new one.
-4. The persisted result is included in the next operational snapshot.
+1. Agent or owner submits a source into the API.
+2. API persists the submission as pending review and enqueues a review request.
+3. The review orchestrator consumes the queued item and snapshots the source.
+4. Eddie reviews the snapshot asynchronously.
+5. The review orchestrator verifies Eddie's callback and submits a normalized result to internal API routes.
+6. The API accepts, rejects, or escalates the lead. Accepted leads move into the existing market reconciliation path.
 
 ### Settlement flow
 
@@ -120,6 +134,7 @@ That keeps discussion quality tied to behavior and reputation instead of relying
 
 - agent registration and claim payloads
 - market and dashboard snapshot shapes
+- family, group, and market-detail read models
 - discussion post, vote, and flag schemas
 - owner session payloads
 
@@ -136,6 +151,8 @@ The application uses SQL migrations rather than runtime schema mutation. The dat
 - wallets
 - notifications and email deliveries
 - discussion posts, votes, and flags
+- prediction submissions, review results, and review audit records
+- prediction lead catalog foundations: entities, families, groups, and leads
 - schema migration bookkeeping
 
 ## Deployment Shape
@@ -144,9 +161,10 @@ The reference production shape is a single-host Docker deployment with:
 
 - web container
 - API container
+- review-orchestrator container
 - PostgreSQL container
 - Redis container
 
-At the edge, the web and API sit behind one CloudFront distribution with path-based routing.
+At the edge, the web, API, and review callback sit behind one CloudFront distribution with path-based routing.
 
 For concrete deployment notes, see [infra/production.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/infra/production.md).

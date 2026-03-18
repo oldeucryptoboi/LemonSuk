@@ -74,4 +74,37 @@ describe('apiConfig', () => {
     expect(apiConfig.sendGridApiKey).toBe('sg-key')
     expect(apiConfig.sendGridFromEmail).toBe('alerts@lemonsuk.example')
   })
+
+  it('rejects unsafe production defaults', async () => {
+    mutableEnv.NODE_ENV = 'production'
+    delete process.env.DATABASE_URL
+    delete process.env.INTERNAL_SERVICE_TOKEN
+    delete process.env.JWT_SECRET
+
+    await expect(import('./config')).rejects.toThrow(
+      'Production DATABASE_URL must point to the deployed database service.',
+    )
+  })
+
+  it('rejects the production default internal token after the database is configured', async () => {
+    mutableEnv.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@db.internal/lemonsuk'
+    delete process.env.INTERNAL_SERVICE_TOKEN
+    process.env.JWT_SECRET = 'safe-production-secret'
+
+    await expect(import('./config')).rejects.toThrow(
+      'Production INTERNAL_SERVICE_TOKEN must be overridden.',
+    )
+  })
+
+  it('rejects the production default jwt secret after the database and internal token are configured', async () => {
+    mutableEnv.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@db.internal/lemonsuk'
+    process.env.INTERNAL_SERVICE_TOKEN = 'safe-internal-token'
+    delete process.env.JWT_SECRET
+
+    await expect(import('./config')).rejects.toThrow(
+      'Production JWT_SECRET must be overridden.',
+    )
+  })
 })

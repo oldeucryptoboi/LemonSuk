@@ -4,37 +4,53 @@ import express from 'express'
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { InternalPredictionSubmission } from '../../../packages/shared/src/types'
+import type { InternalPredictionLead } from '../../../packages/shared/src/types'
 
 describe('EDDIE callback handling', () => {
-  function buildSubmission(
-    overrides: Partial<InternalPredictionSubmission> = {},
-  ): InternalPredictionSubmission {
+  function buildLead(
+    overrides: Partial<InternalPredictionLead> = {},
+  ): InternalPredictionLead {
     return {
-      id: 'submission_1',
-      headline: 'Queued headline',
-      subject: 'Queued subject',
-      category: 'social',
-      summary: 'Queued summary that is long enough for schema validation.',
-      promisedDate: '2027-12-31T23:59:59.000Z',
+      id: 'lead_1',
+      leadType: 'structured_agent_lead',
+      submittedByAgentId: 'agent_1',
+      submittedByOwnerEmail: null,
       sourceUrl: 'https://example.com/source',
+      normalizedSourceUrl: 'https://example.com/source',
       sourceLabel: 'example.com',
       sourceDomain: 'example.com',
       sourceType: 'blog',
+      sourceNote: null,
+      sourcePublishedAt: null,
+      claimedHeadline: 'Queued headline',
+      claimedSubject: 'Queued subject',
+      claimedCategory: 'social',
+      familyId: null,
+      familySlug: null,
+      familyDisplayName: null,
+      primaryEntityId: null,
+      primaryEntitySlug: null,
+      primaryEntityDisplayName: null,
+      eventGroupId: null,
+      promisedDate: '2027-12-31T23:59:59.000Z',
+      summary: 'Queued summary that is long enough for schema validation.',
       tags: [],
       status: 'pending',
+      spamScore: 0,
+      duplicateOfLeadId: null,
+      duplicateOfMarketId: null,
       reviewNotes: null,
       linkedMarketId: null,
-      submittedAt: '2026-03-17T00:00:00.000Z',
-      updatedAt: '2026-03-17T00:00:00.000Z',
       reviewedAt: null,
+      legacyAgentSubmissionId: 'submission_1',
+      legacyHumanSubmissionId: null,
+      createdAt: '2026-03-17T00:00:00.000Z',
+      updatedAt: '2026-03-17T00:00:00.000Z',
       submittedBy: {
         id: 'agent_1',
         handle: 'alpha',
         displayName: 'Alpha',
       },
-      sourceNote: null,
-      sourcePublishedAt: null,
       ...overrides,
     }
   }
@@ -50,7 +66,7 @@ describe('EDDIE callback handling', () => {
 
     const rawBody = JSON.stringify({
       runId: 'run_1',
-      submissionId: 'submission_1',
+      leadId: 'lead_1',
       status: 'failed',
       errorMessage: 'Nope.',
     })
@@ -80,11 +96,11 @@ describe('EDDIE callback handling', () => {
 
   it('handles completed and failed callbacks through the internal API', async () => {
     const submitInternalPredictionReviewResult = vi.fn(async () => ({
-      submission: buildSubmission({ reviewedAt: '2026-03-17T00:10:00.000Z' }),
+      lead: buildLead({ reviewedAt: '2026-03-17T00:10:00.000Z' }),
     }))
-    const updateInternalPredictionSubmissionStatus = vi.fn(async () =>
-      buildSubmission({
-        id: 'submission_2',
+    const updateInternalPredictionLeadStatus = vi.fn(async () =>
+      buildLead({
+        id: 'lead_2',
         status: 'failed',
         reviewNotes: 'Provider timeout.',
         reviewedAt: '2026-03-17T00:11:00.000Z',
@@ -100,14 +116,15 @@ describe('EDDIE callback handling', () => {
       express.raw({ type: 'application/json' }),
       createEddieCallbackHandlerWithDependencies({
         submitReviewResult: submitInternalPredictionReviewResult,
-        updateStatus: updateInternalPredictionSubmissionStatus,
+        updateStatus: updateInternalPredictionLeadStatus,
       }),
     )
 
     const timestamp = String(Math.floor(Date.now() / 1000))
     const completedBody = JSON.stringify({
       runId: 'run_1',
-      submissionId: 'submission_1',
+      leadId: 'lead_1',
+      legacySubmissionId: 'submission_1',
       status: 'completed',
       verdict: 'reject',
       confidence: 0.3,
@@ -136,7 +153,7 @@ describe('EDDIE callback handling', () => {
 
     const failedBody = JSON.stringify({
       runId: 'run_2',
-      submissionId: 'submission_2',
+      leadId: 'lead_2',
       status: 'failed',
       errorMessage: 'Provider timeout.',
     })
@@ -151,8 +168,8 @@ describe('EDDIE callback handling', () => {
           .send(failedBody)
       ).statusCode,
     ).toBe(202)
-    expect(updateInternalPredictionSubmissionStatus).toHaveBeenCalledWith(
-      'submission_2',
+    expect(updateInternalPredictionLeadStatus).toHaveBeenCalledWith(
+      'lead_2',
       expect.objectContaining({
         status: 'failed',
       }),
@@ -160,7 +177,7 @@ describe('EDDIE callback handling', () => {
 
     const failedWithoutErrorMessage = JSON.stringify({
       runId: 'run_2b',
-      submissionId: 'submission_2b',
+      leadId: 'lead_2b',
       status: 'failed',
     })
 
@@ -174,8 +191,8 @@ describe('EDDIE callback handling', () => {
           .send(failedWithoutErrorMessage)
       ).statusCode,
     ).toBe(202)
-    expect(updateInternalPredictionSubmissionStatus).toHaveBeenLastCalledWith(
-      'submission_2b',
+    expect(updateInternalPredictionLeadStatus).toHaveBeenLastCalledWith(
+      'lead_2b',
       expect.objectContaining({
         note: 'EDDIE review failed.',
       }),
@@ -213,7 +230,7 @@ describe('EDDIE callback handling', () => {
     const timestamp = String(Math.floor(Date.now() / 1000))
     const completedBody = JSON.stringify({
       runId: 'run_3',
-      submissionId: 'submission_3',
+      leadId: 'lead_3',
       status: 'completed',
       verdict: 'accept',
       confidence: 0.7,

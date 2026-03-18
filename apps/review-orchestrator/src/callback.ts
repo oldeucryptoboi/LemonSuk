@@ -3,8 +3,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { RequestHandler } from 'express'
 
 import {
-  submitInternalPredictionReviewResult,
-  updateInternalPredictionSubmissionStatus,
+  submitInternalPredictionLeadReviewResult,
+  updateInternalPredictionLeadStatus,
 } from './internal-api'
 import { reviewOrchestratorConfig } from './config'
 import { eddieCallbackPayloadSchema, normalizedCallbackResultSchema } from './types'
@@ -49,17 +49,16 @@ export function createEddieCallbackHandler(): RequestHandler {
 }
 
 type CallbackDependencies = {
-  submitReviewResult?: typeof submitInternalPredictionReviewResult
-  updateStatus?: typeof updateInternalPredictionSubmissionStatus
+  submitReviewResult?: typeof submitInternalPredictionLeadReviewResult
+  updateStatus?: typeof updateInternalPredictionLeadStatus
 }
 
 export function createEddieCallbackHandlerWithDependencies(
   dependencies: CallbackDependencies,
 ): RequestHandler {
   const submitReviewResult =
-    dependencies.submitReviewResult ?? submitInternalPredictionReviewResult
-  const updateStatus =
-    dependencies.updateStatus ?? updateInternalPredictionSubmissionStatus
+    dependencies.submitReviewResult ?? submitInternalPredictionLeadReviewResult
+  const updateStatus = dependencies.updateStatus ?? updateInternalPredictionLeadStatus
 
   return async (request, response) => {
     try {
@@ -76,7 +75,7 @@ export function createEddieCallbackHandlerWithDependencies(
       const payload = eddieCallbackPayloadSchema.parse(JSON.parse(rawBody))
 
       if (payload.status === 'failed') {
-        await updateStatus(payload.submissionId, {
+        await updateStatus(payload.leadId, {
           status: 'failed',
           runId: payload.runId,
           providerRunId: payload.providerRunId,
@@ -87,7 +86,7 @@ export function createEddieCallbackHandlerWithDependencies(
       }
 
       await submitReviewResult(
-        payload.submissionId,
+        payload.leadId,
         normalizedCallbackResultSchema.parse({
           runId: payload.runId,
           reviewer: 'eddie',

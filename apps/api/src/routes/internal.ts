@@ -8,15 +8,13 @@ import {
 import { apiConfig } from '../config'
 import { asyncHandler } from '../middleware/async-handler'
 import {
-  applyPredictionReviewResultForInternal,
-  readPredictionSubmissionForInternal,
-  updatePredictionSubmissionStatusForInternal,
-} from '../services/review-workflow'
+  applyPredictionLeadReviewResultForInternal,
+  readPredictionLeadInspectionForInternal,
+  readPredictionLeadForInternal,
+  updatePredictionLeadStatusForInternal,
+} from '../services/lead-review-workflow'
+import { readPendingPredictionLeads } from '../services/lead-intake'
 import { publishCurrentOperationalSnapshot } from './helpers'
-
-const paramsSchema = z.object({
-  submissionId: z.string(),
-})
 
 function authorizeInternalRequest(
   authorizationHeader: string | undefined,
@@ -42,60 +40,114 @@ export function createInternalRouter(): Router {
   })
 
   router.get(
-    '/internal/prediction-submissions/:submissionId',
+    '/internal/leads',
     asyncHandler(async (request, response) => {
-      const params = paramsSchema.parse(request.params)
-      const submission = await readPredictionSubmissionForInternal(
-        params.submissionId,
-      )
+      const query = z
+        .object({
+          limit: z.coerce.number().int().min(1).max(100).optional(),
+          leadType: z
+            .enum(['structured_agent_lead', 'human_url_lead'])
+            .optional(),
+          familySlug: z
+            .enum([
+              'ai_launch',
+              'product_ship_date',
+              'earnings_guidance',
+              'policy_promise',
+              'ceo_claim',
+            ])
+            .optional(),
+          entitySlug: z.string().min(1).optional(),
+          sourceDomain: z.string().min(1).optional(),
+        })
+        .parse(request.query)
 
-      if (!submission) {
-        response.status(404).json({ message: 'Prediction submission not found.' })
+      response.json(await readPendingPredictionLeads(query))
+    }),
+  )
+
+  router.get(
+    '/internal/leads/:leadId',
+    asyncHandler(async (request, response) => {
+      const params = z
+        .object({
+          leadId: z.string(),
+        })
+        .parse(request.params)
+      const lead = await readPredictionLeadForInternal(params.leadId)
+
+      if (!lead) {
+        response.status(404).json({ message: 'Prediction lead not found.' })
         return
       }
 
-      response.json(submission)
+      response.json(lead)
+    }),
+  )
+
+  router.get(
+    '/internal/leads/:leadId/inspect',
+    asyncHandler(async (request, response) => {
+      const params = z
+        .object({
+          leadId: z.string(),
+        })
+        .parse(request.params)
+      const detail = await readPredictionLeadInspectionForInternal(params.leadId)
+
+      if (!detail) {
+        response.status(404).json({ message: 'Prediction lead not found.' })
+        return
+      }
+
+      response.json(detail)
     }),
   )
 
   router.post(
-    '/internal/prediction-submissions/:submissionId/status',
+    '/internal/leads/:leadId/status',
     asyncHandler(async (request, response) => {
-      const params = paramsSchema.parse(request.params)
+      const params = z
+        .object({
+          leadId: z.string(),
+        })
+        .parse(request.params)
       const body = internalPredictionSubmissionStatusInputSchema.parse(
         request.body,
       )
 
       try {
-        const submission = await updatePredictionSubmissionStatusForInternal(
-          params.submissionId,
+        const lead = await updatePredictionLeadStatusForInternal(
+          params.leadId,
           body,
         )
         await publishCurrentOperationalSnapshot(new Date())
-        response.json(submission)
+        response.json(lead)
       } catch (error) {
         const message =
-          error instanceof Error
-            ? error.message
-            : 'Could not update submission status.'
+          error instanceof Error ? error.message : 'Could not update lead status.'
         response
-          .status(message === 'Prediction submission not found.' ? 404 : 400)
+          .status(message === 'Prediction lead not found.' ? 404 : 400)
           .json({ message })
       }
     }),
   )
 
   router.post(
-    '/internal/prediction-submissions/:submissionId/review-result',
+    '/internal/leads/:leadId/review-result',
     asyncHandler(async (request, response) => {
-      const params = paramsSchema.parse(request.params)
+      const params = z
+        .object({
+          leadId: z.string(),
+        })
+        .parse(request.params)
       const body = internalPredictionSubmissionReviewResultInputSchema.parse(
         request.body,
       )
 
       try {
-        const result = await applyPredictionReviewResultForInternal(
-          params.submissionId,
+        const result = await applyPredictionLeadReviewResultForInternal(
+          params.leadId,
           body,
         )
         await publishCurrentOperationalSnapshot(new Date())
@@ -104,9 +156,9 @@ export function createInternalRouter(): Router {
         const message =
           error instanceof Error
             ? error.message
-            : 'Could not apply prediction review result.'
+            : 'Could not apply prediction lead review result.'
         response
-          .status(message === 'Prediction submission not found.' ? 404 : 400)
+          .status(message === 'Prediction lead not found.' ? 404 : 400)
           .json({ message })
       }
     }),

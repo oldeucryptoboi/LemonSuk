@@ -1,7 +1,60 @@
 import { describe, expect, it } from 'vitest'
 
 describe('review orchestrator internal api client', () => {
-  it('reads submissions, posts status updates, posts review results, and surfaces API failures', async () => {
+  function buildLead(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'lead_1',
+      leadType: 'structured_agent_lead',
+      submittedByAgentId: 'agent_1',
+      submittedByOwnerEmail: null,
+      sourceUrl: 'https://example.com/source',
+      normalizedSourceUrl: 'https://example.com/source',
+      sourceLabel: 'example.com',
+      sourceDomain: 'example.com',
+      sourceType: 'blog',
+      sourceNote: null,
+      sourcePublishedAt: null,
+      claimedHeadline: 'Queued headline',
+      claimedSubject: 'Queued subject',
+      claimedCategory: 'social',
+      familyId: null,
+      familySlug: null,
+      familyDisplayName: null,
+      primaryEntityId: null,
+      primaryEntitySlug: null,
+      primaryEntityDisplayName: null,
+      eventGroupId: null,
+      promisedDate: '2027-12-31T23:59:59.000Z',
+      summary: 'Queued summary that is long enough for schema validation.',
+      tags: [],
+      status: 'pending',
+      spamScore: 0,
+      duplicateOfLeadId: null,
+      duplicateOfMarketId: null,
+      reviewNotes: null,
+      linkedMarketId: null,
+      reviewedAt: null,
+      legacyAgentSubmissionId: 'submission_1',
+      legacyHumanSubmissionId: null,
+      createdAt: '2026-03-17T00:00:00.000Z',
+      updatedAt: '2026-03-17T00:00:00.000Z',
+      submittedBy: {
+        id: 'agent_1',
+        handle: 'alpha',
+        displayName: 'Alpha',
+      },
+      ...overrides,
+    }
+  }
+
+  function buildQueue() {
+    return {
+      pendingCount: 1,
+      items: [buildLead()],
+    }
+  }
+
+  it('reads, updates, lists, and reviews lead records through the internal api', async () => {
     const client = await import('./internal-api')
 
     const okFetch: typeof fetch = async (input, init) => {
@@ -12,312 +65,160 @@ describe('review orchestrator internal api client', () => {
             ? input.toString()
             : input.url
 
-      if (url.endsWith('/status')) {
+      if (url.includes('/internal/leads?limit=10')) {
+        return new Response(JSON.stringify(buildQueue()), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+
+      if (url.endsWith('/internal/leads/lead_1/status')) {
         expect(init?.method).toBe('POST')
         return new Response(
-          JSON.stringify({
-            id: 'submission_1',
-            headline: 'Queued headline',
-            subject: 'Queued subject',
-            category: 'social',
-            summary: 'Queued summary that is long enough for schema validation.',
-            promisedDate: '2027-12-31T23:59:59.000Z',
-            sourceUrl: 'https://example.com/source',
-            sourceLabel: 'example.com',
-            sourceDomain: 'example.com',
-            sourceType: 'blog',
-            tags: [],
-            status: 'in_review',
-            reviewNotes: 'Picked up.',
-            linkedMarketId: null,
-            submittedAt: '2026-03-17T00:00:00.000Z',
-            updatedAt: '2026-03-17T00:00:30.000Z',
-            reviewedAt: null,
-            submittedBy: {
-              id: 'agent_1',
-              handle: 'alpha',
-              displayName: 'Alpha',
-            },
-            sourceNote: null,
-            sourcePublishedAt: null,
-          }),
+          JSON.stringify(buildLead({ status: 'in_review', reviewNotes: 'Picked up.' })),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       }
 
-      if (url.endsWith('/review-result')) {
+      if (url.endsWith('/internal/leads/lead_1/review-result')) {
         return new Response(
           JSON.stringify({
-            submission: {
-              id: 'submission_1',
-              headline: 'Queued headline',
-              subject: 'Queued subject',
-              category: 'social',
-              summary:
-                'Queued summary that is long enough for schema validation.',
-              promisedDate: '2027-12-31T23:59:59.000Z',
-              sourceUrl: 'https://example.com/source',
-              sourceLabel: 'example.com',
-              sourceDomain: 'example.com',
-              sourceType: 'blog',
-              tags: [],
-              status: 'rejected',
-              reviewNotes: 'Rejected.',
-              linkedMarketId: null,
-              submittedAt: '2026-03-17T00:00:00.000Z',
-              updatedAt: '2026-03-17T00:00:30.000Z',
-              reviewedAt: '2026-03-17T00:00:30.000Z',
-              submittedBy: {
-                id: 'agent_1',
-                handle: 'alpha',
-                displayName: 'Alpha',
-              },
-              sourceNote: null,
-              sourcePublishedAt: null,
-            },
+            lead: buildLead({
+              status: 'accepted',
+              reviewNotes: 'Accepted.',
+              linkedMarketId: 'optimus-customizable-2026',
+              reviewedAt: '2026-03-17T00:00:40.000Z',
+            }),
             reviewResult: {
-              runId: 'run_1',
+              runId: 'run_2',
               reviewer: 'eddie',
-              verdict: 'reject',
-              confidence: 0.31,
-              summary: 'Rejected with strong evidence.',
+              verdict: 'accept',
+              confidence: 0.74,
+              summary: 'Accepted with clear matching evidence.',
               evidence: [],
               needsHumanReview: false,
               snapshotRef: null,
               linkedMarketId: 'optimus-customizable-2026',
-              providerRunId: 'provider_1',
+              providerRunId: 'provider_2',
             },
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       }
 
-      return new Response(
-        JSON.stringify({
-          id: 'submission_1',
-          headline: 'Queued headline',
-          subject: 'Queued subject',
-          category: 'social',
-          summary: 'Queued summary that is long enough for schema validation.',
-          promisedDate: '2027-12-31T23:59:59.000Z',
-          sourceUrl: 'https://example.com/source',
-          sourceLabel: 'example.com',
-          sourceDomain: 'example.com',
-          sourceType: 'blog',
-          tags: [],
-          status: 'pending',
-          reviewNotes: null,
-          linkedMarketId: null,
-          submittedAt: '2026-03-17T00:00:00.000Z',
-          updatedAt: '2026-03-17T00:00:00.000Z',
-          reviewedAt: null,
-          submittedBy: {
-            id: 'agent_1',
-            handle: 'alpha',
-            displayName: 'Alpha',
-          },
-          sourceNote: null,
-          sourcePublishedAt: null,
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      )
+      if (url.endsWith('/internal/leads/missing')) {
+        return new Response(
+          JSON.stringify({ message: 'Prediction lead not found.' }),
+          { status: 404, headers: { 'content-type': 'application/json' } },
+        )
+      }
+
+      return new Response(JSON.stringify(buildLead()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
     }
 
     await expect(
-      client.readInternalPredictionSubmission('submission_1', okFetch),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        id: 'submission_1',
-      }),
-    )
-
+      client.readPendingInternalPredictionLeads(10, okFetch),
+    ).resolves.toEqual(expect.objectContaining({ pendingCount: 1 }))
     await expect(
-      client.updateInternalPredictionSubmissionStatus(
-        'submission_1',
+      client.readPendingInternalPredictionLeads(undefined, async (input) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+
+        expect(url.endsWith('/internal/leads')).toBe(true)
+
+        return new Response(JSON.stringify(buildQueue()), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }),
+    ).resolves.toEqual(expect.objectContaining({ pendingCount: 1 }))
+    await expect(client.readInternalPredictionLead('lead_1', okFetch)).resolves.toEqual(
+      expect.objectContaining({ id: 'lead_1' }),
+    )
+    await expect(
+      client.updateInternalPredictionLeadStatus(
+        'lead_1',
         {
           status: 'in_review',
           note: 'Picked up.',
         },
         okFetch,
       ),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        status: 'in_review',
-      }),
-    )
-
+    ).resolves.toEqual(expect.objectContaining({ status: 'in_review' }))
     await expect(
-      client.submitInternalPredictionReviewResult(
-        'submission_1',
+      client.submitInternalPredictionLeadReviewResult(
+        'lead_1',
         {
-          runId: 'run_1',
+          runId: 'run_2',
           reviewer: 'eddie',
-          verdict: 'reject',
-          confidence: 0.31,
-          summary: 'Rejected with strong evidence.',
+          verdict: 'accept',
+          confidence: 0.74,
+          summary: 'Accepted with clear matching evidence.',
           evidence: [],
           needsHumanReview: false,
+          linkedMarketId: 'optimus-customizable-2026',
         },
         okFetch,
       ),
     ).resolves.toEqual(
       expect.objectContaining({
-        submission: expect.objectContaining({
-          status: 'rejected',
+        lead: expect.objectContaining({
+          status: 'accepted',
         }),
       }),
     )
 
-    await expect(
-      client.readInternalPredictionSubmission(
-        'missing',
-        async () =>
-          new Response(JSON.stringify({ message: 'Prediction submission not found.' }), {
-            status: 404,
-            headers: { 'content-type': 'application/json' },
-          }),
-      ),
-    ).rejects.toThrow('Prediction submission not found.')
+    await expect(client.readInternalPredictionLead('missing', okFetch)).rejects.toThrow(
+      'Prediction lead not found.',
+    )
   })
 
-  it('uses the global fetch implementation when no override is provided', async () => {
+  it('uses the global fetch implementation and falls back cleanly on sparse review results', async () => {
     const client = await import('./internal-api')
     const originalFetch = global.fetch
 
-    global.fetch = (async () =>
-      new Response(
-        JSON.stringify({
-          id: 'submission_fetch',
-          headline: 'Queued headline',
-          subject: 'Queued subject',
-          category: 'social',
-          summary: 'Queued summary that is long enough for schema validation.',
-          promisedDate: '2027-12-31T23:59:59.000Z',
-          sourceUrl: 'https://example.com/source',
-          sourceLabel: 'example.com',
-          sourceDomain: 'example.com',
-          sourceType: 'blog',
-          tags: [],
-          status: 'pending',
-          reviewNotes: null,
-          linkedMarketId: null,
-          submittedAt: '2026-03-17T00:00:00.000Z',
-          updatedAt: '2026-03-17T00:00:00.000Z',
-          reviewedAt: null,
-          submittedBy: {
-            id: 'agent_1',
-            handle: 'alpha',
-            displayName: 'Alpha',
-          },
-          sourceNote: null,
-          sourcePublishedAt: null,
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      )) as typeof fetch
+    global.fetch = (async (input) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url
+
+      if (url.includes('/internal/leads?limit=5')) {
+        return new Response(JSON.stringify(buildQueue()), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+
+      return new Response(JSON.stringify(buildLead({ id: 'lead_fetch' })), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as typeof fetch
 
     try {
-      await expect(
-        client.readInternalPredictionSubmission('submission_fetch'),
-      ).resolves.toEqual(
-        expect.objectContaining({
-          id: 'submission_fetch',
-        }),
+      await expect(client.readPendingInternalPredictionLeads(5)).resolves.toEqual(
+        expect.objectContaining({ pendingCount: 1 }),
+      )
+      await expect(client.readInternalPredictionLead('lead_fetch')).resolves.toEqual(
+        expect.objectContaining({ id: 'lead_fetch' }),
       )
     } finally {
       global.fetch = originalFetch
     }
-  })
-
-  it('falls back cleanly when the internal API returns non-JSON or null review-result fields', async () => {
-    const client = await import('./internal-api')
 
     await expect(
-      client.submitInternalPredictionReviewResult(
-        'submission_2',
-        {
-          runId: 'run_2',
-          reviewer: 'eddie',
-          verdict: 'accept',
-          confidence: 0.72,
-          summary: 'Accepted for linkage review.',
-          evidence: [],
-          needsHumanReview: true,
-          linkedMarketId: 'optimus-customizable-2026',
-          providerRunId: 'provider_2',
-        },
-        async (_input, init) => {
-          const rawBody =
-            typeof init?.body === 'string' ? init.body : JSON.stringify({})
-          const requestBody = JSON.parse(rawBody)
-          expect(requestBody.linkedMarketId).toBe('optimus-customizable-2026')
-
-          return new Response(
-            JSON.stringify({
-              submission: {
-                id: 'submission_2',
-                headline: 'Queued headline',
-                subject: 'Queued subject',
-                category: 'social',
-                summary:
-                  'Queued summary that is long enough for schema validation.',
-                promisedDate: '2027-12-31T23:59:59.000Z',
-                sourceUrl: 'https://example.com/source',
-                sourceLabel: 'example.com',
-                sourceDomain: 'example.com',
-                sourceType: 'blog',
-                tags: [],
-                status: 'escalated',
-                reviewNotes: 'Accepted for linkage review.',
-                linkedMarketId: null,
-                submittedAt: '2026-03-17T00:00:00.000Z',
-                updatedAt: '2026-03-17T00:01:00.000Z',
-                reviewedAt: '2026-03-17T00:01:00.000Z',
-                submittedBy: {
-                  id: 'agent_1',
-                  handle: 'alpha',
-                  displayName: 'Alpha',
-                },
-                sourceNote: null,
-                sourcePublishedAt: null,
-              },
-              reviewResult: {
-                runId: 'run_2',
-                reviewer: 'eddie',
-                verdict: 'accept',
-                confidence: 0.72,
-                summary: 'Accepted for linkage review.',
-                evidence: [],
-                needsHumanReview: true,
-                linkedMarketId: null,
-                providerRunId: null,
-              },
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
-          )
-        },
-      ),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        submission: expect.objectContaining({
-          status: 'escalated',
-        }),
-      }),
-    )
-
-    await expect(
-      client.readInternalPredictionSubmission(
-        'bad',
-        async () =>
-          new Response('not json', {
-            status: 500,
-            headers: { 'content-type': 'text/plain' },
-          }),
-      ),
-    ).rejects.toThrow('Internal API request failed with status 500.')
-
-    await expect(
-      client.submitInternalPredictionReviewResult(
-        'submission_3',
+      client.submitInternalPredictionLeadReviewResult(
+        'lead_2',
         {
           runId: 'run_3',
           reviewer: 'eddie',
@@ -336,33 +237,12 @@ describe('review orchestrator internal api client', () => {
         async () =>
           new Response(
             JSON.stringify({
-              submission: {
-                id: 'submission_3',
-                headline: 'Queued headline',
-                subject: 'Queued subject',
-                category: 'social',
-                summary:
-                  'Queued summary that is long enough for schema validation.',
-                promisedDate: '2027-12-31T23:59:59.000Z',
-                sourceUrl: 'https://example.com/source',
-                sourceLabel: 'example.com',
-                sourceDomain: 'example.com',
-                sourceType: 'blog',
-                tags: [],
+              lead: buildLead({
+                id: 'lead_2',
                 status: 'rejected',
                 reviewNotes: 'Reject fallback coverage.',
-                linkedMarketId: null,
-                submittedAt: '2026-03-17T00:00:00.000Z',
-                updatedAt: '2026-03-17T00:01:00.000Z',
                 reviewedAt: '2026-03-17T00:01:00.000Z',
-                submittedBy: {
-                  id: 'agent_1',
-                  handle: 'alpha',
-                  displayName: 'Alpha',
-                },
-                sourceNote: null,
-                sourcePublishedAt: null,
-              },
+              }),
               reviewResult: null,
             }),
             { status: 200, headers: { 'content-type': 'application/json' } },
@@ -370,10 +250,21 @@ describe('review orchestrator internal api client', () => {
       ),
     ).resolves.toEqual(
       expect.objectContaining({
-        submission: expect.objectContaining({
+        lead: expect.objectContaining({
           status: 'rejected',
         }),
       }),
     )
+
+    await expect(
+      client.readInternalPredictionLead(
+        'bad',
+        async () =>
+          new Response('not json', {
+            status: 500,
+            headers: { 'content-type': 'text/plain' },
+          }),
+      ),
+    ).rejects.toThrow('Internal API request failed with status 500.')
   })
 })

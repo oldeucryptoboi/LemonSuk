@@ -15,9 +15,11 @@
   },
   "include": [
     "apps",
+    "tests",
     "packages",
     "scripts",
     "eslint.config.js",
+    "playwright.config.ts",
     "vitest.config.ts",
     "vitest.setup.ts"
   ]

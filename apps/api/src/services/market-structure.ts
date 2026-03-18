@@ -42,6 +42,26 @@ const companyDefinitions: CompanyDefinition[] = [
     ],
   },
   {
+    company: 'apple',
+    tags: ['apple', 'iphone', 'ipad', 'mac', 'homepod'],
+    patterns: [/\bapple\b/i, /\biphone\b/i, /\bipad\b/i, /\bmac(book)?\b/i],
+  },
+  {
+    company: 'openai',
+    tags: ['openai', 'chatgpt', 'gpt'],
+    patterns: [/\bopenai\b/i, /\bchatgpt\b/i, /\bgpt-\d/i],
+  },
+  {
+    company: 'anthropic',
+    tags: ['anthropic', 'claude'],
+    patterns: [/\banthropic\b/i, /\bclaude\b/i],
+  },
+  {
+    company: 'meta',
+    tags: ['meta', 'facebook', 'llama', 'meta ai'],
+    patterns: [/\bmeta\b/i, /\bfacebook\b/i, /\bllama\b/i, /\bmeta ai\b/i],
+  },
+  {
     company: 'tesla',
     tags: ['tesla', 'fsd', 'robotaxi', 'cybercab', 'optimus'],
     patterns: [/tesla/i, /cybercab/i, /robotaxi/i, /optimus/i, /full self-driving/i],

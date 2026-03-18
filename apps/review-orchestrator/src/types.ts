@@ -14,7 +14,8 @@ export const fetchedSnapshotSchema = z.object({
 
 export const eddieDispatchTaskSchema = z.object({
   runId: z.string(),
-  submissionId: z.string(),
+  leadId: z.string(),
+  legacySubmissionId: z.string().nullable().optional(),
   sourceUrl: z.url(),
   snapshotText: z.string(),
   snapshotRef: z.string().nullable(),
@@ -22,7 +23,8 @@ export const eddieDispatchTaskSchema = z.object({
 
 export const eddieCallbackPayloadSchema = z.object({
   runId: z.string(),
-  submissionId: z.string(),
+  leadId: z.string(),
+  legacySubmissionId: z.string().nullable().optional(),
   status: z.enum(['completed', 'failed']),
   verdict: predictionReviewVerdictSchema.optional(),
   confidence: z.number().min(0).max(1).optional(),

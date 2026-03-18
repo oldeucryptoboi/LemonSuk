@@ -230,11 +230,13 @@ export function createAuthRouter(): Router {
         await dispatchOwnerLoginLink(loginLink)
         response.json(loginLink)
       } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not create login link.'
+
         response.status(400).json({
-          message:
-            error instanceof Error
-              ? error.message
-              : 'Could not create login link.',
+          message,
         })
       }
     }),

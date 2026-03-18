@@ -7,6 +7,7 @@ import { createRateLimitMiddleware } from './middleware/rate-limit'
 import { createAgentRouter } from './routes/agent'
 import { createAuthRouter } from './routes/auth'
 import { createBetRouter } from './routes/bets'
+import { createCatalogRouter } from './routes/catalog'
 import { createDashboardRouter } from './routes/dashboard'
 import { createDiscussionRouter } from './routes/discussion'
 import { createInternalRouter } from './routes/internal'
@@ -35,6 +36,7 @@ export function buildApp(): Express {
       limit: 100,
       windowMs: 60_000,
     }),
+    createCatalogRouter(),
     createDashboardRouter(),
     createBetRouter(),
     createDiscussionRouter(),

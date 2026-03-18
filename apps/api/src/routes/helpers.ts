@@ -107,6 +107,10 @@ export async function dispatchOwnerLoginLink(loginLink: {
   ownerEmail: string
   expiresAt: string
   agentHandles: string[]
-}) {
-  await sendOwnerLoginLinkEmail(loginLink)
+}): Promise<void> {
+  const delivered = await sendOwnerLoginLinkEmail(loginLink)
+
+  if (!delivered) {
+    throw new Error('Owner login email could not be delivered right now.')
+  }
 }

@@ -1,4 +1,4 @@
-import { reviewPredictionSubmission } from '../apps/api/src/services/submission-queue'
+import { reviewPredictionLead } from '../apps/api/src/services/lead-review-workflow'
 
 type Decision = 'accepted' | 'rejected'
 
@@ -10,17 +10,17 @@ function readFlag(name: string): string | undefined {
 function fail(message: string): never {
   throw new Error(
     `${message}\n\nUsage:\n` +
-      '  npm run review-submission -- --submission-id <id> --decision <accepted|rejected> [--market-id <market-id>] [--note <text>]',
+      '  npm run review-lead -- --lead-id <id> --decision <accepted|rejected> [--market-id <market-id>] [--note <text>]',
   )
 }
 
-const submissionId = readFlag('--submission-id')
+const leadId = readFlag('--lead-id')
 const decision = readFlag('--decision') as Decision | undefined
 const linkedMarketId = readFlag('--market-id')
 const reviewNotes = readFlag('--note')
 
-if (!submissionId) {
-  fail('Missing --submission-id.')
+if (!leadId) {
+  fail('Missing --lead-id.')
 }
 
 if (decision !== 'accepted' && decision !== 'rejected') {
@@ -28,11 +28,11 @@ if (decision !== 'accepted' && decision !== 'rejected') {
 }
 
 if (decision === 'accepted' && !linkedMarketId) {
-  fail('Accepted submissions require --market-id.')
+  fail('Accepted leads require --market-id.')
 }
 
-const reviewed = await reviewPredictionSubmission({
-  submissionId,
+const reviewed = await reviewPredictionLead({
+  leadId,
   decision,
   linkedMarketId,
   reviewNotes,

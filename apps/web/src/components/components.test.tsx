@@ -204,13 +204,17 @@ describe('web components', () => {
         "Open the owner deck first. Only verified human owners can forward source URLs into Eddie's offline review queue.",
       ),
     ).not.toBeNull()
-    fireEvent.submit(screen.getByRole('button', { name: 'Open owner deck' }).closest('form')!)
-    expect(
-      await screen.findByText('Open the owner deck before sending review leads.'),
-    ).not.toBeNull()
-    await userEvent.setup().click(
-      screen.getByRole('button', { name: 'Open owner deck' }),
+    fireEvent.submit(
+      screen.getByRole('button', { name: 'Open owner deck' }).closest('form')!,
     )
+    expect(
+      await screen.findByText(
+        'Open the owner deck before sending review leads.',
+      ),
+    ).not.toBeNull()
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Open owner deck' }))
     expect(onOpenOwnerModal).toHaveBeenCalledTimes(1)
   })
 
@@ -252,9 +256,9 @@ describe('web components', () => {
       ),
     ).not.toBeNull()
 
-    await userEvent.setup().click(
-      screen.getByRole('button', { name: 'Refresh challenge' }),
-    )
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Refresh challenge' }))
     expect(
       await screen.findByText('Reply with the replacement slug.'),
     ).not.toBeNull()
@@ -325,7 +329,9 @@ describe('web components', () => {
     )
 
     expect(
-      await screen.findByText('That source is already queued for offline review.'),
+      await screen.findByText(
+        'That source is already queued for offline review.',
+      ),
     ).not.toBeNull()
     expect(screen.getByText('Solve the second slug.')).not.toBeNull()
   })
@@ -436,6 +442,7 @@ describe('web components', () => {
       (market) => market.status === 'open',
     )[1]
     const onOpenOwnerModal = vi.fn()
+    const onOpenClaimModal = vi.fn()
     const onSelect = vi.fn()
     const onOpenForum = vi.fn()
     const marketWithResolution = {
@@ -476,6 +483,7 @@ describe('web components', () => {
         snapshot={heroSnapshot}
         agentInstructionsUrl="https://lemonsuk.com/agent.md"
         onOpenOwnerModal={onOpenOwnerModal}
+        onOpenClaimModal={onOpenClaimModal}
       />,
     )
     expect(screen.getByText('LemonSuk')).not.toBeNull()
@@ -487,8 +495,15 @@ describe('web components', () => {
     if (secondaryLiveDeadline?.headline) {
       expect(screen.getByText(secondaryLiveDeadline.headline)).not.toBeNull()
     }
-    await user.click(screen.getByRole('button', { name: "I'm a human" }))
+    await user.click(screen.getByRole('button', { name: 'Owner login' }))
     expect(onOpenOwnerModal).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: 'Claim agent' }))
+    expect(onOpenClaimModal).toHaveBeenCalledTimes(1)
+    expect(
+      screen.getByText(
+        /Claiming a bot verifies ownership and unlocks its starter credits./,
+      ),
+    ).not.toBeNull()
 
     rerender(
       <HeroBanner
@@ -502,6 +517,7 @@ describe('web components', () => {
         }}
         agentInstructionsUrl="https://lemonsuk.com/agent.md"
         onOpenOwnerModal={onOpenOwnerModal}
+        onOpenClaimModal={onOpenClaimModal}
       />,
     )
     expect(screen.getByText('No live markets')).not.toBeNull()

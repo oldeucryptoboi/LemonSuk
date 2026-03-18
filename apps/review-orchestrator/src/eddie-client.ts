@@ -1,6 +1,4 @@
-import {
-  internalPredictionSubmissionReviewResultInputSchema,
-} from '../../../packages/shared/src/types'
+import { internalPredictionSubmissionReviewResultInputSchema } from '../../../packages/shared/src/types'
 
 import { reviewOrchestratorConfig } from './config'
 import { eddieDispatchTaskSchema } from './types'
@@ -9,12 +7,25 @@ import type { EddieDispatchTask } from './types'
 type EddieDispatchResult =
   | {
       mode: 'completed'
-      result: ReturnType<typeof internalPredictionSubmissionReviewResultInputSchema.parse>
+      result: ReturnType<
+        typeof internalPredictionSubmissionReviewResultInputSchema.parse
+      >
     }
   | {
       mode: 'awaiting_callback'
       providerRunId: string
     }
+
+function buildEddieDispatchUrl(): string {
+  const endpoint = new URL(reviewOrchestratorConfig.eddieBaseUrl)
+  if (reviewOrchestratorConfig.reviewToken) {
+    endpoint.searchParams.set(
+      'review_token',
+      reviewOrchestratorConfig.reviewToken,
+    )
+  }
+  return endpoint.toString()
+}
 
 export async function dispatchToEddie(
   task: EddieDispatchTask,
@@ -35,7 +46,8 @@ export async function dispatchToEddie(
         evidence: [
           {
             url: parsed.sourceUrl,
-            excerpt: parsed.snapshotText.slice(0, 220) || 'No snapshot text captured.',
+            excerpt:
+              parsed.snapshotText.slice(0, 220) || 'No snapshot text captured.',
           },
         ],
         needsHumanReview: true,
@@ -44,7 +56,7 @@ export async function dispatchToEddie(
     }
   }
 
-  const response = await fetchImpl(`${reviewOrchestratorConfig.eddieBaseUrl}/reviews`, {
+  const response = await fetchImpl(buildEddieDispatchUrl(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -53,9 +65,9 @@ export async function dispatchToEddie(
     body: JSON.stringify(parsed),
   })
 
-  const payload = (await response.json().catch(() => null)) as
-    | { providerRunId?: string }
-    | null
+  const payload = (await response.json().catch(() => null)) as {
+    providerRunId?: string
+  } | null
 
   if (!response.ok || !payload?.providerRunId) {
     throw new Error('EDDIE dispatch failed.')

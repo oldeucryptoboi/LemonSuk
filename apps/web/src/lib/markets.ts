@@ -28,6 +28,10 @@ const companyOrder: Company[] = [
   'xai',
   'neuralink',
   'boring',
+  'apple',
+  'openai',
+  'anthropic',
+  'meta',
   'solarcity',
   'hyperloop',
   'doge',
@@ -47,6 +51,14 @@ export function companyLabel(company: Company): string {
       return 'Neuralink'
     case 'boring':
       return 'Boring'
+    case 'apple':
+      return 'Apple'
+    case 'openai':
+      return 'OpenAI'
+    case 'anthropic':
+      return 'Anthropic'
+    case 'meta':
+      return 'Meta'
     case 'solarcity':
       return 'SolarCity'
     case 'hyperloop':

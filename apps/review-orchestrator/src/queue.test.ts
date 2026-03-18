@@ -13,9 +13,11 @@ describe('review orchestrator queue', () => {
 
     const consume = vi.fn(async () => ({
       eventType: 'review.requested' as const,
-      submissionId: 'submission_1',
+      leadId: 'lead_1',
+      legacySubmissionId: 'submission_1',
       submittedUrl: 'https://example.com/post',
       agentId: 'agent_1',
+      ownerEmail: null,
       createdAt: '2026-03-17T00:00:00.000Z',
       priority: 'normal' as const,
     }))
@@ -23,7 +25,7 @@ describe('review orchestrator queue', () => {
 
     await expect(queue.consumeReviewRequestedEvent()).resolves.toEqual(
       expect.objectContaining({
-        submissionId: 'submission_1',
+        leadId: 'lead_1',
       }),
     )
     expect(consume).toHaveBeenCalledWith('lemonsuk:review-requested')
@@ -50,9 +52,11 @@ describe('review orchestrator queue', () => {
               'lemonsuk:review-requested',
               JSON.stringify({
                 eventType: 'review.requested',
-                submissionId: 'submission_redis',
+                leadId: 'lead_redis',
+                legacySubmissionId: 'submission_redis',
                 submittedUrl: 'https://example.com/post',
                 agentId: 'agent_redis',
+                ownerEmail: null,
                 createdAt: '2026-03-17T00:00:00.000Z',
                 priority: 'high',
               }),
@@ -64,7 +68,7 @@ describe('review orchestrator queue', () => {
       const queue = await import('./queue')
       await expect(queue.consumeReviewRequestedEvent()).resolves.toEqual(
         expect.objectContaining({
-          submissionId: 'submission_redis',
+          leadId: 'lead_redis',
           priority: 'high',
         }),
       )
