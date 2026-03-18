@@ -52,6 +52,7 @@ services:
       - api
     environment:
       INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://api:8787}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-replace-internal-service-token}
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
       REVIEW_CONSOLE_ACCESS_KEY: ${REVIEW_CONSOLE_ACCESS_KEY:-}
       PORT: 3000

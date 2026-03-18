@@ -5,10 +5,16 @@ const ownerSessionToken = process.env.PLAYWRIGHT_OWNER_SESSION_TOKEN
 const claimToken = process.env.PLAYWRIGHT_CLAIM_TOKEN
 
 test.describe('authenticated board flows', () => {
-  test('configured owner email can request a login link', async ({ page }) => {
+  test('configured owner email can request a login link', async ({
+    page,
+  }, testInfo) => {
     test.skip(
       !ownerEmail,
       'PLAYWRIGHT_OWNER_EMAIL is required for owner login-link smoke.',
+    )
+    test.skip(
+      testInfo.project.name !== 'desktop-chromium',
+      'Owner email smoke runs once to avoid duplicate live email sends.',
     )
 
     await page.goto('/')
@@ -22,7 +28,7 @@ test.describe('authenticated board flows', () => {
     await expect(
       dialog.getByText(`Check ${ownerEmail!} for your LemonSuk owner link.`),
     ).toBeVisible()
-    await expect(dialog.getByRole('button', { name: 'Done' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Use another email' })).toBeVisible()
   })
 
   test('configured owner session token opens the signed-in board state', async ({

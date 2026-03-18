@@ -46,7 +46,11 @@ export function createInternalRouter(): Router {
         .object({
           limit: z.coerce.number().int().min(1).max(100).optional(),
           leadType: z
-            .enum(['structured_agent_lead', 'human_url_lead'])
+            .enum([
+              'structured_agent_lead',
+              'human_url_lead',
+              'system_discovery_lead',
+            ])
             .optional(),
           familySlug: z
             .enum([

@@ -44,10 +44,12 @@ test.describe('review console', () => {
       page.getByRole('heading', { name: 'Eddie review desk' }),
     ).toBeVisible()
     await expect(page).toHaveURL(new RegExp(`leadId=${reviewLeadId}`))
-    await expect(page.getByText('Lead detail')).toBeVisible()
-    await expect(page.getByText('Manual decision')).toBeVisible()
-    await expect(page.getByText('Recent review results')).toBeVisible()
-    await expect(page.getByText('Status')).toBeVisible()
-    await expect(page.getByText('Source')).toBeVisible()
+    await expect(page.getByText('Lead detail', { exact: true })).toBeVisible()
+    await expect(page.getByText('Manual decision', { exact: true })).toBeVisible()
+    await expect(
+      page.getByText('Recent review results', { exact: true }),
+    ).toBeVisible()
+    await expect(page.getByText('Status', { exact: true })).toBeVisible()
+    await expect(page.getByText('Source', { exact: true })).toBeVisible()
   })
 })

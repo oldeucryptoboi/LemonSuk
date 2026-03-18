@@ -23,7 +23,7 @@ test.describe('board interactions', () => {
       dialog.getByText('Paste a claim link or claim token from your agent.'),
     ).toBeVisible()
 
-    await dialog.getByRole('button', { name: 'I already have owner access' }).click()
+    await dialog.getByRole('button', { name: 'Owner login' }).click()
     await expect(dialog.getByRole('heading', { name: 'Owner login' })).toBeVisible()
     await dialog.getByRole('button', { name: 'Not now' }).click()
     await expect(dialog).toBeHidden()

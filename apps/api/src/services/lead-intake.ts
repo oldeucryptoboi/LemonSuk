@@ -799,8 +799,8 @@ export async function readPredictionLeadInspectionFromClient(
       AND (
         leads.normalized_source_url = $2
         OR leads.source_domain = $3
-        OR ($4 IS NOT NULL AND leads.primary_entity_id = $4)
-        OR ($5 IS NOT NULL AND leads.family_id = $5)
+        OR ($4::text IS NOT NULL AND leads.primary_entity_id = $4::text)
+        OR ($5::text IS NOT NULL AND leads.family_id = $5::text)
       )
   `
 

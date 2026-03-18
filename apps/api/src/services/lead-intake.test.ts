@@ -754,6 +754,103 @@ describe('lead intake service', () => {
     await context.pool.end()
   })
 
+  it('builds inspection detail when family and entity are both unset', async () => {
+    const context = await setupApiContext()
+    const database = await import('./database')
+    const leadIntake = await import('./lead-intake')
+
+    const leadId = await database.withDatabaseTransaction(async (client) => {
+      await client.query(
+        `
+          INSERT INTO prediction_leads (
+            id,
+            lead_type,
+            submitted_by_agent_id,
+            submitted_by_owner_email,
+            source_url,
+            normalized_source_url,
+            source_domain,
+            source_type,
+            source_label,
+            source_note,
+            source_published_at,
+            claimed_headline,
+            claimed_subject,
+            claimed_category,
+            family_id,
+            primary_entity_id,
+            event_group_id,
+            promised_date,
+            summary,
+            tags,
+            status,
+            spam_score,
+            duplicate_of_lead_id,
+            duplicate_of_market_id,
+            legacy_agent_submission_id,
+            legacy_human_submission_id,
+            created_at,
+            updated_at,
+            review_notes,
+            linked_market_id,
+            reviewed_at
+          )
+          VALUES (
+            'lead_null_identity',
+            'human_url_lead',
+            NULL,
+            'owner@example.com',
+            'https://example.com/null-identity',
+            'https://example.com/null-identity',
+            'example.com',
+            'reference',
+            'example.com',
+            'Null identity inspection regression coverage.',
+            NULL,
+            'Null identity lead',
+            'Null identity',
+            'software_release',
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            'Lead without inferred family or entity.',
+            ARRAY['smoke'],
+            'failed',
+            0,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            '2026-03-18T15:00:00.000Z',
+            '2026-03-18T15:00:00.000Z',
+            'fetch failed',
+            NULL,
+            '2026-03-18T15:00:00.000Z'
+          )
+        `,
+      )
+
+      return 'lead_null_identity'
+    })
+
+    await expect(leadIntake.readPredictionLeadInspection(leadId)).resolves.toEqual(
+      expect.objectContaining({
+        lead: expect.objectContaining({
+          id: 'lead_null_identity',
+          familyId: null,
+          primaryEntityId: null,
+          status: 'failed',
+        }),
+        relatedPendingLeads: [],
+        recentReviewedLeads: [],
+        recentReviewResults: [],
+      }),
+    )
+
+    await context.pool.end()
+  })
+
   it('syncs legacy human submission status back onto the unified lead shape', async () => {
     const context = await setupApiContext()
     const database = await import('./database')
