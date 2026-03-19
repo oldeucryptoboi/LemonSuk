@@ -171,6 +171,51 @@ describe('runMaintenance', () => {
     expect(unchanged.changed).toBe(false)
   })
 
+  it('does not resettle an already-settled bet or duplicate notifications on rerun', () => {
+    const firstRun = runMaintenance(baseStore, new Date('2024-03-01T00:00:00.000Z'))
+    const secondRun = runMaintenance(
+      firstRun.store,
+      new Date('2024-03-02T00:00:00.000Z'),
+    )
+
+    expect(firstRun.store.bets[0]?.status).toBe('won')
+    expect(secondRun.changed).toBe(false)
+    expect(secondRun.store.bets[0]).toEqual(firstRun.store.bets[0])
+    expect(secondRun.store.notifications).toEqual(firstRun.store.notifications)
+  })
+
+  it('leaves bets open when their market is missing or still pending', () => {
+    const result = runMaintenance(
+      {
+        ...baseStore,
+        markets: [
+          {
+            ...baseStore.markets[0]!,
+            promisedDate: '2024-04-01T00:00:00.000Z',
+            lastCheckedAt: '2024-01-01T00:00:00.000Z',
+          },
+        ],
+        bets: [
+          {
+            ...baseStore.bets[0]!,
+            marketId: 'missing-market',
+          },
+          {
+            ...baseStore.bets[0]!,
+            id: 'bet-2',
+            marketId: 'market-1',
+          },
+        ],
+        notifications: [],
+      },
+      new Date('2024-01-15T00:00:00.000Z'),
+    )
+
+    expect(result.changed).toBe(true)
+    expect(result.store.bets.map((bet) => bet.status)).toEqual(['open', 'open'])
+    expect(result.store.notifications).toHaveLength(0)
+  })
+
   it('throws when resolving a missing or already-settled market', () => {
     expect(() =>
       resolveMarket(
@@ -207,9 +252,15 @@ describe('runMaintenance', () => {
     const unchanged = await context.maintenance.loadMaintainedStore(
       new Date('2020-01-01T00:00:00.000Z'),
     )
+    const unchangedAgain = await context.maintenance.loadMaintainedStore(
+      new Date('2020-01-01T00:00:00.000Z'),
+    )
 
     expect(changed.metadata.lastMaintenanceRunAt).not.toBeNull()
     expect(unchanged.markets.length).toBeGreaterThan(0)
+    expect(unchangedAgain.metadata.lastMaintenanceRunAt).toBe(
+      unchanged.metadata.lastMaintenanceRunAt,
+    )
 
     await context.pool.end()
   })

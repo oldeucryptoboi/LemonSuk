@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg'
 import type {
   BetSlip,
   Market,
+  MarketLineHistoryEntry,
   Notification,
   Source,
   StoreData,
@@ -11,7 +12,10 @@ import { storeSchema } from '../shared'
 import { createSeedStore } from '../data/seed'
 import { withDatabaseClient, withDatabaseTransaction } from './database'
 import { createStoredSourceId } from './utils'
-import { applyAgentSettlementCredits } from './wallet'
+import {
+  applyAgentSettlementCredits,
+  applyAuthoredMarketResolutionRewards,
+} from './wallet'
 
 type MetadataRow = {
   last_maintenance_run_at: Date | null
@@ -45,6 +49,32 @@ type MarketRow = {
   authored_by_agent_id: string | null
   author_handle: string | null
   author_display_name: string | null
+  previous_payout_multiplier: number | null
+  last_line_move_at: Date | null
+  last_line_move_reason: Market['lastLineMoveReason']
+  current_open_interest_credits: number
+  current_liability_credits: number
+  max_stake_credits: number
+  max_liability_credits: number
+  per_agent_exposure_cap_credits: number
+  betting_suspended: boolean
+  suspension_reason: string | null
+  settlement_grace_hours: number
+  auto_resolve_at: Date | null
+  settlement_state: Market['settlementState']
+}
+
+type MarketLineHistoryRow = {
+  id: string
+  market_id: string
+  moved_at: Date
+  previous_payout_multiplier: number
+  next_payout_multiplier: number
+  reason: MarketLineHistoryEntry['reason']
+  commentary: string
+  trigger_bet_id: string | null
+  open_interest_credits: number
+  liability_credits: number
 }
 
 type MarketSourceRow = {
@@ -92,6 +122,7 @@ function toIso(value: Date | null): string | null {
 function mapMarket(
   row: MarketRow,
   sourcesByMarketId: Map<string, Source[]>,
+  lineHistoryByMarketId: Map<string, MarketLineHistoryEntry[]>,
 ): Market {
   return {
     id: row.id,
@@ -126,6 +157,37 @@ function mapMarket(
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     lastCheckedAt: row.last_checked_at.toISOString(),
+    previousPayoutMultiplier:
+      row.previous_payout_multiplier === null
+        ? null
+        : Number(row.previous_payout_multiplier),
+    lastLineMoveAt: toIso(row.last_line_move_at),
+    lastLineMoveReason: row.last_line_move_reason ?? null,
+    lineHistory: lineHistoryByMarketId.get(row.id) ?? [],
+    currentOpenInterestCredits: Number(row.current_open_interest_credits),
+    currentLiabilityCredits: Number(row.current_liability_credits),
+    maxStakeCredits: Number(row.max_stake_credits),
+    maxLiabilityCredits: Number(row.max_liability_credits),
+    perAgentExposureCapCredits: Number(row.per_agent_exposure_cap_credits),
+    bettingSuspended: row.betting_suspended,
+    suspensionReason: row.suspension_reason,
+    settlementGraceHours: row.settlement_grace_hours,
+    autoResolveAt: toIso(row.auto_resolve_at),
+    settlementState: row.settlement_state,
+  }
+}
+
+function mapLineHistoryEntry(row: MarketLineHistoryRow): MarketLineHistoryEntry {
+  return {
+    id: row.id,
+    movedAt: row.moved_at.toISOString(),
+    previousPayoutMultiplier: Number(row.previous_payout_multiplier),
+    nextPayoutMultiplier: Number(row.next_payout_multiplier),
+    reason: row.reason,
+    commentary: row.commentary,
+    triggerBetId: row.trigger_bet_id,
+    openInterestCredits: Number(row.open_interest_credits),
+    liabilityCredits: Number(row.liability_credits),
   }
 }
 
@@ -203,6 +265,13 @@ async function readStoreFromClient(client: PoolClient): Promise<StoreData> {
       ORDER BY market_id, label
     `,
   )
+  const lineHistoryResult = await client.query<MarketLineHistoryRow>(
+    `
+      SELECT *
+      FROM market_line_history
+      ORDER BY market_id, moved_at DESC
+    `,
+  )
   const betsResult = await client.query<BetRow>(
     `
       SELECT *
@@ -224,11 +293,19 @@ async function readStoreFromClient(client: PoolClient): Promise<StoreData> {
     collection.push(mapSource(row))
     sourcesByMarketId.set(row.market_id, collection)
   }
+  const lineHistoryByMarketId = new Map<string, MarketLineHistoryEntry[]>()
+  for (const row of lineHistoryResult.rows) {
+    const collection = lineHistoryByMarketId.get(row.market_id) ?? []
+    collection.push(mapLineHistoryEntry(row))
+    lineHistoryByMarketId.set(row.market_id, collection)
+  }
 
   const metadata = metadataResult.rows[0]
 
   return storeSchema.parse({
-    markets: marketsResult.rows.map((row) => mapMarket(row, sourcesByMarketId)),
+    markets: marketsResult.rows.map((row) =>
+      mapMarket(row, sourcesByMarketId, lineHistoryByMarketId),
+    ),
     bets: betsResult.rows.map(mapBet),
     notifications: notificationsResult.rows.map(mapNotification),
     metadata: {
@@ -250,6 +327,7 @@ async function replaceStoreFromClient(
 
   await client.query('DELETE FROM notifications')
   await client.query('DELETE FROM bets')
+  await client.query('DELETE FROM market_line_history')
   await client.query('DELETE FROM market_sources')
   await client.query('DELETE FROM markets')
 
@@ -298,11 +376,26 @@ async function replaceStoreFromClient(
           created_at,
           updated_at,
           last_checked_at,
-          authored_by_agent_id
+          authored_by_agent_id,
+          previous_payout_multiplier,
+          last_line_move_at,
+          last_line_move_reason,
+          current_open_interest_credits,
+          current_liability_credits,
+          max_stake_credits,
+          max_liability_credits,
+          per_agent_exposure_cap_credits,
+          betting_suspended,
+          suspension_reason,
+          settlement_grace_hours,
+          auto_resolve_at,
+          settlement_state
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-          $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+          $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
+          $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35,
+          $36, $37
         )
       `,
       [
@@ -330,6 +423,19 @@ async function replaceStoreFromClient(
         market.updatedAt,
         market.lastCheckedAt,
         market.author?.id ?? null,
+        market.previousPayoutMultiplier ?? null,
+        market.lastLineMoveAt ?? null,
+        market.lastLineMoveReason ?? null,
+        market.currentOpenInterestCredits ?? 0,
+        market.currentLiabilityCredits ?? 0,
+        market.maxStakeCredits ?? 100,
+        market.maxLiabilityCredits ?? 350,
+        market.perAgentExposureCapCredits ?? 150,
+        market.bettingSuspended ?? false,
+        market.suspensionReason ?? null,
+        market.settlementGraceHours ?? 0,
+        market.autoResolveAt ?? null,
+        market.settlementState ?? 'live',
       ],
     )
 
@@ -360,6 +466,8 @@ async function replaceStoreFromClient(
         ],
       )
     }
+
+    await insertMarketLineHistoryEntries(client, market)
   }
 
   for (const bet of validated.bets) {
@@ -461,11 +569,26 @@ async function insertMarketFromClient(
         created_at,
         updated_at,
         last_checked_at,
-        authored_by_agent_id
+        authored_by_agent_id,
+        previous_payout_multiplier,
+        last_line_move_at,
+        last_line_move_reason,
+        current_open_interest_credits,
+        current_liability_credits,
+        max_stake_credits,
+        max_liability_credits,
+        per_agent_exposure_cap_credits,
+        betting_suspended,
+        suspension_reason,
+        settlement_grace_hours,
+        auto_resolve_at,
+        settlement_state
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
+        $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35,
+        $36, $37
       )
     `,
     [
@@ -493,6 +616,19 @@ async function insertMarketFromClient(
       market.updatedAt,
       market.lastCheckedAt,
       market.author?.id ?? null,
+      market.previousPayoutMultiplier ?? null,
+      market.lastLineMoveAt ?? null,
+      market.lastLineMoveReason ?? null,
+      market.currentOpenInterestCredits ?? 0,
+      market.currentLiabilityCredits ?? 0,
+      market.maxStakeCredits ?? 100,
+      market.maxLiabilityCredits ?? 350,
+      market.perAgentExposureCapCredits ?? 150,
+      market.bettingSuspended ?? false,
+      market.suspensionReason ?? null,
+      market.settlementGraceHours ?? 0,
+      market.autoResolveAt ?? null,
+      market.settlementState ?? 'live',
     ],
   )
 
@@ -520,6 +656,45 @@ async function insertMarketFromClient(
         source.domain,
         source.publishedAt,
         source.note,
+      ],
+    )
+  }
+
+  await insertMarketLineHistoryEntries(client, market)
+}
+
+async function insertMarketLineHistoryEntries(
+  client: PoolClient,
+  market: Market,
+): Promise<void> {
+  for (const entry of market.lineHistory ?? []) {
+    await client.query(
+      `
+        INSERT INTO market_line_history (
+          id,
+          market_id,
+          moved_at,
+          previous_payout_multiplier,
+          next_payout_multiplier,
+          reason,
+          commentary,
+          trigger_bet_id,
+          open_interest_credits,
+          liability_credits
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `,
+      [
+        entry.id,
+        market.id,
+        entry.movedAt,
+        entry.previousPayoutMultiplier,
+        entry.nextPayoutMultiplier,
+        entry.reason,
+        entry.commentary,
+        entry.triggerBetId ?? null,
+        entry.openInterestCredits,
+        entry.liabilityCredits,
       ],
     )
   }
@@ -574,13 +749,18 @@ export async function withStoreTransaction<T>(
 
     let currentStore = await readStoreFromClient(client)
 
-    const persist = async (nextStore: StoreData): Promise<StoreData> => {
-      const previousStore = currentStore
-      const persistedStore = await replaceStoreFromClient(client, nextStore)
-      await applyAgentSettlementCredits(client, previousStore, persistedStore)
-      currentStore = persistedStore
-      return currentStore
-    }
+      const persist = async (nextStore: StoreData): Promise<StoreData> => {
+        const previousStore = currentStore
+        const persistedStore = await replaceStoreFromClient(client, nextStore)
+        await applyAgentSettlementCredits(client, previousStore, persistedStore)
+        await applyAuthoredMarketResolutionRewards(
+          client,
+          previousStore,
+          persistedStore,
+        )
+        currentStore = persistedStore
+        return currentStore
+      }
 
     return run(currentStore, persist, client)
   })

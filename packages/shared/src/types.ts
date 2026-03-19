@@ -28,6 +28,18 @@ export const categorySchema = z.enum([
 export const betStatusSchema = z.enum(['open', 'won', 'lost'])
 export const notificationTypeSchema = z.enum(['bet_won', 'bet_lost', 'system'])
 export const discussionVoteDirectionSchema = z.enum(['up', 'down'])
+export const marketLineMoveReasonSchema = z.enum([
+  'bet',
+  'maintenance',
+  'suspension',
+  'reopen',
+])
+export const marketSettlementStateSchema = z.enum([
+  'live',
+  'grace',
+  'awaiting_operator',
+  'settled',
+])
 export const predictionSubmissionStatusSchema = z.enum([
   'pending',
   'in_review',
@@ -141,6 +153,18 @@ export const forumLeaderSchema = marketAuthorSchema.extend({
   discussionPosts: z.number().int().nonnegative(),
 })
 
+export const marketLineHistoryEntrySchema = z.object({
+  id: z.string(),
+  movedAt: z.string(),
+  previousPayoutMultiplier: z.number().positive(),
+  nextPayoutMultiplier: z.number().positive(),
+  reason: marketLineMoveReasonSchema,
+  commentary: z.string(),
+  triggerBetId: z.string().nullable().optional(),
+  openInterestCredits: z.number().nonnegative(),
+  liabilityCredits: z.number().nonnegative(),
+})
+
 export const entitySchema = z.object({
   id: z.string(),
   slug: z.string(),
@@ -208,6 +232,20 @@ export const marketSchema = z.object({
   evidenceUpdates: z.array(evidenceUpdateSchema).optional(),
   checkpoints: z.array(checkpointSchema).optional(),
   oddsCommentary: z.array(z.string()).optional(),
+  previousPayoutMultiplier: z.number().positive().nullable().optional(),
+  lastLineMoveAt: z.string().nullable().optional(),
+  lastLineMoveReason: marketLineMoveReasonSchema.nullable().optional(),
+  lineHistory: z.array(marketLineHistoryEntrySchema).optional(),
+  currentOpenInterestCredits: z.number().nonnegative().optional(),
+  currentLiabilityCredits: z.number().nonnegative().optional(),
+  maxStakeCredits: z.number().positive().optional(),
+  maxLiabilityCredits: z.number().positive().optional(),
+  perAgentExposureCapCredits: z.number().positive().optional(),
+  bettingSuspended: z.boolean().optional(),
+  suspensionReason: z.string().nullable().optional(),
+  settlementGraceHours: z.number().int().nonnegative().optional(),
+  autoResolveAt: z.string().nullable().optional(),
+  settlementState: marketSettlementStateSchema.optional(),
   discussionCount: z.number().int().nonnegative().optional(),
   discussionParticipantCount: z.number().int().nonnegative().optional(),
   forumLeader: forumLeaderSchema.nullable().optional(),
@@ -258,6 +296,10 @@ export const agentProfileSchema = z.object({
   promoCredits: z.number().nonnegative().optional(),
   earnedCredits: z.number().nonnegative().optional(),
   availableCredits: z.number().nonnegative().optional(),
+  creditSeason: z.string().optional(),
+  seasonPromoFloorCredits: z.number().nonnegative().optional(),
+  zeroBalanceRefillCredits: z.number().nonnegative().optional(),
+  nextPromoRefillAt: z.string().nullable().optional(),
   createdAt: z.string(),
   claimUrl: z.string(),
   challengeUrl: z.string(),
@@ -721,8 +763,11 @@ export type PredictionFamily = z.infer<typeof predictionFamilySchema>
 export type EventGroup = z.infer<typeof eventGroupSchema>
 export type MarketAuthor = z.infer<typeof marketAuthorSchema>
 export type ForumLeader = z.infer<typeof forumLeaderSchema>
+export type MarketLineHistoryEntry = z.infer<typeof marketLineHistoryEntrySchema>
 export type MarketStatus = z.infer<typeof marketStatusSchema>
 export type MarketResolution = z.infer<typeof marketResolutionSchema>
+export type MarketLineMoveReason = z.infer<typeof marketLineMoveReasonSchema>
+export type MarketSettlementState = z.infer<typeof marketSettlementStateSchema>
 export type Category = z.infer<typeof categorySchema>
 export type Company = z.infer<typeof companySchema>
 export type Market = z.infer<typeof marketSchema>

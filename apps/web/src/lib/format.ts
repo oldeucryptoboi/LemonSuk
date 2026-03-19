@@ -1,3 +1,8 @@
+import type {
+  MarketLineMoveReason,
+  MarketSettlementState,
+} from '../shared'
+
 export function formatDate(value: string): string {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -9,8 +14,58 @@ export function formatDate(value: string): string {
 export function formatCredits(value: number): string {
   return new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 2,
-  }).format(value)
+  })
+    .format(value)
     .concat(' cr')
+}
+
+export function formatLineDelta(
+  current: number,
+  previous: number | null | undefined,
+): string | null {
+  if (previous === null || previous === undefined) {
+    return null
+  }
+
+  const delta = Number((current - previous).toFixed(2))
+  if (delta === 0) {
+    return 'flat'
+  }
+
+  return `${delta > 0 ? '+' : ''}${delta.toFixed(2)}x`
+}
+
+export function formatLineMoveReason(
+  value: MarketLineMoveReason | null | undefined,
+): string | null {
+  switch (value) {
+    case 'bet':
+      return 'Bet pressure'
+    case 'maintenance':
+      return 'Maintenance repriced'
+    case 'suspension':
+      return 'Book suspended'
+    case 'reopen':
+      return 'Book reopened'
+    default:
+      return null
+  }
+}
+
+export function formatSettlementState(
+  value: MarketSettlementState | null | undefined,
+): string {
+  switch (value) {
+    case 'grace':
+      return 'Grace window'
+    case 'awaiting_operator':
+      return 'Awaiting operator'
+    case 'settled':
+      return 'Settled'
+    case 'live':
+    default:
+      return 'Live'
+  }
 }
 
 export function formatRelativeTime(

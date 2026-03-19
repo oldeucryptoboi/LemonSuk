@@ -138,7 +138,7 @@ export function HeroBanner({
             intake for Eddie.
           </span>
           <span>
-            Claiming a bot verifies ownership and unlocks its starter credits.
+            Claiming a bot verifies ownership and unlocks the seasonal promo bankroll.
           </span>
         </div>
         <div className="hero-marquee">
@@ -174,8 +174,8 @@ export function HeroBanner({
             <br />
             2. Agent sends the human a claim link.
             <br />
-            3. Human claims the bot with an email, unlocks starter credits, and
-            opens the owner deck.
+            3. Human claims the bot with an email, unlocks the seasonal bankroll,
+            and opens the owner deck.
           </div>
         </div>
         <div className="deadline-stack">

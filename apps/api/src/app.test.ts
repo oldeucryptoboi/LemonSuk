@@ -329,18 +329,65 @@ describe('app routes', () => {
       ).statusCode,
     ).toBe(401)
 
+    const preBetDashboardResponse = await request(app).get('/api/v1/dashboard')
+    expect(preBetDashboardResponse.statusCode).toBe(200)
+    const preBetOptimusLine = preBetDashboardResponse.body.markets.find(
+      (market: { id: string; payoutMultiplier: number }) =>
+        market.id === 'optimus-customizable-2026',
+    )?.payoutMultiplier
+    const preBetStarshipLine = preBetDashboardResponse.body.markets.find(
+      (market: { id: string; payoutMultiplier: number }) =>
+        market.id === 'starship-mars-2026',
+    )?.payoutMultiplier
+
     const agentBetResponse = await request(app)
       .post('/api/v1/auth/agents/bets')
       .send({
         apiKey: registration.apiKey,
         marketId: 'optimus-customizable-2026',
-        stakeCredits: 15,
+        stakeCredits: 90,
       })
     expect(agentBetResponse.statusCode).toBe(200)
     expect(agentBetResponse.body.agent.handle).toBe('deadlinebot')
-    expect(agentBetResponse.body.agent.availableCredits).toBe(25)
-    expect(agentBetResponse.body.agent.promoCredits).toBe(25)
+    expect(agentBetResponse.body.agent.availableCredits).toBe(10)
+    expect(agentBetResponse.body.agent.promoCredits).toBe(10)
     expect(agentBetResponse.body.agent.earnedCredits).toBe(0)
+    expect(agentBetResponse.body.bet.payoutMultiplierAtPlacement).toBe(
+      preBetOptimusLine,
+    )
+    expect(
+      agentBetResponse.body.snapshot.markets.find(
+        (market: { id: string; payoutMultiplier: number }) =>
+          market.id === 'optimus-customizable-2026',
+      )?.payoutMultiplier,
+    ).toBeLessThan(preBetOptimusLine)
+    expect(
+      agentBetResponse.body.snapshot.markets.find(
+        (market: { id: string; payoutMultiplier: number }) =>
+          market.id === 'starship-mars-2026',
+      )?.payoutMultiplier,
+    ).toBe(preBetStarshipLine)
+    expect(agentBetResponse.body.snapshot.stats.activeBets).toBe(1)
+
+    const postBetDashboardResponse = await request(app).get('/api/v1/dashboard')
+    expect(postBetDashboardResponse.statusCode).toBe(200)
+    expect(
+      postBetDashboardResponse.body.markets.find(
+        (market: { id: string; payoutMultiplier: number }) =>
+          market.id === 'optimus-customizable-2026',
+      )?.payoutMultiplier,
+    ).toBe(
+      agentBetResponse.body.snapshot.markets.find(
+        (market: { id: string; payoutMultiplier: number }) =>
+          market.id === 'optimus-customizable-2026',
+      )?.payoutMultiplier,
+    )
+    expect(
+      postBetDashboardResponse.body.markets.find(
+        (market: { id: string; payoutMultiplier: number }) =>
+          market.id === 'starship-mars-2026',
+      )?.payoutMultiplier,
+    ).toBe(preBetStarshipLine)
 
     const closedAgentBetResponse = await request(app)
       .post('/api/v1/auth/agents/bets')
@@ -365,6 +412,137 @@ describe('app routes', () => {
     )
     expect(maintenanceResponse.statusCode).toBe(200)
     expect(maintenanceResponse.body.hallOfFame.length).toBeGreaterThanOrEqual(1)
+
+    await context.pool.end()
+  }, 10_000)
+
+  it('settles agent bets through the api for both wins and losses', async () => {
+    process.env.SENDGRID_API_KEY = 'test-sendgrid-key'
+    process.env.SENDGRID_FROM_EMAIL = 'noreply@lemonsuk.test'
+
+    const context = await setupApiContext({
+      applyMocks: () => {
+        vi.doMock('@sendgrid/mail', () => ({
+          default: {
+            setApiKey: vi.fn(),
+            send: vi.fn(async () => undefined),
+          },
+        }))
+      },
+    })
+    const app = context.buildApp()
+
+    const captcha = (await request(app).get('/api/v1/auth/captcha')).body
+    const registrationResponse = await request(app)
+      .post('/api/v1/auth/agents/register')
+      .send({
+        handle: 'hedgebot',
+        displayName: 'Hedge Bot',
+        ownerName: 'Observer',
+        modelProvider: 'OpenAI',
+        biography:
+          'Systematic agent that sizes contrarian bets and tracks settlement outcomes.',
+        captchaChallengeId: captcha.id,
+        captchaAnswer: solveCaptcha(captcha.prompt),
+      })
+
+    expect(registrationResponse.statusCode).toBe(200)
+    const registration = registrationResponse.body
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    const claimOwnerResponse = await request(app)
+      .post(`/api/v1/auth/claims/${claimToken}/owner`)
+      .send({
+        ownerEmail: 'owner@example.com',
+      })
+    expect(claimOwnerResponse.statusCode).toBe(200)
+    const ownerSession = claimOwnerResponse.body
+
+    const winningBetResponse = await request(app)
+      .post('/api/v1/auth/agents/bets')
+      .send({
+        apiKey: registration.apiKey,
+        marketId: 'optimus-customizable-2026',
+        stakeCredits: 15,
+      })
+    expect(winningBetResponse.statusCode).toBe(200)
+    expect(winningBetResponse.body.bet.projectedPayoutCredits).toBeGreaterThan(15)
+    const winningPayout = winningBetResponse.body.bet.projectedPayoutCredits
+
+    const overbetResponse = await request(app)
+      .post('/api/v1/auth/agents/bets')
+      .send({
+        apiKey: registration.apiKey,
+        marketId: 'starship-mars-2026',
+        stakeCredits: 95,
+      })
+    expect(overbetResponse.statusCode).toBe(400)
+    expect(overbetResponse.body.message).toBe('Insufficient agent credits.')
+
+    const wonResolutionResponse = await request(app)
+      .post('/api/v1/markets/optimus-customizable-2026/resolve')
+      .send({
+        resolution: 'missed',
+        resolutionNotes: 'The robot missed the shipping window.',
+      })
+    expect(wonResolutionResponse.statusCode).toBe(200)
+    expect(wonResolutionResponse.body.stats.activeBets).toBe(0)
+    expect(wonResolutionResponse.body.stats.wonBets).toBe(1)
+
+    const ownerAfterWinResponse = await request(app).get(
+      `/api/v1/auth/owners/sessions/${ownerSession.sessionToken}`,
+    )
+    expect(ownerAfterWinResponse.statusCode).toBe(200)
+    expect(ownerAfterWinResponse.body.agents[0]).toMatchObject({
+      handle: 'hedgebot',
+      promoCredits: 85,
+      earnedCredits: winningPayout,
+      availableCredits: Number((85 + winningPayout).toFixed(2)),
+    })
+    expect(
+      ownerAfterWinResponse.body.notifications.some(
+        (notification: { type: string; marketId: string | null }) =>
+          notification.type === 'bet_won' &&
+          notification.marketId === 'optimus-customizable-2026',
+      ),
+    ).toBe(true)
+
+    const losingBetResponse = await request(app)
+      .post('/api/v1/auth/agents/bets')
+      .send({
+        apiKey: registration.apiKey,
+        marketId: 'starship-mars-2026',
+        stakeCredits: 10,
+      })
+    expect(losingBetResponse.statusCode).toBe(200)
+
+    const lostResolutionResponse = await request(app)
+      .post('/api/v1/markets/starship-mars-2026/resolve')
+      .send({
+        resolution: 'delivered',
+        resolutionNotes: 'The mission shipped on schedule.',
+      })
+    expect(lostResolutionResponse.statusCode).toBe(200)
+    expect(lostResolutionResponse.body.stats.wonBets).toBe(1)
+    expect(lostResolutionResponse.body.stats.lostBets).toBe(1)
+
+    const ownerAfterLossResponse = await request(app).get(
+      `/api/v1/auth/owners/sessions/${ownerSession.sessionToken}`,
+    )
+    expect(ownerAfterLossResponse.statusCode).toBe(200)
+    expect(ownerAfterLossResponse.body.agents[0]).toMatchObject({
+      handle: 'hedgebot',
+      promoCredits: 75,
+      earnedCredits: winningPayout,
+      availableCredits: Number((75 + winningPayout).toFixed(2)),
+    })
+    expect(
+      ownerAfterLossResponse.body.notifications.some(
+        (notification: { type: string; marketId: string | null }) =>
+          notification.type === 'bet_lost' &&
+          notification.marketId === 'starship-mars-2026',
+      ),
+    ).toBe(true)
 
     await context.pool.end()
   }, 10_000)

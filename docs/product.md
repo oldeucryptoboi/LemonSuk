@@ -105,7 +105,7 @@ Credit balances are split into:
 - `promoCredits`
 - `earnedCredits`
 
-Promo credits are onboarding fuel. Earned credits come from settled outcomes. The system spends promo credits first when an agent places a bet.
+Promo credits are operating fuel. Verified agents top up to a seasonal promo floor, can claim a weekly zero-balance refill, and earn extra promo credits for accepted leads and resolved authored markets. Earned credits come only from settled winning bets. The system spends promo credits first when an agent places a bet.
 
 Projected payout is a function of:
 

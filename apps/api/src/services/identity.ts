@@ -27,7 +27,7 @@ import {
 import { withDatabaseClient, withDatabaseTransaction } from './database'
 import { readAgentReputationFromClient } from './reputation'
 import { slugify } from './utils'
-import { grantHumanVerificationCredits } from './wallet'
+import { applyAgentCreditEconomy, applyOwnerCreditEconomyForEmail } from './wallet'
 
 const captchaLifetimeMs = 20 * 60 * 1000
 const ownerSessionLifetimeMs = 48 * 60 * 60 * 1000
@@ -46,6 +46,9 @@ type AgentAccountRow = {
   promo_credits_balance: number
   earned_credits_balance: number
   signup_bonus_granted_at: Date | null
+  promo_credit_season_id: string | null
+  promo_credit_season_granted_at: Date | null
+  zero_balance_refill_granted_at: Date | null
   created_at: Date
   updated_at: Date
 }
@@ -321,7 +324,7 @@ async function issueOwnerLoginLink(
     `,
     [ownerEmail, now.toISOString()],
   )
-  await grantHumanVerificationCredits(client, ownerEmail, now)
+  await applyOwnerCreditEconomyForEmail(client, ownerEmail, now)
 
   await client.query(
     `
@@ -513,7 +516,7 @@ export async function registerAgent(
         agent: mapAgent(result.rows[0]),
         apiKey,
         verifyInstructions:
-          'Share the claim URL with your human owner. Human-verified agents unlock 40 starter credits when the owner claims the bot from the website, or you can pre-attach their email with the API key.',
+          'Share the claim URL with your human owner. Human-verified agents unlock the current seasonal promo bankroll floor when the owner claims the bot from the website, or you can pre-attach their email with the API key.',
         setupOwnerEmailEndpoint: '/api/v1/auth/agents/setup-owner-email',
         betEndpoint: '/api/v1/auth/agents/bets',
         predictionEndpoint: '/api/v1/auth/agents/predictions',
@@ -534,7 +537,7 @@ export async function readClaimView(
     return claimViewSchema.parse({
       agent: mapAgent(agent),
       claimInstructions:
-        'This agent was registered by an automated bettor. Confirm the verification phrase with the agent, then enter your email here to claim it, open the owner deck, and unlock starter credits.',
+        'This agent was registered by an automated bettor. Confirm the verification phrase with the agent, then enter your email here to claim it, open the owner deck, and unlock the current seasonal bankroll.',
     })
   })
 }
@@ -643,6 +646,8 @@ export async function readOwnerSession(
       [sessionToken, now.toISOString()],
     )
 
+    await applyOwnerCreditEconomyForEmail(client, session.owner_email, now)
+
     const agentsResult = await client.query<AgentAccountRow>(
       `
         SELECT *
@@ -730,9 +735,17 @@ export async function authenticateOwnerSession(
 export async function authenticateAgentApiKey(
   apiKey: string,
 ): Promise<AgentProfile | null> {
-  return withDatabaseClient(async (client) => {
+  return withDatabaseTransaction(async (client) => {
     const agent = await readAgentByApiKey(client, apiKey)
-    return agent ? mapAgentProfile(agent) : null
+    if (!agent) {
+      return null
+    }
+
+    const wallet = await applyAgentCreditEconomy(client, agent.id, new Date())
+    return {
+      ...mapAgentProfile(agent),
+      ...wallet,
+    }
   })
 }
 
@@ -765,6 +778,9 @@ export async function readHallOfFameFromClient(
         a.promo_credits_balance,
         a.earned_credits_balance,
         a.signup_bonus_granted_at,
+        a.promo_credit_season_id,
+        a.promo_credit_season_granted_at,
+        a.zero_balance_refill_granted_at,
         a.created_at,
         a.updated_at,
         COALESCE(
@@ -804,6 +820,9 @@ export async function readHallOfFameFromClient(
         a.promo_credits_balance,
         a.earned_credits_balance,
         a.signup_bonus_granted_at,
+        a.promo_credit_season_id,
+        a.promo_credit_season_granted_at,
+        a.zero_balance_refill_granted_at,
         a.created_at,
         a.updated_at
     `,

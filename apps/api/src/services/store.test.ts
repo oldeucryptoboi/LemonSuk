@@ -76,6 +76,19 @@ describe('store service', () => {
                   displayName: 'Deadline Bot',
                 },
                 sources: [],
+                lineHistory: [
+                  {
+                    id: 'line-test-1',
+                    movedAt: '2026-03-16T00:45:00.000Z',
+                    previousPayoutMultiplier: 2.45,
+                    nextPayoutMultiplier: 2.1,
+                    reason: 'bet' as const,
+                    commentary: 'Risk tightened after a live ticket.',
+                    triggerBetId: 'bet-1',
+                    openInterestCredits: 20,
+                    liabilityCredits: 57.82,
+                  },
+                ],
               }
             : market,
         ),
@@ -117,6 +130,11 @@ describe('store service', () => {
     )
     expect(updatedMarket?.sources).toEqual([])
     expect(updatedMarket?.author?.handle).toBe('deadlinebot')
+    expect(updatedMarket?.lineHistory?.[0]).toMatchObject({
+      id: 'line-test-1',
+      reason: 'bet',
+      triggerBetId: 'bet-1',
+    })
     expect(reloaded.bets[0]?.settledAt).toBe('2026-03-16T01:00:00.000Z')
 
     await context.pool.query('DELETE FROM app_metadata')

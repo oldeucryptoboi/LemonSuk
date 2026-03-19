@@ -4,7 +4,11 @@ import type { StoreData } from '../shared'
 import { createSeedStore } from '../data/seed'
 import {
   applyPricingEngine,
+  calculateMarketExposure,
   calculateLivePayoutMultiplier,
+  calculateSettlementState,
+  inferPricingFamilySlug,
+  resolveMarketRiskPolicy,
 } from './pricing'
 
 function createPricingStore(): StoreData {
@@ -74,6 +78,138 @@ describe('pricing engine', () => {
 
     expect(liveMultiplier).toBeLessThan(market.basePayoutMultiplier)
     expect(liveMultiplier).toBeGreaterThanOrEqual(1.12)
+  })
+
+  it('applies family-specific limits and grace windows to the live board', () => {
+    const repriced = applyPricingEngine(
+      createSeedStore(),
+      new Date('2026-03-16T00:00:00.000Z'),
+    ).store
+    const aiMarket = repriced.markets.find((entry) => entry.id === 'openai-device-2026')!
+    const productMarket = repriced.markets.find(
+      (entry) => entry.id === 'optimus-customizable-2026',
+    )!
+
+    expect(inferPricingFamilySlug(aiMarket)).toBe('ai_launch')
+    expect(inferPricingFamilySlug(productMarket)).toBe('product_ship_date')
+    expect(aiMarket.maxStakeCredits).toBe(resolveMarketRiskPolicy(aiMarket).maxStakeCredits)
+    expect(productMarket.maxStakeCredits).toBe(
+      resolveMarketRiskPolicy(productMarket).maxStakeCredits,
+    )
+    expect(aiMarket.maxStakeCredits).toBeLessThan(productMarket.maxStakeCredits!)
+    expect(aiMarket.settlementGraceHours).toBe(
+      resolveMarketRiskPolicy(aiMarket).settlementGraceHours,
+    )
+    expect(productMarket.settlementGraceHours).toBe(
+      resolveMarketRiskPolicy(productMarket).settlementGraceHours,
+    )
+    expect(
+      inferPricingFamilySlug({
+        ...productMarket,
+        headline: 'Tesla holds its 2026 earnings guidance',
+        summary: 'The board is tracking a clear earnings guidance claim.',
+        company: 'tesla',
+      }),
+    ).toBe('earnings_guidance')
+    expect(
+      inferPricingFamilySlug({
+        ...productMarket,
+        headline: 'A CEO claim market',
+        summary: 'The creator says the launch lands this quarter.',
+        category: 'social',
+        company: 'x',
+      }),
+    ).toBe('ceo_claim')
+  })
+
+  it('tracks liability, suspends near-cap markets, and records line history', () => {
+    const store = createPricingStore()
+    const market = store.markets.find((entry) => entry.id === 'cybercab-volume-2026')!
+    const policy = resolveMarketRiskPolicy(market)
+    const exposure = calculateMarketExposure(store, market.id)
+    const liabilityHeavyStore: StoreData = {
+      ...store,
+      bets: [
+        ...store.bets,
+        {
+          id: 'bet-cap-heavy',
+          userId: 'agent-3',
+          marketId: market.id,
+          stakeCredits: 40,
+          side: 'against',
+          status: 'open',
+          payoutMultiplierAtPlacement: market.payoutMultiplier,
+          globalBonusPercentAtPlacement: 18,
+          projectedPayoutCredits: Math.max(
+            1,
+            policy.maxLiabilityCredits - exposure.liabilityCredits + 12,
+          ),
+          settledPayoutCredits: null,
+          placedAt: '2026-06-03T00:00:00.000Z',
+          settledAt: null,
+        },
+      ],
+    }
+
+    const repriced = applyPricingEngine(
+      liabilityHeavyStore,
+      new Date('2026-12-30T00:00:00.000Z'),
+      {
+        reason: 'bet',
+        triggerMarketId: market.id,
+        triggerBetId: 'bet-cap-heavy',
+      },
+    ).store
+    const repricedMarket = repriced.markets.find((entry) => entry.id === market.id)!
+
+    expect(repricedMarket.currentLiabilityCredits).toBeGreaterThanOrEqual(
+      policy.maxLiabilityCredits,
+    )
+    expect(repricedMarket.bettingSuspended).toBe(true)
+    expect(repricedMarket.suspensionReason).toContain('exposure cap')
+    expect(repricedMarket.lineHistory?.[0]).toMatchObject({
+      reason: 'suspension',
+      triggerBetId: 'bet-cap-heavy',
+    })
+  })
+
+  it('records a bet-driven line move without a trigger bet id when only the market is known', () => {
+    const store = createSeedStore()
+    const market = store.markets.find(
+      (entry) => entry.id === 'optimus-customizable-2026',
+    )!
+
+    const repriced = applyPricingEngine(
+      store,
+      new Date('2026-12-30T00:00:00.000Z'),
+      {
+        reason: 'bet',
+        triggerMarketId: market.id,
+      },
+    ).store
+
+    expect(repriced.markets.find((entry) => entry.id === market.id)?.lineHistory?.[0])
+      .toMatchObject({
+        reason: 'bet',
+        triggerBetId: null,
+      })
+  })
+
+  it('moves markets into grace after the deadline and out again after settlement', () => {
+    const store = createSeedStore()
+    const market = store.markets.find((entry) => entry.id === 'optimus-customizable-2026')!
+    const policy = resolveMarketRiskPolicy(market)
+    const inGrace = new Date(Date.parse(market.promisedDate) + 60 * 60 * 1000)
+
+    expect(calculateSettlementState(market, inGrace, policy)).toBe('grace')
+
+    const repriced = applyPricingEngine(store, inGrace).store
+    const repricedMarket = repriced.markets.find((entry) => entry.id === market.id)!
+
+    expect(repricedMarket.settlementState).toBe('grace')
+    expect(repricedMarket.betWindowOpen).toBe(false)
+    expect(repricedMarket.bettingSuspended).toBe(true)
+    expect(repricedMarket.suspensionReason).toContain('grace window')
   })
 
   it('leaves a store untouched when no market price changes are needed', () => {

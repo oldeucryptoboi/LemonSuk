@@ -433,4 +433,137 @@ describe('createAuthRouter fallback errors', () => {
       availableCredits: 30,
     })
   })
+
+  it('persists a maintenance-updated store before placing and repricing a bet', async () => {
+    vi.resetModules()
+
+    const maintenanceStore = {
+      markets: [{ id: 'market-1', payoutMultiplier: 1.5 }],
+      bets: [],
+      notifications: [],
+      metadata: {
+        lastMaintenanceRunAt: '2026-03-16T00:00:00.000Z',
+        lastDiscoveryRunAt: null,
+      },
+    }
+    const repricedStore = {
+      ...maintenanceStore,
+      markets: [{ id: 'market-1', payoutMultiplier: 1.32 }],
+      bets: [
+        {
+          id: 'bet-1',
+          userId: 'agent-1',
+          marketId: 'market-1',
+          stakeCredits: 10,
+          side: 'against',
+          status: 'open',
+          payoutMultiplierAtPlacement: 1.5,
+          globalBonusPercentAtPlacement: 18,
+          projectedPayoutCredits: 17.7,
+          settledPayoutCredits: null,
+          placedAt: '2026-03-16T00:00:00.000Z',
+          settledAt: null,
+        },
+      ],
+    }
+    const persist = vi.fn(async (nextStore: unknown) => nextStore)
+    const placeAgainstBetForUser = vi.fn(() => ({
+      bet: repricedStore.bets[0],
+      store: repricedStore,
+    }))
+
+    vi.doMock('../services/identity', () => ({
+      authenticateAgentApiKey: vi.fn(async () => ({
+        id: 'agent-1',
+        handle: 'deadlinebot',
+      })),
+      claimOwnerByClaimToken: vi.fn(),
+      createCaptchaChallenge: vi.fn(),
+      createOwnerLoginLink: vi.fn(),
+      readAgentProfileByIdFromClient: vi.fn(async () => ({
+        id: 'agent-1',
+        handle: 'deadlinebot',
+        promoCredits: 90,
+        earnedCredits: 0,
+        availableCredits: 90,
+      })),
+      readCaptchaChallenge: vi.fn(),
+      readClaimView: vi.fn(),
+      readOwnerSession: vi.fn(),
+      registerAgent: vi.fn(),
+      setupOwnerEmail: vi.fn(),
+    }))
+    vi.doMock('../services/store', () => ({
+      withStoreTransaction: vi.fn(async (run) =>
+        run(
+          {
+            markets: [],
+            bets: [],
+            notifications: [],
+            metadata: {
+              lastMaintenanceRunAt: null,
+              lastDiscoveryRunAt: null,
+            },
+          },
+          persist,
+          { id: 'client-1' },
+        ),
+      ),
+    }))
+    vi.doMock('../services/maintenance', () => ({
+      runMaintenance: vi.fn(() => ({
+        changed: true,
+        store: maintenanceStore,
+      })),
+    }))
+    vi.doMock('../services/betting', () => ({
+      placeAgainstBetForUser,
+    }))
+    vi.doMock('../services/wallet', () => ({
+      debitAgentCredits: vi.fn(async () => ({
+        promoCredits: 90,
+        earnedCredits: 0,
+        availableCredits: 90,
+      })),
+    }))
+    vi.doMock('./helpers', () => ({
+      createOperationalSnapshot: vi.fn(async () => ({
+        stats: { totalMarkets: 1, activeBets: 1 },
+      })),
+      dispatchOwnerLoginLink: vi.fn(async () => undefined),
+      publishCurrentOperationalSnapshot: vi.fn(async () => ({})),
+      publishOperationalSnapshot: vi.fn(async () => true),
+      readApiKey: (headerValue: unknown, bodyValue: string | undefined) => {
+        if (typeof headerValue === 'string') {
+          return headerValue
+        }
+
+        return bodyValue ?? null
+      },
+    }))
+
+    const { createAuthRouter } = await import('./auth')
+    const app = express()
+    app.use(express.json())
+    app.use('/api/v1/auth', createAuthRouter())
+
+    const response = await request(app)
+      .post('/api/v1/auth/agents/bets')
+      .send({
+        apiKey: 'lsk_live_1234567890',
+        marketId: 'market-1',
+        stakeCredits: 10,
+      })
+
+    expect(response.statusCode).toBe(200)
+    expect(persist).toHaveBeenNthCalledWith(1, maintenanceStore)
+    expect(placeAgainstBetForUser).toHaveBeenCalledWith(
+      maintenanceStore,
+      'agent-1',
+      'market-1',
+      10,
+      expect.any(Date),
+    )
+    expect(persist).toHaveBeenNthCalledWith(2, repricedStore)
+  })
 })

@@ -18,6 +18,7 @@ import {
 } from '../shared'
 import { withDatabaseClient, withDatabaseTransaction } from './database'
 import { readPredictionLeadInspectionFromClient } from './lead-intake'
+import { grantAcceptedLeadReward } from './wallet'
 
 type InternalLeadRow = {
   id: string
@@ -299,6 +300,19 @@ async function syncLegacyRows(
   }
 }
 
+async function maybeGrantAcceptedLeadReward(
+  client: PoolClient,
+  lead: InternalLeadRow,
+  nextStatus: PredictionLead['status'],
+  now: Date,
+): Promise<void> {
+  if (nextStatus !== 'accepted' || !lead.submitted_by_agent_id) {
+    return
+  }
+
+  await grantAcceptedLeadReward(client, lead.submitted_by_agent_id, lead.id, now)
+}
+
 export async function readPredictionLeadForInternal(
   leadId: string,
 ): Promise<InternalPredictionLead | null> {
@@ -386,6 +400,7 @@ export async function updatePredictionLeadStatusForInternal(
       current.linked_market_id,
       now,
     )
+    await maybeGrantAcceptedLeadReward(client, current, input.status, now)
 
     await appendAuditLog(
       client,
@@ -534,6 +549,7 @@ export async function applyPredictionLeadReviewResultForInternal(
       linkedMarketId,
       now,
     )
+    await maybeGrantAcceptedLeadReward(client, current, nextStatus, now)
 
     await appendAuditLog(
       client,
@@ -633,6 +649,7 @@ export async function reviewPredictionLead(input: {
       nextLinkedMarketId,
       now,
     )
+    await maybeGrantAcceptedLeadReward(client, current, input.decision, now)
 
     await appendAuditLog(
       client,

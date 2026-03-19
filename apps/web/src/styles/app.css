@@ -335,6 +335,26 @@ input {
   background: rgba(246, 200, 107, 0.08);
 }
 
+.market-odds {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.market-odds-delta {
+  color: rgba(247, 236, 215, 0.82);
+  font-size: 0.84rem;
+}
+
+.market-odds-delta.up {
+  color: #8df0b8;
+}
+
+.market-odds-delta.down {
+  color: #ffb0a6;
+}
+
 .highlight-card {
   border-radius: 22px;
   padding: 18px;
@@ -637,6 +657,12 @@ input {
   background: rgba(246, 200, 107, 0.1);
 }
 
+.route-flash-danger {
+  border-color: rgba(199, 61, 68, 0.36);
+  background: rgba(120, 20, 28, 0.18);
+  color: #ffbcc0;
+}
+
 .review-filter-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -753,6 +779,42 @@ input {
   padding-left: 18px;
   display: grid;
   gap: 8px;
+}
+
+.route-history-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.route-history-item {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(246, 200, 107, 0.12);
+  background: rgba(7, 17, 13, 0.74);
+}
+
+.route-history-item strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.route-history-item p {
+  margin: 0;
+  color: rgba(247, 236, 215, 0.8);
+  line-height: 1.5;
+}
+
+.route-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: rgba(247, 236, 215, 0.68);
+  font-size: 0.86rem;
 }
 
 .error-text {
@@ -1136,6 +1198,31 @@ input {
 .market-commentary {
   padding-left: 12px;
   border-left: 2px solid rgba(246, 200, 107, 0.32);
+}
+
+.market-book-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.market-book-chip {
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(247, 236, 215, 0.06);
+  border: 1px solid rgba(247, 236, 215, 0.1);
+  color: rgba(247, 236, 215, 0.78);
+  font-size: 0.82rem;
+}
+
+.market-risk-alert {
+  margin: -2px 0 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(199, 61, 68, 0.28);
+  background: rgba(120, 20, 28, 0.16);
+  color: #ffb0b5;
+  line-height: 1.45;
 }
 
 .market-meta {

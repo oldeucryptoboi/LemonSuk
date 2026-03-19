@@ -1,7 +1,12 @@
 import type { BetSlip, Market, Notification, StoreData } from '../shared'
 import { storeSchema } from '../shared'
 import { withStoreTransaction } from './store'
-import { applyPricingEngine } from './pricing'
+import {
+  applyPricingEngine,
+  calculateAutoResolveAt,
+  calculateSettlementState,
+  resolveMarketRiskPolicy,
+} from './pricing'
 
 const bustedNote =
   'Deadline expired without a validated delivery signal in the current market book.'
@@ -73,8 +78,11 @@ function closeMarketAsMissed(market: Market, nowIso: string): Market {
     status: 'busted',
     resolution: 'missed',
     resolutionNotes: market.resolutionNotes ?? bustedNote,
+    settlementState: 'settled',
     bustedAt: nowIso,
     betWindowOpen: false,
+    bettingSuspended: false,
+    suspensionReason: null,
     updatedAt: nowIso,
     lastCheckedAt: nowIso,
   }
@@ -110,7 +118,10 @@ export function resolveMarket(
             status: 'resolved',
             resolution: 'delivered',
             resolutionNotes,
+            settlementState: 'settled',
             betWindowOpen: false,
+            bettingSuspended: false,
+            suspensionReason: null,
             bustedAt: null,
             updatedAt: resolvedAtIso,
             lastCheckedAt: resolvedAtIso,
@@ -140,20 +151,31 @@ export function runMaintenance(
   let changed = false
 
   const transitionedMarkets = store.markets.map((market) => {
-    const deadlinePassed = Date.parse(market.promisedDate) <= now.getTime()
+    const policy = resolveMarketRiskPolicy(market)
+    const promisedDatePassed = Date.parse(market.promisedDate) <= now.getTime()
+    const autoResolveAt = calculateAutoResolveAt(market, policy)
+    const deadlinePassed = autoResolveAt.getTime() <= now.getTime()
 
     if (market.status === 'open' && deadlinePassed) {
       changed = true
       return closeMarketAsMissed(market, nowIso)
     }
 
-    const nextBetWindowOpen = market.status === 'open' && !deadlinePassed
-    if (market.betWindowOpen !== nextBetWindowOpen) {
+    const nextBetWindowOpen = market.status === 'open' && !promisedDatePassed
+    const nextSettlementState = calculateSettlementState(market, now, policy)
+    if (
+      market.betWindowOpen !== nextBetWindowOpen ||
+      market.autoResolveAt !== autoResolveAt.toISOString() ||
+      market.settlementState !== nextSettlementState
+    ) {
       changed = true
 
       return {
         ...market,
         betWindowOpen: nextBetWindowOpen,
+        autoResolveAt: autoResolveAt.toISOString(),
+        settlementGraceHours: policy.settlementGraceHours,
+        settlementState: nextSettlementState,
         lastCheckedAt: nowIso,
       }
     }
@@ -167,6 +189,7 @@ export function runMaintenance(
       markets: transitionedMarkets,
     }),
     now,
+    { reason: 'maintenance' },
   )
   changed = changed || priced.changed
 
@@ -194,15 +217,28 @@ export function runMaintenance(
     return settledBet
   })
 
-  const nextStore = storeSchema.parse({
+  const postSettlementStore = storeSchema.parse({
     ...priced.store,
     bets,
     notifications,
     metadata: {
       ...priced.store.metadata,
+      lastMaintenanceRunAt: priced.store.metadata.lastMaintenanceRunAt,
+    },
+  })
+
+  const finalized = applyPricingEngine(postSettlementStore, now, {
+    reason: 'maintenance',
+  })
+  changed = changed || finalized.changed
+
+  const nextStore = storeSchema.parse({
+    ...finalized.store,
+    metadata: {
+      ...finalized.store.metadata,
       lastMaintenanceRunAt: changed
         ? nowIso
-        : priced.store.metadata.lastMaintenanceRunAt,
+        : finalized.store.metadata.lastMaintenanceRunAt,
     },
   })
 

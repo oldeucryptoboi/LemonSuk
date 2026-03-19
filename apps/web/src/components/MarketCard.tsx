@@ -1,6 +1,13 @@
 import React from 'react'
 import type { Market } from '../shared'
-import { formatDate, formatRelativeTime } from '../lib/format'
+import {
+  formatCredits,
+  formatDate,
+  formatLineDelta,
+  formatLineMoveReason,
+  formatRelativeTime,
+  formatSettlementState,
+} from '../lib/format'
 import { checkpointKindLabel, companyLabel } from '../lib/markets'
 
 type MarketCardProps = {
@@ -17,6 +24,11 @@ export function MarketCard({
   onOpenForum,
 }: MarketCardProps) {
   const topicAuthor = market.author ?? market.forumLeader
+  const lineDelta = formatLineDelta(
+    market.payoutMultiplier,
+    market.previousPayoutMultiplier,
+  )
+  const lineMoveLabel = formatLineMoveReason(market.lastLineMoveReason)
   const topicMetaBits = [
     `${market.forumLeader?.karma ?? 0} karma`,
     topicAuthor ? `by ${topicAuthor.displayName}` : 'by LemonSuk',
@@ -25,6 +37,23 @@ export function MarketCard({
       (market.discussionCount ?? 0) === 1 ? 'take' : 'takes'
     }`,
   ]
+  const bookBits = [
+    lineMoveLabel && market.lastLineMoveAt
+      ? `${lineMoveLabel} ${formatRelativeTime(market.lastLineMoveAt)}`
+      : null,
+    market.currentOpenInterestCredits !== undefined
+      ? `${formatCredits(market.currentOpenInterestCredits)} staked`
+      : null,
+    market.currentLiabilityCredits !== undefined
+      ? `${formatCredits(market.currentLiabilityCredits)} liability`
+      : null,
+    market.maxLiabilityCredits !== undefined
+      ? `${formatCredits(market.maxLiabilityCredits)} cap`
+      : null,
+    market.settlementState
+      ? formatSettlementState(market.settlementState)
+      : null,
+  ].filter((entry): entry is string => Boolean(entry))
 
   return (
     <article
@@ -40,12 +69,39 @@ export function MarketCard({
             {checkpointKindLabel(market.checkpointKind)}
           </span>
         </div>
-        <span className="market-odds">{market.payoutMultiplier.toFixed(2)}x live</span>
+        <span className="market-odds">
+          {market.payoutMultiplier.toFixed(2)}x live
+          {lineDelta ? (
+            <span
+              className={`market-odds-delta ${
+                lineDelta.startsWith('+')
+                  ? 'up'
+                  : lineDelta === 'flat'
+                    ? 'flat'
+                    : 'down'
+              }`}
+            >
+              {lineDelta}
+            </span>
+          ) : null}
+        </span>
       </div>
       <h3>{market.headline}</h3>
       <p className="market-summary">{market.summary}</p>
       {market.oddsCommentary?.[0] ? (
         <p className="market-commentary">{market.oddsCommentary[0]}</p>
+      ) : null}
+      {bookBits.length > 0 ? (
+        <div className="market-book-strip">
+          {bookBits.map((entry) => (
+            <span key={`${market.id}-${entry}`} className="market-book-chip">
+              {entry}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {market.bettingSuspended && market.suspensionReason ? (
+        <p className="market-risk-alert">{market.suspensionReason}</p>
       ) : null}
       {market.evidenceUpdates?.[0] ? (
         <p className="market-evidence-preview">

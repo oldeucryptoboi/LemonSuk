@@ -185,6 +185,9 @@ describe('lead review workflow branch coverage', () => {
           })
           .mockResolvedValueOnce({ rowCount: 1, rows: [] })
           .mockResolvedValueOnce({ rowCount: 1, rows: [] })
+          .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+          .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'credit_1' }] })
+          .mockResolvedValueOnce({ rowCount: 1, rows: [] })
           .mockResolvedValueOnce({ rowCount: 1, rows: [] })
           .mockResolvedValueOnce({ rowCount: 0, rows: [] }),
       } as never),

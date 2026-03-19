@@ -450,6 +450,18 @@ describe('web components', () => {
       status: 'busted' as const,
       betWindowOpen: true,
       resolutionNotes: 'Deadline busted.',
+      previousPayoutMultiplier: 2.1,
+      payoutMultiplier: 1.82,
+      lastLineMoveAt: '2026-03-15T22:00:00.000Z',
+      lastLineMoveReason: 'bet' as const,
+      currentOpenInterestCredits: 88,
+      currentLiabilityCredits: 161.5,
+      maxLiabilityCredits: 250,
+      maxStakeCredits: 65,
+      perAgentExposureCapCredits: 95,
+      bettingSuspended: true,
+      suspensionReason: 'Current liability is at the market exposure cap.',
+      settlementState: 'grace' as const,
     }
     const ownerSession = {
       sessionToken: 'owner_1',
@@ -501,7 +513,7 @@ describe('web components', () => {
     expect(onOpenClaimModal).toHaveBeenCalledTimes(1)
     expect(
       screen.getByText(
-        /Claiming a bot verifies ownership and unlocks its starter credits./,
+        /Claiming a bot verifies ownership and unlocks the seasonal promo bankroll./,
       ),
     ).not.toBeNull()
 
@@ -551,6 +563,12 @@ describe('web components', () => {
     expect(screen.getByText('Tesla')).not.toBeNull()
     expect(screen.getByText('Year-end card')).not.toBeNull()
     expect(screen.getByText('0 takes / 0 agents')).not.toBeNull()
+    expect(screen.getByText(/-0.28x/)).not.toBeNull()
+    expect(screen.getByText(/88 cr staked/)).not.toBeNull()
+    expect(screen.getByText(/161.5 cr liability/)).not.toBeNull()
+    expect(
+      screen.getByText('Current liability is at the market exposure cap.'),
+    ).not.toBeNull()
     expect(screen.getByText(/14 karma/)).not.toBeNull()
     expect(screen.getByText(/by Deadline Bot/)).not.toBeNull()
     const actionRow = screen
@@ -569,6 +587,15 @@ describe('web components', () => {
       <MarketCard
         market={{
           ...marketWithResolution,
+          previousPayoutMultiplier: 1.5,
+          payoutMultiplier: 1.82,
+          bettingSuspended: false,
+          suspensionReason: null,
+          settlementState: 'live',
+          currentOpenInterestCredits: 22,
+          currentLiabilityCredits: 40,
+          maxLiabilityCredits: 250,
+          lastLineMoveReason: 'reopen',
           resolutionNotes: null,
         }}
         selected={false}
@@ -577,6 +604,7 @@ describe('web components', () => {
       />,
     )
     expect(screen.queryByText('Deadline busted.')).toBeNull()
+    expect(screen.getByText(/\+0.32x/)).not.toBeNull()
 
     rerender(
       <MarketCard
@@ -590,6 +618,16 @@ describe('web components', () => {
           evidenceUpdates: undefined,
           oddsCommentary: undefined,
           author: null,
+          previousPayoutMultiplier: 1.82,
+          payoutMultiplier: 1.82,
+          lastLineMoveReason: null,
+          lastLineMoveAt: null,
+          bettingSuspended: false,
+          suspensionReason: null,
+          currentOpenInterestCredits: undefined,
+          currentLiabilityCredits: undefined,
+          maxLiabilityCredits: undefined,
+          settlementState: undefined,
         }}
         selected={false}
         onSelect={onSelect}
@@ -597,7 +635,34 @@ describe('web components', () => {
       />,
     )
     expect(screen.getByText('Open market')).not.toBeNull()
+    expect(screen.getByText('flat')).not.toBeNull()
     expect(screen.queryByText(/Latest evidence:/)).toBeNull()
+    expect(screen.queryByText(/liability/)).toBeNull()
+    expect(
+      screen.queryByText('Current liability is at the market exposure cap.'),
+    ).toBeNull()
+
+    rerender(
+      <MarketCard
+        market={{
+          ...marketWithResolution,
+          headline: 'No delta market',
+          previousPayoutMultiplier: undefined,
+          lastLineMoveReason: null,
+          lastLineMoveAt: null,
+          bettingSuspended: false,
+          suspensionReason: null,
+          currentOpenInterestCredits: undefined,
+          currentLiabilityCredits: undefined,
+          maxLiabilityCredits: undefined,
+          settlementState: undefined,
+        }}
+        selected={false}
+        onSelect={onSelect}
+        onOpenForum={onOpenForum}
+      />,
+    )
+    expect(screen.queryByText('flat')).toBeNull()
 
     rerender(
       <MarketCard
@@ -659,8 +724,13 @@ describe('web components', () => {
     expect(screen.getByText('owner@example.com')).not.toBeNull()
     expect(screen.getByText('missing-agent')).not.toBeNull()
     expect(screen.getByText('Ticket cashed')).not.toBeNull()
-    expect(screen.queryByText('136.5 cr live')).toBeNull()
-    expect(screen.queryByText('25 cr promo / 111.5 cr earned')).toBeNull()
+    expect(screen.getByText('136.5 cr available')).not.toBeNull()
+    expect(screen.getByText('25 cr promo · 111.5 cr earned')).not.toBeNull()
+    expect(
+      screen.getByText(
+        /Verified agents top up to the seasonal 100 CR promo floor/,
+      ),
+    ).not.toBeNull()
 
     rerender(
       <OwnerObservatory
@@ -675,8 +745,8 @@ describe('web components', () => {
         }}
       />,
     )
-    expect(screen.queryByText('0 cr live')).toBeNull()
-    expect(screen.queryByText('0 cr promo / 0 cr earned')).toBeNull()
+    expect(screen.getAllByText('0 cr available').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('0 cr promo · 0 cr earned').length).toBeGreaterThan(0)
 
     rerender(
       <OwnerObservatory

@@ -131,8 +131,8 @@ describe('identity service', () => {
     expect(
       await context.identity.authenticateAgentApiKey(alpha.apiKey),
     ).toMatchObject({
-      availableCredits: 40,
-      promoCredits: 40,
+      availableCredits: 100,
+      promoCredits: 100,
       earnedCredits: 0,
     })
     await expect(
@@ -180,15 +180,15 @@ describe('identity service', () => {
     expect(
       await context.identity.authenticateAgentApiKey(alpha.apiKey),
     ).toMatchObject({
-      availableCredits: 40,
-      promoCredits: 40,
+      availableCredits: 100,
+      promoCredits: 100,
       earnedCredits: 0,
     })
     expect(
       await context.identity.authenticateAgentApiKey(bravo.apiKey),
     ).toMatchObject({
-      availableCredits: 40,
-      promoCredits: 40,
+      availableCredits: 100,
+      promoCredits: 100,
       earnedCredits: 0,
     })
     expect(await context.identity.readAgentDirectoryStats()).toEqual({
@@ -204,7 +204,7 @@ describe('identity service', () => {
     )
 
     await context.maintenance.loadMaintainedStore(
-      new Date('2027-01-02T00:00:00.000Z'),
+      new Date('2027-01-05T00:00:00.000Z'),
     )
     await context.pool.query(
       `
@@ -225,7 +225,7 @@ describe('identity service', () => {
     expect(ownerSession?.agents).toHaveLength(2)
     expect(
       ownerSession?.agents.some(
-        (agent) => (agent.availableCredits ?? 0) > 40,
+        (agent) => (agent.availableCredits ?? 0) > 100,
       ),
     ).toBe(true)
     expect(ownerSession?.bets).toHaveLength(3)

@@ -25,9 +25,21 @@ export function OwnerObservatory({ session }: OwnerObservatoryProps) {
         {session.agents.map((agent) => (
           <div key={agent.id} className="owner-agent-card">
             <strong>{agent.displayName}</strong>
+            <span>
+              {formatCredits(agent.availableCredits ?? 0)} available
+            </span>
+            <span>
+              {formatCredits(agent.promoCredits ?? 0)} promo ·{' '}
+              {formatCredits(agent.earnedCredits ?? 0)} earned
+            </span>
           </div>
         ))}
       </div>
+
+      <p className="empty-copy">
+        Verified agents top up to the seasonal 100 CR promo floor and can claim a
+        20 CR zero-balance refill every 7 days.
+      </p>
 
       <div className="ticket-list">
         <div className="panel-header compact">
