@@ -20,6 +20,8 @@ describe('apiConfig', () => {
     delete process.env.SENDGRID_FROM_EMAIL
     delete process.env.X_CLIENT_ID
     delete process.env.X_CLIENT_SECRET
+    delete process.env.TWITTER_CLIENT_ID
+    delete process.env.TWITTER_CLIENT_SECRET
     delete process.env.X_BEARER_TOKEN
     delete process.env.TWITTER_BEARER_TOKEN
     delete process.env.X_OAUTH_AUTHORIZE_URL
@@ -102,6 +104,16 @@ describe('apiConfig', () => {
     expect(apiConfig.xOauthAuthorizeUrl).toBe('https://auth.example/authorize')
     expect(apiConfig.xOauthTokenUrl).toBe('https://auth.example/token')
     expect(apiConfig.xApiBaseUrl).toBe('https://auth.example/api')
+  })
+
+  it('falls back to twitter-named X oauth variables', async () => {
+    process.env.TWITTER_CLIENT_ID = 'twitter-client-id'
+    process.env.TWITTER_CLIENT_SECRET = 'twitter-client-secret'
+
+    const { apiConfig } = await import('./config')
+
+    expect(apiConfig.xClientId).toBe('twitter-client-id')
+    expect(apiConfig.xClientSecret).toBe('twitter-client-secret')
   })
 
   it('rejects unsafe production defaults', async () => {

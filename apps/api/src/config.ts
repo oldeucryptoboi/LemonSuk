@@ -19,8 +19,9 @@ const apiConfig = {
   jwtSecret: process.env.JWT_SECRET ?? defaultJwtSecret,
   sendGridApiKey: process.env.SENDGRID_API_KEY ?? '',
   sendGridFromEmail: process.env.SENDGRID_FROM_EMAIL ?? '',
-  xClientId: process.env.X_CLIENT_ID ?? '',
-  xClientSecret: process.env.X_CLIENT_SECRET ?? '',
+  xClientId: process.env.X_CLIENT_ID ?? process.env.TWITTER_CLIENT_ID ?? '',
+  xClientSecret:
+    process.env.X_CLIENT_SECRET ?? process.env.TWITTER_CLIENT_SECRET ?? '',
   xBearerToken:
     process.env.X_BEARER_TOKEN ?? process.env.TWITTER_BEARER_TOKEN ?? '',
   xOauthAuthorizeUrl:

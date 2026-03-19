@@ -9,6 +9,8 @@
     "dev:web": "sh -c 'cd apps/web && rm -rf .next-dev && NEXT_PUBLIC_API_BASE_URL=\"${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8787}\" INTERNAL_API_BASE_URL=\"${INTERNAL_API_BASE_URL:-http://localhost:8787}\" INTERNAL_SERVICE_TOKEN=\"${INTERNAL_SERVICE_TOKEN:-local-internal-token}\" REVIEW_CONSOLE_ACCESS_KEY=\"${REVIEW_CONSOLE_ACCESS_KEY:-local-review-key}\" npx next dev -p 5173'",
     "dev:review": "tsx watch apps/review-orchestrator/src/server.ts",
     "migrate": "tsx scripts/migrate.ts",
+    "prod:compose": "bash scripts/prod-compose.sh",
+    "prod:render-secrets": "bash scripts/render-prod-secrets.sh",
     "review-lead": "tsx scripts/review-lead.ts",
     "list-pending-leads": "tsx scripts/list-pending-leads.ts",
     "inspect-lead": "tsx scripts/inspect-lead.ts",

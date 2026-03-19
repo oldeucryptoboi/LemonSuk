@@ -144,6 +144,8 @@ This brings up:
 - `npm run review-lead -- --lead-id <id> --decision <accepted|rejected> [--market-id <market-id>]` is the canonical operator review command.
 - Read-only Phase 3 surfaces now exist at `/groups`, `/groups/:slug`, `/markets/:slug`, `/standings`, and `/owner`.
 - The protected operator review desk lives at `/review` and requires `?review_key=<REVIEW_CONSOLE_ACCESS_KEY>` in production.
+- Production secret rendering uses `npm run prod:render-secrets`, which fetches `lemonsuk/prod/app-secrets` from AWS Secrets Manager into `.env.secrets`.
+- Production compose commands should go through `npm run prod:compose -- ...` so both `.env` and `.env.secrets` are loaded.
 - Playwright smoke coverage lives in `tests/e2e` and defaults to `https://lemonsuk.com` unless `PLAYWRIGHT_BASE_URL` is set.
 - Authenticated Playwright smoke can be enabled with `PLAYWRIGHT_OWNER_EMAIL`, `PLAYWRIGHT_OWNER_SESSION_TOKEN`, `PLAYWRIGHT_CLAIM_TOKEN`, `PLAYWRIGHT_REVIEW_KEY`, and `PLAYWRIGHT_REVIEW_LEAD_ID`.
 - The owner-email smoke sends a real login-link email, so use a controlled inbox when setting `PLAYWRIGHT_OWNER_EMAIL`.

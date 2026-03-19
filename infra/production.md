@@ -35,6 +35,20 @@ Recommended viewer policy:
 - `JWT_SECRET`
 - `SENDGRID_API_KEY`
 - `SENDGRID_FROM_EMAIL`
+- `INTERNAL_SERVICE_TOKEN`
+- `REVIEW_CONSOLE_ACCESS_KEY`
+- `LEMONSUK_REVIEW_TOKEN`
+- `LEMONSUK_REVIEW_WEBHOOK_SECRET`
+- `X_CLIENT_ID` or `TWITTER_CLIENT_ID`
+- `X_CLIENT_SECRET` or `TWITTER_CLIENT_SECRET`
+- `X_BEARER_TOKEN` or `TWITTER_BEARER_TOKEN`
+
+Store those in AWS Secrets Manager as `lemonsuk/prod/app-secrets`, attach an EC2 instance role with `secretsmanager:GetSecretValue`, then render them onto the host before recreating containers:
+
+```bash
+npm run prod:render-secrets
+npm run prod:compose -- up -d api web review-orchestrator
+```
 
 ## Local production rehearsal
 

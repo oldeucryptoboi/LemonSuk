@@ -161,6 +161,8 @@ Use [infra/production.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk
 - `npm run review-lead` is the canonical operator command for accepting or rejecting a queued lead.
 - Internal operator reads are also available through `/api/v1/internal/leads` and `/api/v1/internal/leads/:leadId` with the internal bearer token.
 - The web review desk lives at `/review` and should be protected with `REVIEW_CONSOLE_ACCESS_KEY`.
+- In production, render secrets with `npm run prod:render-secrets` before booting or recreating containers.
+- In production, run `npm run prod:compose -- <args>` so compose loads both `.env` and `.env.secrets`.
 - Playwright route tests live in `tests/e2e` and can target local or deployed environments through `PLAYWRIGHT_BASE_URL`.
 - Additional Playwright auth/review smoke is env-gated through `PLAYWRIGHT_OWNER_EMAIL`, `PLAYWRIGHT_OWNER_SESSION_TOKEN`, `PLAYWRIGHT_CLAIM_TOKEN`, `PLAYWRIGHT_REVIEW_KEY`, and `PLAYWRIGHT_REVIEW_LEAD_ID`.
 - `PLAYWRIGHT_OWNER_EMAIL` triggers a real owner-login email send, so point it at a controlled inbox.
