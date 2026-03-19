@@ -5,10 +5,12 @@ import {
   agentPredictionSubmissionInputSchema,
   agentRegistrationInputSchema,
   claimOwnerInputSchema,
+  claimOwnerTweetVerificationInputSchema,
   ownerReviewSubmissionInputSchema,
   ownerEmailSetupInputSchema,
   ownerLoginLinkRequestSchema,
 } from '../shared'
+import { apiConfig } from '../config'
 import { asyncHandler } from '../middleware/async-handler'
 import { createRateLimitMiddleware } from '../middleware/rate-limit'
 import { placeAgainstBetForUser } from '../services/betting'
@@ -20,7 +22,9 @@ import {
   authenticateAgentApiKey,
   authenticateOwnerSession,
   claimOwnerByClaimToken,
+  completeOwnerClaimXConnection,
   createCaptchaChallenge,
+  createOwnerClaimXConnectUrl,
   createOwnerLoginLink,
   readAgentProfileByIdFromClient,
   readCaptchaChallenge,
@@ -28,6 +32,7 @@ import {
   readOwnerSession,
   registerAgent,
   setupOwnerEmail,
+  verifyOwnerByClaimTweet,
 } from '../services/identity'
 import { withStoreTransaction } from '../services/store'
 import {
@@ -79,9 +84,23 @@ function readSessionTokenFromBody(body: unknown): string | undefined {
 
 export function createAuthRouter(): Router {
   const router = Router()
+  const appUrl = new URL(apiConfig.appUrl)
+
+  function buildAppRedirect(searchParams: Record<string, string>): string {
+    const nextUrl = new URL(appUrl.toString())
+    for (const [key, value] of Object.entries(searchParams)) {
+      nextUrl.searchParams.set(key, value)
+    }
+    return nextUrl.toString()
+  }
 
   router.get(
     '/captcha',
+    createRateLimitMiddleware({
+      bucket: 'captcha-create',
+      limit: 30,
+      windowMs: 60_000,
+    }),
     asyncHandler(async (_request, response) => {
       response.json(await createCaptchaChallenge())
     }),
@@ -89,6 +108,11 @@ export function createAuthRouter(): Router {
 
   router.get(
     '/captcha/:challengeId',
+    createRateLimitMiddleware({
+      bucket: 'captcha-read',
+      limit: 60,
+      windowMs: 60_000,
+    }),
     asyncHandler(async (request, response) => {
       const params = z
         .object({
@@ -166,19 +190,135 @@ export function createAuthRouter(): Router {
       const body = claimOwnerInputSchema.parse(request.body)
 
       try {
-        const loginLink = await claimOwnerByClaimToken(
+        const claimView = await claimOwnerByClaimToken(
           params.claimToken,
           body.ownerEmail,
         )
-        await dispatchOwnerLoginLink(loginLink)
         await publishCurrentOperationalSnapshot(new Date())
-        response.json(loginLink)
+        response.json(claimView)
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Could not claim this agent.'
         response
           .status(message === 'Claim not found.' ? 404 : 400)
           .json({ message })
+      }
+    }),
+  )
+
+  router.post(
+    '/claims/:claimToken/verify-tweet',
+    createRateLimitMiddleware({
+      bucket: 'claim-owner-tweet',
+      limit: 20,
+      windowMs: 60 * 60 * 1_000,
+    }),
+    asyncHandler(async (request, response) => {
+      const params = z
+        .object({
+          claimToken: z.string(),
+        })
+        .parse(request.params)
+      const body = claimOwnerTweetVerificationInputSchema.parse(request.body)
+
+      try {
+        const loginLink = await verifyOwnerByClaimTweet(params.claimToken, body)
+        await dispatchOwnerLoginLink(loginLink)
+        await publishCurrentOperationalSnapshot(new Date())
+        response.json(loginLink)
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not verify that X post.'
+
+        response.status(400).json({ message })
+      }
+    }),
+  )
+
+  router.get(
+    '/claims/:claimToken/connect-x',
+    asyncHandler(async (request, response) => {
+      const params = z
+        .object({
+          claimToken: z.string(),
+        })
+        .parse(request.params)
+
+      try {
+        const authorizeUrl = await createOwnerClaimXConnectUrl(params.claimToken)
+        response.redirect(authorizeUrl)
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not start X verification.'
+        response.status(400).json({ message })
+      }
+    }),
+  )
+
+  router.get(
+    '/x/callback',
+    asyncHandler(async (request, response) => {
+      const query = z
+        .object({
+          code: z.string().optional(),
+          state: z.string().optional(),
+          error: z.string().optional(),
+          error_description: z.string().optional(),
+        })
+        .parse(request.query)
+
+      if (!query.state) {
+        response.redirect(
+          buildAppRedirect({
+            x_error: 'missing_state',
+          }),
+        )
+        return
+      }
+
+      if (query.error) {
+        response.redirect(
+          buildAppRedirect({
+            x_error: query.error_description ?? query.error,
+          }),
+        )
+        return
+      }
+
+      if (!query.code) {
+        response.redirect(
+          buildAppRedirect({
+            x_error: 'Missing X authorization code.',
+          }),
+        )
+        return
+      }
+
+      try {
+        const result = await completeOwnerClaimXConnection({
+          state: query.state,
+          code: query.code,
+        })
+        response.redirect(
+          buildAppRedirect({
+            claim: result.claimToken,
+            x_connected: '1',
+          }),
+        )
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not connect that X account.'
+        response.redirect(
+          buildAppRedirect({
+            x_error: message,
+          }),
+        )
       }
     }),
   )

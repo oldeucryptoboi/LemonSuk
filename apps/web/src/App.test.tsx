@@ -84,12 +84,31 @@ vi.mock('./components/HeroBanner', () => ({
   HeroBanner: ({
     onOpenOwnerModal,
     onOpenClaimModal,
+    onOwnerLogout,
+    ownerSession,
   }: {
     onOpenOwnerModal: () => void
     onOpenClaimModal: () => void
+    onOwnerLogout: () => void
+    ownerSession: { ownerEmail: string } | null
   }) => (
     <div>
       <span>hero banner</span>
+      {ownerSession ? (
+        <>
+          <span>Signed in as {ownerSession.ownerEmail}</span>
+          <button type="button" onClick={onOwnerLogout}>
+            Log out
+          </button>
+        </>
+      ) : (
+        <>
+          <span>Not signed in</span>
+          <button type="button" onClick={onOpenOwnerModal}>
+            Owner login
+          </button>
+        </>
+      )}
       <button type="button" onClick={onOpenOwnerModal}>
         hero owner
       </button>
@@ -242,6 +261,44 @@ describe('App', () => {
     window.history.pushState({}, '', '/')
   })
 
+  it('renders immediately from initial server data without the loading strip', () => {
+    render(<App initialSnapshot={baseSnapshot} />)
+
+    expect(screen.queryByText('Loading the board…')).toBeNull()
+    expect(screen.getByText('hero banner')).not.toBeNull()
+    expect(apiMocks.fetchDashboard).not.toHaveBeenCalled()
+    expect(screen.getByRole('link', { name: 'Board' }).getAttribute('href')).toBe(
+      '/#board-surface-top',
+    )
+    expect(screen.getByRole('link', { name: 'Groups' }).getAttribute('href')).toBe(
+      '/groups#route-surface-top',
+    )
+  })
+
+  it('falls back to the first visible board market when the initial snapshot has no open cards', () => {
+    const closedSnapshot = {
+      ...baseSnapshot,
+      markets: baseSnapshot.markets.map((market) =>
+        market.id === supportMarketId
+          ? market
+          : {
+              ...market,
+              status: 'busted' as const,
+            },
+      ),
+    }
+    const firstVisibleMarketId = pickFirstVisibleMarketIdFromSnapshot(
+      closedSnapshot,
+      'all',
+      'all',
+    )
+
+    render(<App initialSnapshot={closedSnapshot} />)
+
+    expect(firstVisibleMarketId).not.toBeNull()
+    expect(screen.getByText(firstVisibleMarketId!)).not.toBeNull()
+  })
+
   it('loads the board, handles owner and claim params, and runs discovery', async () => {
     const user = userEvent.setup()
     const openSpacexMarket = baseSnapshot.markets.find(
@@ -267,12 +324,22 @@ describe('App', () => {
         biography: 'Tracks deadlines.',
         ownerEmail: null,
         ownerVerifiedAt: null,
+        ownerVerificationStatus: 'unclaimed',
+        ownerVerificationCode: null,
+        ownerVerificationXHandle: null,
+        ownerVerificationXUserId: null,
+        ownerVerificationXConnectedAt: null,
+        ownerVerificationTweetUrl: null,
         createdAt: '2026-03-16T00:00:00.000Z',
         claimUrl: '/?claim=claim_1',
         challengeUrl: '/api/v1/auth/claims/claim_1',
         verificationPhrase: 'busted-oracle-42',
       },
       claimInstructions: 'Confirm the phrase.',
+      tweetVerificationInstructions: null,
+      tweetVerificationTemplate: null,
+      tweetVerificationConnectUrl: null,
+      tweetVerificationConnectedAccount: null,
     })
     apiMocks.fetchOwnerSession.mockResolvedValue({
       sessionToken: 'owner_1',
@@ -392,6 +459,54 @@ describe('App', () => {
       ).getByRole('button', { name: 'Open topic' }),
     )
     expect(screen.getByText(supportMarketId)).not.toBeNull()
+  })
+
+  it('surfaces X callback status messages and clears those query params', async () => {
+    apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
+    apiMocks.fetchClaimView.mockResolvedValue({
+      agent: {
+        id: 'agent-1',
+        handle: 'deadlinebot',
+        displayName: 'Deadline Bot',
+        ownerName: 'Owner',
+        modelProvider: 'OpenAI',
+        biography: 'Tracks deadlines.',
+        ownerEmail: 'owner@example.com',
+        ownerVerifiedAt: null,
+        ownerVerificationStatus: 'pending_tweet',
+        ownerVerificationCode: 'REEF-1A2B',
+        ownerVerificationXHandle: null,
+        ownerVerificationXUserId: null,
+        ownerVerificationXConnectedAt: null,
+        ownerVerificationTweetUrl: null,
+        createdAt: '2026-03-16T00:00:00.000Z',
+        claimUrl: '/?claim=claim_1',
+        challengeUrl: '/api/v1/auth/claims/claim_1',
+        verificationPhrase: 'busted-oracle-42',
+      },
+      claimInstructions: 'Confirm the phrase.',
+      tweetVerificationInstructions: null,
+      tweetVerificationTemplate: null,
+      tweetVerificationConnectUrl: '/api/v1/auth/claims/claim_1/connect-x',
+      tweetVerificationConnectedAccount: null,
+    })
+
+    window.history.pushState(
+      {},
+      '',
+      '/?claim=claim_1&x_connected=1&x_error=Callback+failed',
+    )
+    render(<App />)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'X account connected. Finish the verification tweet to open the owner deck.',
+        ),
+      ).not.toBeNull()
+    })
+    expect(screen.getByText('Callback failed')).not.toBeNull()
+    expect(window.location.search).toBe('?claim=claim_1')
   })
 
   it('renders family and group board surfaces when catalog summaries are available', async () => {
@@ -711,6 +826,7 @@ describe('App', () => {
         name: bustedMarket.headline,
       }),
     ).toBeNull()
+    expect(window.scrollTo).not.toHaveBeenCalled()
   })
 
   it('does not open the login modal from scroll alone', async () => {

@@ -48,6 +48,7 @@ Default local endpoints:
 ### Required for the web app to talk to the API correctly
 
 - `APP_URL`
+- `API_PUBLIC_URL`
 - `ALLOWED_ORIGIN`
 - `INTERNAL_API_BASE_URL`
 
@@ -55,6 +56,12 @@ Default local endpoints:
 
 - `SENDGRID_API_KEY`
 - `SENDGRID_FROM_EMAIL`
+- `X_CLIENT_ID`
+- `X_CLIENT_SECRET`
+- `X_BEARER_TOKEN` or `TWITTER_BEARER_TOKEN`
+- `X_OAUTH_AUTHORIZE_URL`
+- `X_OAUTH_TOKEN_URL`
+- `X_API_BASE_URL`
 - `NEXT_PUBLIC_API_BASE_URL`
 - `EDDIE_BASE_URL`
 - `EDDIE_API_KEY`
@@ -157,6 +164,7 @@ Use [infra/production.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk
 - Playwright route tests live in `tests/e2e` and can target local or deployed environments through `PLAYWRIGHT_BASE_URL`.
 - Additional Playwright auth/review smoke is env-gated through `PLAYWRIGHT_OWNER_EMAIL`, `PLAYWRIGHT_OWNER_SESSION_TOKEN`, `PLAYWRIGHT_CLAIM_TOKEN`, `PLAYWRIGHT_REVIEW_KEY`, and `PLAYWRIGHT_REVIEW_LEAD_ID`.
 - `PLAYWRIGHT_OWNER_EMAIL` triggers a real owner-login email send, so point it at a controlled inbox.
+- Human claim verification now requires both X OAuth account connection and a public verification tweet, so local claim-flow testing also needs valid X app credentials.
 - The live dashboard channel depends on the API process staying up; there is no separate realtime worker.
 - Rate limiting depends on Redis when configured; in production that should be treated as required, not optional.
 - The review orchestrator consumes queued submissions, dispatches them to Eddie, and posts signed callback results back into the API.

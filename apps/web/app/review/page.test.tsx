@@ -4,12 +4,14 @@ import { describe, expect, it, vi } from 'vitest'
 import ReviewPage from './page'
 
 const mocks = vi.hoisted(() => ({
+  isReviewConsoleAvailable: vi.fn(),
   isReviewConsoleAuthorized: vi.fn(),
   fetchInternalLeadQueueServer: vi.fn(),
   fetchInternalLeadInspectionServer: vi.fn(),
 }))
 
 vi.mock('../../src/lib/internal-server-api', () => ({
+  isReviewConsoleAvailable: mocks.isReviewConsoleAvailable,
   isReviewConsoleAuthorized: mocks.isReviewConsoleAuthorized,
   fetchInternalLeadQueueServer: mocks.fetchInternalLeadQueueServer,
   fetchInternalLeadInspectionServer: mocks.fetchInternalLeadInspectionServer,
@@ -21,7 +23,17 @@ vi.mock('./actions', () => ({
 }))
 
 describe('ReviewPage', () => {
+  it('renders an unavailable state when the internal service token is missing', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(false)
+
+    render(await ReviewPage({ searchParams: Promise.resolve({}) }))
+
+    expect(screen.getByText('Review desk unavailable')).not.toBeNull()
+    expect(screen.getByText(/INTERNAL_SERVICE_TOKEN/)).not.toBeNull()
+  })
+
   it('renders a locked state when the review key is not authorized', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(false)
 
     render(await ReviewPage({ searchParams: Promise.resolve({}) }))
@@ -31,6 +43,7 @@ describe('ReviewPage', () => {
   })
 
   it('renders an empty inbox when no matching leads are pending', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.fetchInternalLeadQueueServer.mockResolvedValue({
       pendingCount: 0,
@@ -50,6 +63,7 @@ describe('ReviewPage', () => {
   })
 
   it('renders the inbox, lead detail, and review forms when authorized', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.fetchInternalLeadQueueServer.mockResolvedValue({
       pendingCount: 1,
@@ -177,6 +191,7 @@ describe('ReviewPage', () => {
   })
 
   it('auto-selects the first lead, shows flash copy, and renders related/reviewed fallback branches', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.fetchInternalLeadQueueServer.mockResolvedValue({
       pendingCount: 2,

@@ -8,6 +8,7 @@ describe('apiConfig', () => {
     delete process.env.HOST
     delete process.env.PORT
     delete process.env.APP_URL
+    delete process.env.API_PUBLIC_URL
     delete process.env.ALLOWED_ORIGIN
     delete process.env.DATABASE_URL
     delete process.env.PGSSLMODE
@@ -17,6 +18,13 @@ describe('apiConfig', () => {
     delete process.env.JWT_SECRET
     delete process.env.SENDGRID_API_KEY
     delete process.env.SENDGRID_FROM_EMAIL
+    delete process.env.X_CLIENT_ID
+    delete process.env.X_CLIENT_SECRET
+    delete process.env.X_BEARER_TOKEN
+    delete process.env.TWITTER_BEARER_TOKEN
+    delete process.env.X_OAUTH_AUTHORIZE_URL
+    delete process.env.X_OAUTH_TOKEN_URL
+    delete process.env.X_API_BASE_URL
     mutableEnv.NODE_ENV = currentNodeEnv
     vi.resetModules()
   })
@@ -31,6 +39,7 @@ describe('apiConfig', () => {
       port: 8787,
       apiBasePath: '/api/v1',
       appUrl: 'http://localhost:5173',
+      apiPublicUrl: 'http://localhost:8787',
       allowedOrigin: '*',
       databaseUrl: 'postgresql://localhost:5432/lemonsuk',
       databaseSsl: false,
@@ -40,6 +49,12 @@ describe('apiConfig', () => {
       jwtSecret: 'lemonsuk-dev-jwt-secret',
       sendGridApiKey: '',
       sendGridFromEmail: '',
+      xClientId: '',
+      xClientSecret: '',
+      xBearerToken: '',
+      xOauthAuthorizeUrl: 'https://x.com/i/oauth2/authorize',
+      xOauthTokenUrl: 'https://api.x.com/2/oauth2/token',
+      xApiBaseUrl: 'https://api.x.com/2',
     })
   })
 
@@ -48,6 +63,7 @@ describe('apiConfig', () => {
     process.env.HOST = '127.0.0.1'
     process.env.PORT = '9999'
     process.env.APP_URL = 'https://lemonsuk.example'
+    process.env.API_PUBLIC_URL = 'https://api.lemonsuk.example'
     process.env.ALLOWED_ORIGIN = 'https://www.lemonsuk.example'
     process.env.DATABASE_URL = 'postgresql://example/test'
     process.env.PGSSLMODE = 'require'
@@ -57,6 +73,12 @@ describe('apiConfig', () => {
     process.env.JWT_SECRET = 'secret'
     process.env.SENDGRID_API_KEY = 'sg-key'
     process.env.SENDGRID_FROM_EMAIL = 'alerts@lemonsuk.example'
+    process.env.X_CLIENT_ID = 'x-client-id'
+    process.env.X_CLIENT_SECRET = 'x-client-secret'
+    process.env.TWITTER_BEARER_TOKEN = 'x-bearer-token'
+    process.env.X_OAUTH_AUTHORIZE_URL = 'https://auth.example/authorize'
+    process.env.X_OAUTH_TOKEN_URL = 'https://auth.example/token'
+    process.env.X_API_BASE_URL = 'https://auth.example/api'
 
     const { apiConfig } = await import('./config')
 
@@ -64,6 +86,7 @@ describe('apiConfig', () => {
     expect(apiConfig.host).toBe('127.0.0.1')
     expect(apiConfig.port).toBe(9999)
     expect(apiConfig.appUrl).toBe('https://lemonsuk.example')
+    expect(apiConfig.apiPublicUrl).toBe('https://api.lemonsuk.example')
     expect(apiConfig.allowedOrigin).toBe('https://www.lemonsuk.example')
     expect(apiConfig.databaseUrl).toBe('postgresql://example/test')
     expect(apiConfig.databaseSsl).toBe(true)
@@ -73,6 +96,12 @@ describe('apiConfig', () => {
     expect(apiConfig.jwtSecret).toBe('secret')
     expect(apiConfig.sendGridApiKey).toBe('sg-key')
     expect(apiConfig.sendGridFromEmail).toBe('alerts@lemonsuk.example')
+    expect(apiConfig.xClientId).toBe('x-client-id')
+    expect(apiConfig.xClientSecret).toBe('x-client-secret')
+    expect(apiConfig.xBearerToken).toBe('x-bearer-token')
+    expect(apiConfig.xOauthAuthorizeUrl).toBe('https://auth.example/authorize')
+    expect(apiConfig.xOauthTokenUrl).toBe('https://auth.example/token')
+    expect(apiConfig.xApiBaseUrl).toBe('https://auth.example/api')
   })
 
   it('rejects unsafe production defaults', async () => {
@@ -101,10 +130,23 @@ describe('apiConfig', () => {
     mutableEnv.NODE_ENV = 'production'
     process.env.DATABASE_URL = 'postgresql://postgres:postgres@db.internal/lemonsuk'
     process.env.INTERNAL_SERVICE_TOKEN = 'safe-internal-token'
+    process.env.API_PUBLIC_URL = 'https://api.lemonsuk.example'
     delete process.env.JWT_SECRET
 
     await expect(import('./config')).rejects.toThrow(
       'Production JWT_SECRET must be overridden.',
+    )
+  })
+
+  it('rejects the production default api public url after secrets are configured', async () => {
+    mutableEnv.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@db.internal/lemonsuk'
+    process.env.INTERNAL_SERVICE_TOKEN = 'safe-internal-token'
+    process.env.JWT_SECRET = 'safe-production-secret'
+    delete process.env.API_PUBLIC_URL
+
+    await expect(import('./config')).rejects.toThrow(
+      'Production API_PUBLIC_URL must point to the deployed API origin.',
     )
   })
 })

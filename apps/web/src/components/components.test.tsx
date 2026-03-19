@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createSeedStore } from '../../../api/src/data/seed'
 import { createDashboardSnapshot } from '../../../api/src/services/bonus'
+import { createAgentProfile } from '../../../../test/helpers/agents'
 import { AgentConsole } from './AgentConsole'
 import { BetSlipPanel } from './BetSlipPanel'
 import { HallOfFame } from './HallOfFame'
@@ -31,22 +32,14 @@ const seedStore = createSeedStore()
 const hallOfFame = [
   {
     rank: 1,
-    agent: {
-      id: 'agent-1',
-      handle: 'deadlinebot',
-      displayName: 'Deadline Bot',
-      ownerName: 'Owner',
-      modelProvider: 'OpenAI',
-      biography: 'Systematic counter-bettor that tracks deadlines.',
+    agent: createAgentProfile({
       ownerEmail: 'owner@example.com',
       ownerVerifiedAt: '2026-03-16T00:00:00.000Z',
+      ownerVerificationStatus: 'verified',
       promoCredits: 25,
       earnedCredits: 111.5,
       availableCredits: 136.5,
-      createdAt: '2026-03-16T00:00:00.000Z',
-      claimUrl: '/?claim=claim_1',
-      challengeUrl: '/api/v1/auth/claims/claim_1',
-    },
+    }),
     karma: 14,
     authoredClaims: 2,
     discussionPosts: 4,
@@ -493,9 +486,11 @@ describe('web components', () => {
     const { rerender } = render(
       <HeroBanner
         snapshot={heroSnapshot}
+        ownerSession={null}
         agentInstructionsUrl="https://lemonsuk.com/agent.md"
         onOpenOwnerModal={onOpenOwnerModal}
         onOpenClaimModal={onOpenClaimModal}
+        onOwnerLogout={() => {}}
       />,
     )
     expect(screen.getByText('LemonSuk')).not.toBeNull()
@@ -516,6 +511,10 @@ describe('web components', () => {
         /Claiming a bot verifies ownership and unlocks the seasonal promo bankroll./,
       ),
     ).not.toBeNull()
+    expect(screen.getByText('Not signed in')).not.toBeNull()
+    expect(
+      screen.getByRole('link', { name: 'Agent instructions' }),
+    ).not.toBeNull()
 
     rerender(
       <HeroBanner
@@ -527,12 +526,53 @@ describe('web components', () => {
             company: index === 0 ? undefined : market.company,
           })),
         }}
+        ownerSession={{
+          sessionToken: 'owner_1',
+          ownerEmail: 'owner@example.com',
+          expiresAt: '2026-03-18T00:00:00.000Z',
+          agents: [],
+          bets: [],
+          notifications: [],
+        }}
         agentInstructionsUrl="https://lemonsuk.com/agent.md"
         onOpenOwnerModal={onOpenOwnerModal}
         onOpenClaimModal={onOpenClaimModal}
+        onOwnerLogout={onOpenOwnerModal}
       />,
     )
     expect(screen.getByText('No live markets')).not.toBeNull()
+    expect(screen.getAllByText(/Signed in as/i).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Owner login' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Claim agent' })).toBeNull()
+    expect(
+      screen.queryByRole('link', { name: 'Agent instructions' }),
+    ).toBeNull()
+    expect(screen.getByRole('link', { name: 'Owner deck' })).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Submit source' })).not.toBeNull()
+    expect(screen.getByText('Owner access')).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Open owner deck' })).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Jump to intake' })).not.toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Log out' }))
+    expect(onOpenOwnerModal).toHaveBeenCalledTimes(2)
+
+    rerender(
+      <HeroBanner
+        snapshot={heroSnapshot}
+        ownerSession={{
+          sessionToken: 'owner_1',
+          ownerEmail: 'owner@example.com',
+          expiresAt: '2026-03-18T00:00:00.000Z',
+          agents: [hallOfFame[0]!.agent],
+          bets: [],
+          notifications: [],
+        }}
+        agentInstructionsUrl="https://lemonsuk.com/agent.md"
+        onOpenOwnerModal={onOpenOwnerModal}
+        onOpenClaimModal={onOpenClaimModal}
+        onOwnerLogout={onOpenOwnerModal}
+      />,
+    )
+    expect(screen.getByText(/1 linked agent ready for monitoring\./i)).not.toBeNull()
 
     rerender(
       <MarketCard

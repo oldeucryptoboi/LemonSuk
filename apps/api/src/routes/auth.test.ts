@@ -53,6 +53,16 @@ describe('createAuthRouter fallback errors', () => {
       setupOwnerEmail: vi.fn(async () => {
         throw 'owner-email'
       }),
+      verifyOwnerByClaimTweet: vi
+        .fn(async () => {
+          throw new Error('Tweet mismatch.')
+        })
+        .mockImplementationOnce(async () => {
+          throw new Error('Tweet mismatch.')
+        })
+        .mockImplementationOnce(async () => {
+          throw 'tweet-verify'
+        }),
     }))
     vi.doMock('../services/store', () => ({
       withStoreTransaction: vi.fn(async (run) =>
@@ -131,6 +141,28 @@ describe('createAuthRouter fallback errors', () => {
           })
       ).body.message,
     ).toBe('Could not claim this agent.')
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/auth/claims/claim_1/verify-tweet')
+          .send({
+            xHandle: '@owner',
+            tweetUrl: 'https://x.com/owner/status/1',
+          })
+      ).body.message,
+    ).toBe('Tweet mismatch.')
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/auth/claims/claim_1/verify-tweet')
+          .send({
+            xHandle: '@owner',
+            tweetUrl: 'https://x.com/owner/status/2',
+          })
+      ).body.message,
+    ).toBe('Could not verify that X post.')
 
     expect(
       (
@@ -285,6 +317,9 @@ describe('createAuthRouter fallback errors', () => {
       setupOwnerEmail: vi.fn(async () => ({
         agent: { id: 'agent-1' },
       })),
+      verifyOwnerByClaimTweet: vi.fn(async () => ({
+        sessionToken: 'owner_1',
+      })),
     }))
     vi.doMock('../services/store', () => ({
       withStoreTransaction: vi.fn(async (run) =>
@@ -344,6 +379,7 @@ describe('createAuthRouter fallback errors', () => {
       readOwnerSession: vi.fn(),
       registerAgent: vi.fn(),
       setupOwnerEmail: vi.fn(),
+      verifyOwnerByClaimTweet: vi.fn(),
     }))
     vi.doMock('../services/store', () => ({
       withStoreTransaction: vi.fn(async (run) =>
@@ -565,5 +601,175 @@ describe('createAuthRouter fallback errors', () => {
       expect.any(Date),
     )
     expect(persist).toHaveBeenNthCalledWith(2, repricedStore)
+  })
+
+  it('redirects X callback failures back into the app shell', async () => {
+    vi.resetModules()
+
+    vi.doMock('../services/identity', () => ({
+      authenticateAgentApiKey: vi.fn(async () => null),
+      authenticateOwnerSession: vi.fn(async () => null),
+      claimOwnerByClaimToken: vi.fn(),
+      completeOwnerClaimXConnection: vi.fn(async () => {
+        throw 'x-connect-fallback'
+      }),
+      createCaptchaChallenge: vi.fn(),
+      createOwnerClaimXConnectUrl: vi.fn(async () => 'https://x.com/oauth'),
+      createOwnerLoginLink: vi.fn(),
+      readAgentProfileByIdFromClient: vi.fn(),
+      readCaptchaChallenge: vi.fn(),
+      readClaimView: vi.fn(),
+      readOwnerSession: vi.fn(),
+      registerAgent: vi.fn(),
+      setupOwnerEmail: vi.fn(),
+      verifyOwnerByClaimTweet: vi.fn(),
+    }))
+    vi.doMock('./helpers', () => ({
+      createOperationalSnapshot: vi.fn(async () => ({})),
+      dispatchOwnerLoginLink: vi.fn(async () => undefined),
+      publishCurrentOperationalSnapshot: vi.fn(async () => ({})),
+      publishOperationalSnapshot: vi.fn(async () => true),
+      readApiKey: () => null,
+    }))
+
+    const { createAuthRouter } = await import('./auth')
+    const app = express()
+    app.use(express.json())
+    app.use('/api/v1/auth', createAuthRouter())
+
+    const missingCode = await request(app).get(
+      '/api/v1/auth/x/callback?state=missing-code',
+    )
+    expect(missingCode.statusCode).toBe(302)
+    expect(missingCode.headers.location).toContain(
+      'x_error=Missing+X+authorization+code.',
+    )
+
+    const missingState = await request(app).get(
+      '/api/v1/auth/x/callback?code=auth-code',
+    )
+    expect(missingState.statusCode).toBe(302)
+    expect(missingState.headers.location).toContain('x_error=missing_state')
+
+    const providerError = await request(app).get(
+      '/api/v1/auth/x/callback?state=state-1&error=access_denied&error_description=User+cancelled',
+    )
+    expect(providerError.statusCode).toBe(302)
+    expect(providerError.headers.location).toContain(
+      'x_error=User+cancelled',
+    )
+
+    const providerErrorWithoutDescription = await request(app).get(
+      '/api/v1/auth/x/callback?state=state-1&error=access_denied',
+    )
+    expect(providerErrorWithoutDescription.statusCode).toBe(302)
+    expect(providerErrorWithoutDescription.headers.location).toContain(
+      'x_error=access_denied',
+    )
+
+    const failedCallback = await request(app).get(
+      '/api/v1/auth/x/callback?state=state-1&code=auth-code',
+    )
+    expect(failedCallback.statusCode).toBe(302)
+    expect(failedCallback.headers.location).toContain(
+      'x_error=Could+not+connect+that+X+account.',
+    )
+  })
+
+  it('uses explicit Error messages from the X callback workflow', async () => {
+    vi.resetModules()
+
+    vi.doMock('../services/identity', () => ({
+      authenticateAgentApiKey: vi.fn(async () => null),
+      authenticateOwnerSession: vi.fn(async () => null),
+      claimOwnerByClaimToken: vi.fn(),
+      completeOwnerClaimXConnection: vi.fn(async () => {
+        throw new Error('X callback failed hard.')
+      }),
+      createCaptchaChallenge: vi.fn(),
+      createOwnerClaimXConnectUrl: vi.fn(async () => 'https://x.com/oauth'),
+      createOwnerLoginLink: vi.fn(),
+      readAgentProfileByIdFromClient: vi.fn(),
+      readCaptchaChallenge: vi.fn(),
+      readClaimView: vi.fn(),
+      readOwnerSession: vi.fn(),
+      registerAgent: vi.fn(),
+      setupOwnerEmail: vi.fn(),
+      verifyOwnerByClaimTweet: vi.fn(),
+    }))
+    vi.doMock('./helpers', () => ({
+      createOperationalSnapshot: vi.fn(async () => ({})),
+      dispatchOwnerLoginLink: vi.fn(async () => undefined),
+      publishCurrentOperationalSnapshot: vi.fn(async () => ({})),
+      publishOperationalSnapshot: vi.fn(async () => true),
+      readApiKey: () => null,
+    }))
+
+    const { createAuthRouter } = await import('./auth')
+    const app = express()
+    app.use(express.json())
+    app.use('/api/v1/auth', createAuthRouter())
+
+    const response = await request(app).get(
+      '/api/v1/auth/x/callback?state=state-1&code=auth-code',
+    )
+    expect(response.statusCode).toBe(302)
+    expect(response.headers.location).toContain('x_error=X+callback+failed+hard.')
+  })
+
+  it('maps connect-x start failures to JSON errors', async () => {
+    vi.resetModules()
+
+    vi.doMock('../services/identity', () => ({
+      authenticateAgentApiKey: vi.fn(async () => null),
+      authenticateOwnerSession: vi.fn(async () => null),
+      claimOwnerByClaimToken: vi.fn(),
+      completeOwnerClaimXConnection: vi.fn(),
+      createCaptchaChallenge: vi.fn(),
+      createOwnerClaimXConnectUrl: vi
+        .fn(async () => {
+          throw 'connect-start-fallback'
+        })
+        .mockImplementationOnce(async () => {
+          throw 'connect-start-fallback'
+        })
+        .mockImplementationOnce(async () => {
+          throw new Error('Connect start failed hard.')
+        }),
+      createOwnerLoginLink: vi.fn(),
+      readAgentProfileByIdFromClient: vi.fn(),
+      readCaptchaChallenge: vi.fn(),
+      readClaimView: vi.fn(),
+      readOwnerSession: vi.fn(),
+      registerAgent: vi.fn(),
+      setupOwnerEmail: vi.fn(),
+      verifyOwnerByClaimTweet: vi.fn(),
+    }))
+    vi.doMock('./helpers', () => ({
+      createOperationalSnapshot: vi.fn(async () => ({})),
+      dispatchOwnerLoginLink: vi.fn(async () => undefined),
+      publishCurrentOperationalSnapshot: vi.fn(async () => ({})),
+      publishOperationalSnapshot: vi.fn(async () => true),
+      readApiKey: () => null,
+    }))
+
+    const { createAuthRouter } = await import('./auth')
+    const app = express()
+    app.use(express.json())
+    app.use('/api/v1/auth', createAuthRouter())
+
+    const fallbackResponse = await request(app).get(
+      '/api/v1/auth/claims/claim_1/connect-x',
+    )
+    expect(fallbackResponse.statusCode).toBe(400)
+    expect(fallbackResponse.body.message).toBe(
+      'Could not start X verification.',
+    )
+
+    const errorResponse = await request(app).get(
+      '/api/v1/auth/claims/claim_2/connect-x',
+    )
+    expect(errorResponse.statusCode).toBe(400)
+    expect(errorResponse.body.message).toBe('Connect start failed hard.')
   })
 })

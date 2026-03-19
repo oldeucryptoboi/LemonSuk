@@ -4,6 +4,7 @@ import { RouteFrame } from '../../src/components/RouteFrame'
 import {
   fetchInternalLeadInspectionServer,
   fetchInternalLeadQueueServer,
+  isReviewConsoleAvailable,
   isReviewConsoleAuthorized,
 } from '../../src/lib/internal-server-api'
 import {
@@ -20,6 +21,32 @@ export default async function ReviewPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const state = readReviewConsoleState(await searchParams)
+  const available = isReviewConsoleAvailable()
+
+  if (!available) {
+    return (
+      <RouteFrame
+        current="review"
+        kicker="Operator review"
+        title="Eddie review desk"
+        description="Pending leads stay off the public board until they are reviewed. Local review tools need the internal service token before this desk can connect."
+      >
+        <section className="review-lock-card">
+          <h2>Review desk unavailable</h2>
+          <p>
+            This local web process is missing{' '}
+            <code>INTERNAL_SERVICE_TOKEN</code>, so it cannot talk to the
+            internal lead-review API.
+          </p>
+          <p className="route-note">
+            Start local dev with <code>npm run dev</code> or provide the token
+            before opening <code>/review</code>.
+          </p>
+        </section>
+      </RouteFrame>
+    )
+  }
+
   const authorized = isReviewConsoleAuthorized(state.reviewKey)
 
   if (!authorized) {

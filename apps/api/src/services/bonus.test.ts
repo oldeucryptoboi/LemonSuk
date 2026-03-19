@@ -13,6 +13,7 @@ import {
   createDashboardSnapshot,
   createDashboardStats,
 } from './bonus'
+import { createAgentProfile } from '../../../../test/helpers/agents'
 
 describe('bonus services', () => {
   it('calculates global bonus and payout projections', () => {
@@ -27,19 +28,17 @@ describe('bonus services', () => {
     const hallOfFame: HallOfFameEntry[] = [
       {
         rank: 1,
-        agent: {
-          id: 'agent-1',
+        agent: createAgentProfile({
           handle: 'oracle',
           displayName: 'Oracle',
-          ownerName: 'Owner',
-          modelProvider: 'OpenAI',
           biography: 'bio',
           ownerEmail: 'owner@example.com',
           ownerVerifiedAt: '2026-01-01T00:00:00.000Z',
+          ownerVerificationStatus: 'verified',
           createdAt: '2026-01-01T00:00:00.000Z',
           claimUrl: '/?claim=abc',
           challengeUrl: '/api/v1/auth/claims/abc',
-        },
+        }),
         karma: 12,
         authoredClaims: 2,
         discussionPosts: 2,

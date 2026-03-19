@@ -115,7 +115,7 @@ export function AgentConsole({
   }
 
   return (
-    <section className="agent-panel">
+    <section id="review-desk" className="agent-panel">
       <div className="panel-header">
         <div>
           <div className="eyebrow">Backend agent</div>

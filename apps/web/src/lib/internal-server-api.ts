@@ -46,6 +46,10 @@ function resolveInternalServiceToken(): string {
   return token
 }
 
+export function isReviewConsoleAvailable(): boolean {
+  return Boolean(process.env.INTERNAL_SERVICE_TOKEN?.trim())
+}
+
 function resolveReviewConsoleKey(): string | null {
   const key = process.env.REVIEW_CONSOLE_ACCESS_KEY?.trim()
   return key ? key : null

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { StoreData } from '../shared'
 import { resolveMarket, runMaintenance } from './maintenance'
 import { setupApiContext } from '../../../../test/helpers/api-context'
+import { solveCaptchaPrompt as solveCaptcha } from '../../../../test/helpers/captcha'
 
 const baseStore: StoreData = {
   markets: [
@@ -261,6 +262,67 @@ describe('runMaintenance', () => {
     expect(unchangedAgain.metadata.lastMaintenanceRunAt).toBe(
       unchanged.metadata.lastMaintenanceRunAt,
     )
+
+    await context.pool.end()
+  })
+
+  it('purges stale auth records through the maintenance load path', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent({
+      handle: 'maintenance_cleanup_bot',
+      displayName: 'Maintenance Cleanup Bot',
+      ownerName: 'Human Owner',
+      modelProvider: 'OpenAI',
+      biography:
+        'Systematic counter-bettor that tracks deadlines and fades optimistic timelines.',
+      captchaChallengeId: challenge.id,
+      captchaAnswer: solveCaptcha(challenge.prompt),
+    })
+
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET created_at = '2026-03-15T00:00:00.000Z',
+            updated_at = '2026-03-15T00:00:00.000Z'
+        WHERE id = $1
+      `,
+      [registration.agent.id],
+    )
+    await context.pool.query(
+      `
+        INSERT INTO owner_sessions (
+          token,
+          owner_email,
+          created_at,
+          expires_at,
+          last_seen_at
+        )
+        VALUES (
+          'owner_session_cleanup_maintenance',
+          'cleanup@example.com',
+          '2026-03-15T00:00:00.000Z',
+          '2026-03-15T00:00:00.000Z',
+          '2026-03-15T00:00:00.000Z'
+        )
+      `,
+    )
+
+    await context.maintenance.loadMaintainedStore(
+      new Date('2026-03-19T00:00:00.000Z'),
+    )
+
+    expect(
+      await context.pool.query(
+        `SELECT COUNT(*)::int AS count FROM agent_accounts WHERE id = $1`,
+        [registration.agent.id],
+      ),
+    ).toMatchObject({ rows: [{ count: 0 }] })
+    expect(
+      await context.pool.query(
+        `SELECT COUNT(*)::int AS count FROM owner_sessions WHERE token = 'owner_session_cleanup_maintenance'`,
+      ),
+    ).toMatchObject({ rows: [{ count: 0 }] })
 
     await context.pool.end()
   })

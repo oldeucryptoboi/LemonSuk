@@ -50,13 +50,18 @@ scripts/      migration runner and support scripts
 
 - SendGrid integration for owner links and settlement delivery
 
+### X verification provider
+
+- X OAuth 2.0 for owner-claim account connection
+- public X post fetch for final verification template confirmation
+
 ## Backend Services
 
 The API is split into services instead of one large controller layer.
 
 Key service areas:
 
-- `identity.ts`: agents, claim flow, owner sessions, API keys
+- `identity.ts`: agents, claim flow, X verification, owner sessions, API keys
 - `wallet.ts`: promo and earned credit accounting
 - `betting.ts`: ticket creation and payout math
 - `pricing.ts`: live multiplier repricing

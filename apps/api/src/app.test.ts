@@ -6,21 +6,16 @@ import { describe, expect, it, vi } from 'vitest'
 import { supportMarketId } from './shared'
 import { createSeedStore } from './data/seed'
 import { setupApiContext } from '../../../test/helpers/api-context'
-
-function solveCaptcha(prompt: string): string {
-  const match = prompt.match(/slug:\s+([a-z]+-[a-z]+)-(\d+)\+(\d+)\./i)
-
-  if (!match) {
-    throw new Error(`Could not solve captcha prompt: ${prompt}`)
-  }
-
-  return `${match[1]}-${Number(match[2]) + Number(match[3])}`
-}
+import { solveCaptchaPrompt as solveCaptcha } from '../../../test/helpers/captcha'
 
 describe('app routes', () => {
   it('serves health, dashboard, agent auth, and maintenance flows', async () => {
     process.env.SENDGRID_API_KEY = 'test-sendgrid-key'
     process.env.SENDGRID_FROM_EMAIL = 'noreply@lemonsuk.test'
+    process.env.API_PUBLIC_URL = 'http://localhost:8787'
+    process.env.X_CLIENT_ID = 'x-client-id'
+    process.env.X_CLIENT_SECRET = 'x-client-secret'
+    process.env.X_BEARER_TOKEN = 'x-bearer-token'
 
     const context = await setupApiContext({
       applyMocks: () => {
@@ -153,7 +148,10 @@ describe('app routes', () => {
         ownerEmail: 'owner@example.com',
       })
     expect(claimOwnerResponse.statusCode).toBe(200)
-    expect(claimOwnerResponse.body.ownerEmail).toBe('owner@example.com')
+    expect(claimOwnerResponse.body.agent.ownerEmail).toBe('owner@example.com')
+    expect(claimOwnerResponse.body.agent.ownerVerificationStatus).toBe(
+      'pending_tweet',
+    )
 
     expect(
       (
@@ -188,6 +186,83 @@ describe('app routes', () => {
         })
       ).statusCode,
     ).toBe(400)
+    expect(
+      (
+        await request(app).post('/api/v1/auth/owners/login-link').send({
+          ownerEmail: 'owner@example.com',
+        })
+      ).body.message,
+    ).toBe(
+      'Finish X verification from your claim link before opening the owner deck.',
+    )
+
+    const connectResponse = await request(app).get(
+      `/api/v1/auth/claims/${claimToken}/connect-x`,
+    )
+    expect(connectResponse.statusCode).toBe(302)
+    const oauthState = new URL(connectResponse.headers.location).searchParams.get(
+      'state',
+    )
+    expect(oauthState).not.toBeNull()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              access_token: 'x-access-token',
+              token_type: 'bearer',
+            }),
+            { status: 200 },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              data: {
+                id: 'x-user-1',
+                username: 'owner',
+              },
+            }),
+            { status: 200 },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              data: {
+                id: '1',
+                author_id: 'x-user-1',
+                text: `Claiming @deadlinebot on LemonSuk. Human verification code: ${claimOwnerResponse.body.agent.ownerVerificationCode}`,
+              },
+              includes: {
+                users: [
+                  {
+                    id: 'x-user-1',
+                    username: 'owner',
+                  },
+                ],
+              },
+            }),
+            { status: 200 },
+          ),
+        ),
+    )
+    const callbackResponse = await request(app).get(
+      `/api/v1/auth/x/callback?state=${oauthState}&code=test-code`,
+    )
+    expect(callbackResponse.statusCode).toBe(302)
+    expect(callbackResponse.headers.location).toContain(
+      `http://localhost:5173/?claim=${claimToken}&x_connected=1`,
+    )
+    const verifyTweetResponse = await request(app)
+      .post(`/api/v1/auth/claims/${claimToken}/verify-tweet`)
+      .send({
+        tweetUrl: 'https://x.com/owner/status/1',
+      })
+    expect(verifyTweetResponse.statusCode).toBe(200)
+    vi.unstubAllGlobals()
 
     const loginLinkResponse = await request(app)
       .post('/api/v1/auth/owners/login-link')
@@ -421,6 +496,10 @@ describe('app routes', () => {
   it('settles agent bets through the api for both wins and losses', async () => {
     process.env.SENDGRID_API_KEY = 'test-sendgrid-key'
     process.env.SENDGRID_FROM_EMAIL = 'noreply@lemonsuk.test'
+    process.env.API_PUBLIC_URL = 'http://localhost:8787'
+    process.env.X_CLIENT_ID = 'x-client-id'
+    process.env.X_CLIENT_SECRET = 'x-client-secret'
+    process.env.X_BEARER_TOKEN = 'x-bearer-token'
 
     const context = await setupApiContext({
       applyMocks: () => {
@@ -458,7 +537,68 @@ describe('app routes', () => {
         ownerEmail: 'owner@example.com',
       })
     expect(claimOwnerResponse.statusCode).toBe(200)
-    const ownerSession = claimOwnerResponse.body
+    const connectResponse = await request(app).get(
+      `/api/v1/auth/claims/${claimToken}/connect-x`,
+    )
+    const oauthState = new URL(connectResponse.headers.location).searchParams.get(
+      'state',
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              access_token: 'x-access-token',
+              token_type: 'bearer',
+            }),
+            { status: 200 },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              data: {
+                id: 'x-user-1',
+                username: 'owner',
+              },
+            }),
+            { status: 200 },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              data: {
+                id: '2',
+                author_id: 'x-user-1',
+                text: `Claiming @hedgebot on LemonSuk. Human verification code: ${claimOwnerResponse.body.agent.ownerVerificationCode}`,
+              },
+              includes: {
+                users: [
+                  {
+                    id: 'x-user-1',
+                    username: 'owner',
+                  },
+                ],
+              },
+            }),
+            { status: 200 },
+          ),
+        ),
+    )
+    const callbackResponse = await request(app).get(
+      `/api/v1/auth/x/callback?state=${oauthState}&code=test-code`,
+    )
+    expect(callbackResponse.statusCode).toBe(302)
+    const verifyTweetResponse = await request(app)
+      .post(`/api/v1/auth/claims/${claimToken}/verify-tweet`)
+      .send({
+        tweetUrl: 'https://x.com/owner/status/2',
+      })
+    expect(verifyTweetResponse.statusCode).toBe(200)
+    vi.unstubAllGlobals()
+    const ownerSession = verifyTweetResponse.body
 
     const winningBetResponse = await request(app)
       .post('/api/v1/auth/agents/bets')

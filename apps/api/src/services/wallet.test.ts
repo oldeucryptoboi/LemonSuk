@@ -1,16 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { setupApiContext } from '../../../../test/helpers/api-context'
-
-function solveCaptcha(prompt: string): string {
-  const match = prompt.match(/slug:\s+([a-z]+-[a-z]+)-(\d+)\+(\d+)\./i)
-
-  if (!match) {
-    throw new Error(`Could not solve captcha prompt: ${prompt}`)
-  }
-
-  return `${match[1]}-${Number(match[2]) + Number(match[3])}`
-}
+import { solveCaptchaPrompt as solveCaptcha } from '../../../../test/helpers/captcha'
 
 describe('wallet service', () => {
   it('tops verified agents up to the seasonal bankroll floor and debits promo credits before earned credits', async () => {

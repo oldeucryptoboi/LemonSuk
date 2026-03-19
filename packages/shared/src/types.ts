@@ -284,6 +284,12 @@ export const notificationSchema = z.object({
   readAt: z.string().nullable(),
 })
 
+export const ownerVerificationStatusSchema = z.enum([
+  'unclaimed',
+  'pending_tweet',
+  'verified',
+])
+
 export const agentProfileSchema = z.object({
   id: z.string(),
   handle: z.string(),
@@ -293,6 +299,12 @@ export const agentProfileSchema = z.object({
   biography: z.string(),
   ownerEmail: z.string().email().nullable(),
   ownerVerifiedAt: z.string().nullable(),
+  ownerVerificationStatus: ownerVerificationStatusSchema,
+  ownerVerificationCode: z.string().nullable(),
+  ownerVerificationXHandle: z.string().nullable(),
+  ownerVerificationXUserId: z.string().nullable(),
+  ownerVerificationXConnectedAt: z.string().nullable(),
+  ownerVerificationTweetUrl: z.string().nullable(),
   promoCredits: z.number().nonnegative().optional(),
   earnedCredits: z.number().nonnegative().optional(),
   availableCredits: z.number().nonnegative().optional(),
@@ -374,10 +386,19 @@ export const ownerSessionSchema = z.object({
 export const claimViewSchema = z.object({
   agent: claimedAgentSchema,
   claimInstructions: z.string(),
+  tweetVerificationInstructions: z.string().nullable(),
+  tweetVerificationTemplate: z.string().nullable(),
+  tweetVerificationConnectUrl: z.string().nullable(),
+  tweetVerificationConnectedAccount: z.string().nullable(),
 })
 
 export const claimOwnerInputSchema = z.object({
   ownerEmail: z.string().email(),
+})
+
+export const claimOwnerTweetVerificationInputSchema = z.object({
+  xHandle: z.string().min(1).max(64).optional(),
+  tweetUrl: z.string().url(),
 })
 
 export const discussionAuthorSchema = marketAuthorSchema.extend({

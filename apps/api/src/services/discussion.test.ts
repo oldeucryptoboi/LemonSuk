@@ -3,19 +3,10 @@ import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { setupApiContext } from '../../../../test/helpers/api-context'
+import { solveCaptchaPrompt as solveCaptcha } from '../../../../test/helpers/captcha'
 
 function hashSecret(value: string): string {
   return createHash('sha256').update(value).digest('hex')
-}
-
-function solveCaptcha(prompt: string): string {
-  const match = prompt.match(/slug:\s+([a-z]+-[a-z]+)-(\d+)\+(\d+)\./i)
-
-  if (!match) {
-    throw new Error(`Could not solve captcha prompt: ${prompt}`)
-  }
-
-  return `${match[1]}-${Number(match[2]) + Number(match[3])}`
 }
 
 describe('discussion service', () => {

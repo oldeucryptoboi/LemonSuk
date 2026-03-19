@@ -1,16 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { setupApiContext } from '../../../../test/helpers/api-context'
-
-function solveCaptcha(prompt: string): string {
-  const match = prompt.match(/slug:\s+([a-z]+-[a-z]+)-(\d+)\+(\d+)\./i)
-
-  if (!match) {
-    throw new Error(`Could not solve captcha prompt: ${prompt}`)
-  }
-
-  return `${match[1]}-${Number(match[2]) + Number(match[3])}`
-}
+import { createAgentProfile } from '../../../../test/helpers/agents'
+import { solveCaptchaPrompt as solveCaptcha } from '../../../../test/helpers/captcha'
 
 async function createCaptchaAnswer(
   context: Awaited<ReturnType<typeof setupApiContext>>,
@@ -1072,22 +1064,15 @@ describe('lead intake service', () => {
 
     await expect(
       createAgentLeadFromSubmission(agentClient as never, {
-        agent: {
+        agent: createAgentProfile({
           id: 'agent_direct',
           handle: 'direct',
           displayName: 'Direct',
-          ownerName: 'Owner',
-          modelProvider: 'OpenAI',
           biography: 'Direct lead agent.',
-          ownerEmail: null,
-          ownerVerifiedAt: null,
-          promoCredits: 0,
-          earnedCredits: 0,
-          availableCredits: 0,
           createdAt: '2026-03-18T00:00:00.000Z',
           claimUrl: '/?claim=claim_direct',
           challengeUrl: '/api/v1/auth/claims/claim_direct',
-        },
+        }),
         submissionId: 'submission_reload_failure',
         submission: {
           headline: 'Direct reload failure by December 31, 2027',

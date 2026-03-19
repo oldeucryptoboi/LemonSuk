@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 
 import {
   applyInternalLeadReviewResultServer,
+  isReviewConsoleAvailable,
   isReviewConsoleAuthorized,
   updateInternalLeadStatusServer,
 } from '../../src/lib/internal-server-api'
@@ -45,6 +46,10 @@ function readBaseState(formData: FormData): ReviewConsoleState {
 }
 
 function assertAuthorized(reviewKey: string | undefined): void {
+  if (!isReviewConsoleAvailable()) {
+    throw new Error('Review desk is unavailable.')
+  }
+
   if (!isReviewConsoleAuthorized(reviewKey)) {
     throw new Error('Review desk access denied.')
   }

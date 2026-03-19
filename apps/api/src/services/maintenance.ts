@@ -1,5 +1,6 @@
 import type { BetSlip, Market, Notification, StoreData } from '../shared'
 import { storeSchema } from '../shared'
+import { cleanupExpiredIdentityState } from './identity'
 import { withStoreTransaction } from './store'
 import {
   applyPricingEngine,
@@ -248,6 +249,8 @@ export function runMaintenance(
 export async function loadMaintainedStore(
   now: Date = new Date(),
 ): Promise<StoreData> {
+  await cleanupExpiredIdentityState()
+
   return withStoreTransaction(async (current, persist) => {
     const result = runMaintenance(current, now)
 

@@ -273,12 +273,14 @@ describe('internal server api helpers', () => {
     delete process.env.INTERNAL_SERVICE_TOKEN
 
     const api = await import('./internal-server-api')
+    expect(api.isReviewConsoleAvailable()).toBe(false)
     await expect(api.fetchInternalLeadQueueServer()).rejects.toThrow(
       'INTERNAL_SERVICE_TOKEN is required for the review console.',
     )
   })
 
   it('allows review access without a configured key only outside production', async () => {
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-secret'
     delete process.env.REVIEW_CONSOLE_ACCESS_KEY
     setNodeEnv('test')
 
@@ -291,5 +293,12 @@ describe('internal server api helpers', () => {
 
     api = await import('./internal-server-api')
     expect(api.isReviewConsoleAuthorized(undefined)).toBe(false)
+  })
+
+  it('reports the review console as available when the internal token is configured', async () => {
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-secret'
+
+    const api = await import('./internal-server-api')
+    expect(api.isReviewConsoleAvailable()).toBe(true)
   })
 })

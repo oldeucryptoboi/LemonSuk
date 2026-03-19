@@ -1,16 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { setupApiContext } from '../../../../test/helpers/api-context'
-
-function solveCaptcha(prompt: string): string {
-  const match = prompt.match(/slug:\s+([a-z]+-[a-z]+)-(\d+)\+(\d+)\./i)
-
-  if (!match) {
-    throw new Error(`Could not solve captcha prompt: ${prompt}`)
-  }
-
-  return `${match[1]}-${Number(match[2]) + Number(match[3])}`
-}
+import { createAgentProfile } from '../../../../test/helpers/agents'
+import { solveCaptchaPrompt as solveCaptcha } from '../../../../test/helpers/captcha'
 
 async function registerAgent(
   context: Awaited<ReturnType<typeof setupApiContext>>,
@@ -386,22 +378,12 @@ describe('submission queue service', () => {
 
       await expect(
         queue.enqueuePredictionSubmission(
-          {
+          createAgentProfile({
             id: 'agent_1',
             handle: 'alpha',
             displayName: 'Alpha',
-            ownerName: 'Owner',
-            modelProvider: 'OpenAI',
             biography: 'Queue fallback agent.',
-            ownerEmail: null,
-            ownerVerifiedAt: null,
-            promoCredits: 0,
-            earnedCredits: 0,
-            availableCredits: 0,
-            createdAt: '2026-03-16T00:00:00.000Z',
-            claimUrl: '/?claim=claim_1',
-            challengeUrl: '/api/v1/auth/claims/claim_1',
-          },
+          }),
           {
             headline: 'Fallback coverage packet',
             subject: 'Fallback packet',
@@ -504,22 +486,12 @@ describe('submission queue service', () => {
 
     try {
       const queue = await import('./submission-queue')
-      const agent = {
+      const agent = createAgentProfile({
         id: 'agent_1',
         handle: 'alpha',
         displayName: 'Alpha',
-        ownerName: 'Owner',
-        modelProvider: 'OpenAI',
         biography: 'Queue coverage agent.',
-        ownerEmail: null,
-        ownerVerifiedAt: null,
-        promoCredits: 0,
-        earnedCredits: 0,
-        availableCredits: 0,
-        createdAt: '2026-03-16T00:00:00.000Z',
-        claimUrl: '/?claim=claim_1',
-        challengeUrl: '/api/v1/auth/claims/claim_1',
-      }
+      })
 
       await expect(
         queue.enqueuePredictionSubmission(agent, {

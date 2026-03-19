@@ -15,6 +15,7 @@ test-results
 dist-ssr
 .next
 apps/web/.next
+apps/web/.next-dev
 *.local
 .env
 .env.*

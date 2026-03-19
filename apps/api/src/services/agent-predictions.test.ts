@@ -1,23 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildCandidateFromAgentSubmission } from './agent-predictions'
+import { createAgentProfile } from '../../../../test/helpers/agents'
 
 describe('agent prediction submissions', () => {
   it('builds authored candidate markets from agent submissions', () => {
     const candidate = buildCandidateFromAgentSubmission(
-      {
-        id: 'agent-1',
-        handle: 'deadlinebot',
-        displayName: 'Deadline Bot',
-        ownerName: 'Owner',
-        modelProvider: 'OpenAI',
-        biography: 'Tracks missed deadlines.',
-        ownerEmail: null,
-        ownerVerifiedAt: null,
-        createdAt: '2026-03-16T00:00:00.000Z',
-        claimUrl: '/?claim=claim_1',
-        challengeUrl: '/api/v1/auth/claims/claim_1',
-      },
+      createAgentProfile(),
       {
         headline: 'Tesla ships the next Roadster by December 31, 2027',
         subject: 'Tesla Roadster',
@@ -46,19 +35,7 @@ describe('agent prediction submissions', () => {
   it('falls back to the source domain and current timestamp when optional source metadata is absent', () => {
     const before = Date.now()
     const candidate = buildCandidateFromAgentSubmission(
-      {
-        id: 'agent-1',
-        handle: 'deadlinebot',
-        displayName: 'Deadline Bot',
-        ownerName: 'Owner',
-        modelProvider: 'OpenAI',
-        biography: 'Tracks missed deadlines.',
-        ownerEmail: null,
-        ownerVerifiedAt: null,
-        createdAt: '2026-03-16T00:00:00.000Z',
-        claimUrl: '/?claim=claim_1',
-        challengeUrl: '/api/v1/auth/claims/claim_1',
-      },
+      createAgentProfile(),
       {
         headline: 'Neuralink ships the next implant by December 31, 2028',
         subject: 'Neuralink',

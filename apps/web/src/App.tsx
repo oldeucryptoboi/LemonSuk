@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Link from 'next/link'
 import { useCallback, useEffect, useState, useTransition } from 'react'
 
 import {
@@ -46,6 +47,13 @@ import {
 const feedPageSize = 4
 const pageScrollLoadAhead = 280
 const ownerSessionStorageKey = 'lemonsuk.ownerSessionToken'
+const boardSurfaceAnchorId = 'board-surface-top'
+
+type AppProps = {
+  initialSnapshot?: DashboardSnapshot | null
+  initialFamilySummaries?: BoardFamilySummary[]
+  initialGroupSummaries?: BoardEventGroupSummary[]
+}
 
 function replaceUrlWithoutParams(keys: string[]) {
   const url = new URL(window.location.href)
@@ -67,15 +75,27 @@ function replaceUrlWithoutParams(keys: string[]) {
   }
 }
 
-export default function App() {
-  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null)
-  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null)
+export default function App({
+  initialSnapshot = null,
+  initialFamilySummaries = [],
+  initialGroupSummaries = [],
+}: AppProps) {
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(initialSnapshot)
+  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(() => {
+    const boardMarkets = initialSnapshot?.markets.filter(isBoardMarket) ?? []
+
+    return (
+      boardMarkets.find((market) => market.status === 'open')?.id ??
+      boardMarkets[0]?.id ??
+      null
+    )
+  })
   const [topicMarketId, setTopicMarketId] = useState<string | null>(null)
   const [familySummaries, setFamilySummaries] = useState<BoardFamilySummary[]>(
-    [],
+    initialFamilySummaries,
   )
   const [groupSummaries, setGroupSummaries] = useState<BoardEventGroupSummary[]>(
-    [],
+    initialGroupSummaries,
   )
   const [filter, setFilter] = useState<MarketFilter>('all')
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>('all')
@@ -86,7 +106,7 @@ export default function App() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [runningAgent, setRunningAgent] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(initialSnapshot === null)
   const [visibleMarketCount, setVisibleMarketCount] = useState(feedPageSize)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [loginModalMode, setLoginModalMode] = useState<'claim' | 'owner'>(
@@ -136,8 +156,11 @@ export default function App() {
     [],
   )
 
-  const refreshDashboard = useCallback(async () => {
-    setLoading(true)
+  const refreshDashboard = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true)
+    }
+
     try {
       const [nextSnapshot, nextFamilies, nextGroups] = await Promise.all([
         fetchDashboard(),
@@ -156,12 +179,17 @@ export default function App() {
           : 'Unable to load the board.',
       )
     } finally {
-      setLoading(false)
+      if (showLoading) {
+        setLoading(false)
+      }
     }
   }, [applySnapshot])
 
   useEffect(() => {
-    void refreshDashboard()
+    if (!initialSnapshot) {
+      void refreshDashboard()
+    }
+
     const unsubscribe = subscribeToDashboard((nextSnapshot) => {
       applySnapshot(nextSnapshot)
       void Promise.all([fetchBoardFamilies(), fetchBoardGroups()])
@@ -176,9 +204,21 @@ export default function App() {
 
     const params = new URLSearchParams(window.location.search)
     const claimToken = params.get('claim')
+    const xConnected = params.get('x_connected')
+    const xError = params.get('x_error')
     const sessionToken =
       params.get('owner_session') ??
       window.localStorage.getItem(ownerSessionStorageKey)
+
+    if (xConnected) {
+      setMessage('X account connected. Finish the verification tweet to open the owner deck.')
+      replaceUrlWithoutParams(['x_connected'])
+    }
+
+    if (xError) {
+      setError(xError)
+      replaceUrlWithoutParams(['x_error'])
+    }
 
     if (claimToken) {
       void fetchClaimView(claimToken)
@@ -208,7 +248,7 @@ export default function App() {
     return () => {
       unsubscribe()
     }
-  }, [applySnapshot, refreshDashboard])
+  }, [applySnapshot, initialSnapshot, refreshDashboard])
 
   const boardMarkets = snapshot?.markets.filter(isBoardMarket) ?? []
   const supportTopicMarket =
@@ -272,7 +312,6 @@ export default function App() {
 
   useEffect(() => {
     setVisibleMarketCount(Math.min(feedPageSize, visibleMarkets.length))
-    window.scrollTo({ top: 0, behavior: 'auto' })
   }, [companyFilter, filter, visibleMarkets.length])
 
   useEffect(() => {
@@ -325,70 +364,44 @@ export default function App() {
       {snapshot ? (
         <HeroBanner
           snapshot={snapshot}
+          ownerSession={ownerSession}
           agentInstructionsUrl={agentInstructionsUrl}
           onOpenOwnerModal={openOwnerLogin}
           onOpenClaimModal={openClaimLookup}
+          onOwnerLogout={handleOwnerLogout}
         />
       ) : null}
 
-      <div className="message-strip">
-        <div className="message-strip-copy">
-          {loading ? <span>Loading the board…</span> : null}
-          {message ? <span>{message}</span> : null}
-          {error ? <span className="error-text">{error}</span> : null}
+      {loading || message || error ? (
+        <div className="message-strip">
+          <div className="message-strip-copy">
+            {loading ? <span>Loading the board…</span> : null}
+            {message ? <span>{message}</span> : null}
+            {error ? <span className="error-text">{error}</span> : null}
+          </div>
         </div>
-        <div className="session-status" aria-live="polite">
-          {ownerSession ? (
-            <>
-              <span className="session-status-label">
-                Signed in as <strong>{ownerSession.ownerEmail}</strong>
-              </span>
-              <button
-                type="button"
-                className="session-status-action"
-                onClick={handleOwnerLogout}
-              >
-                Log out
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="session-status-label">Not signed in</span>
-              <button
-                type="button"
-                className="session-status-action"
-                onClick={openOwnerLogin}
-              >
-                Owner login
-              </button>
-              <button
-                type="button"
-                className="session-status-action session-status-action-secondary"
-                onClick={openClaimLookup}
-              >
-                Claim agent
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      ) : null}
 
-      <nav className="board-nav-strip" aria-label="Board navigation">
-        <a className="board-nav-link active" href="/">
+      <nav
+        id={boardSurfaceAnchorId}
+        className="board-nav-strip"
+        aria-label="Board navigation"
+      >
+        <Link className="board-nav-link active" href={`/#${boardSurfaceAnchorId}`}>
           Board
-        </a>
-        <a className="board-nav-link" href="/groups">
+        </Link>
+        <Link className="board-nav-link" href="/groups#route-surface-top">
           Groups
-        </a>
-        <a className="board-nav-link" href="/standings">
+        </Link>
+        <Link className="board-nav-link" href="/standings#route-surface-top">
           Standings
-        </a>
-        <a className="board-nav-link" href="/owner">
+        </Link>
+        <Link className="board-nav-link" href="/owner#route-surface-top">
           Owner deck
-        </a>
-        <a className="board-nav-link" href="/review">
+        </Link>
+        <Link className="board-nav-link" href="/review#route-surface-top">
           Review desk
-        </a>
+        </Link>
       </nav>
 
       <div className="content-grid">
@@ -544,15 +557,6 @@ export default function App() {
                       </p>
                     </div>
                     <div className="feed-controls">
-                      {!ownerSession ? (
-                        <button
-                          type="button"
-                          className="filter-button"
-                          onClick={openOwnerLogin}
-                        >
-                          Owner login
-                        </button>
-                      ) : null}
                       <div className="filter-row">
                         {(['all', 'open', 'busted'] as MarketFilter[]).map(
                           (entry) => (

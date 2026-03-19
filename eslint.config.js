@@ -13,6 +13,7 @@ export default [
       'test-results',
       'apps/api/data/store.json',
       'apps/web/.next',
+      'apps/web/.next-dev',
     ],
   },
   {

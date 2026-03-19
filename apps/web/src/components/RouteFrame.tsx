@@ -1,4 +1,5 @@
 import React from 'react'
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 type RouteKey = 'board' | 'groups' | 'standings' | 'owner' | 'review'
@@ -17,11 +18,15 @@ const routeLinks: Array<{
   href: string
   label: string
 }> = [
-  { key: 'board', href: '/', label: 'Board' },
-  { key: 'groups', href: '/groups', label: 'Groups' },
-  { key: 'standings', href: '/standings', label: 'Standings' },
-  { key: 'owner', href: '/owner', label: 'Owner deck' },
-  { key: 'review', href: '/review', label: 'Review desk' },
+  { key: 'board', href: '/#board-surface-top', label: 'Board' },
+  { key: 'groups', href: '/groups#route-surface-top', label: 'Groups' },
+  {
+    key: 'standings',
+    href: '/standings#route-surface-top',
+    label: 'Standings',
+  },
+  { key: 'owner', href: '/owner#route-surface-top', label: 'Owner deck' },
+  { key: 'review', href: '/review#route-surface-top', label: 'Review desk' },
 ]
 
 export function RouteFrame({
@@ -33,17 +38,17 @@ export function RouteFrame({
   children,
 }: RouteFrameProps) {
   return (
-    <main className="route-page">
+    <main id="route-surface-top" className="route-page">
       <div className="app-shell route-shell">
         <nav className="board-nav-strip route-nav" aria-label="Route navigation">
           {routeLinks.map((entry) => (
-            <a
+            <Link
               key={entry.key}
               className={`board-nav-link ${entry.key === current ? 'active' : ''}`}
               href={entry.href}
             >
               {entry.label}
-            </a>
+            </Link>
           ))}
         </nav>
 

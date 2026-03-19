@@ -91,6 +91,7 @@ input {
   overflow: hidden;
   display: grid;
   grid-template-columns: 1.6fr 1fr;
+  align-items: start;
   gap: 24px;
   border-radius: 28px;
   padding: 28px;
@@ -118,6 +119,17 @@ input {
 .hero-side {
   position: relative;
   z-index: 1;
+}
+
+.hero-topbar {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .hero-brand {
@@ -212,7 +224,14 @@ input {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 16px;
+}
+
+.hero-access-row {
+  min-width: 0;
+}
+
+.hero-session-status {
+  margin-left: auto;
 }
 
 .hero-action {
@@ -426,6 +445,13 @@ input {
   overflow-wrap: anywhere;
 }
 
+.instruction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .highlight-label,
 .selected-label,
 .highlight-meta,
@@ -479,7 +505,6 @@ input {
   min-height: 28px;
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
   gap: 16px;
   align-items: center;
   padding: 4px 2px 14px;
@@ -489,12 +514,17 @@ input {
 .board-nav-strip {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 18px;
 }
 
 .board-nav-link,
 .surface-link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  align-self: flex-start;
   border-radius: 999px;
   padding: 10px 14px;
   border: 1px solid rgba(246, 200, 107, 0.16);
@@ -555,6 +585,7 @@ input {
 
 .route-shell {
   padding-top: 28px;
+  align-content: start;
 }
 
 .route-nav {
@@ -862,7 +893,7 @@ input {
 
 .feed-controls {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
@@ -907,37 +938,52 @@ input {
   color: #b8ffd6;
 }
 
-.modal-tab-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.modal-tab {
+.modal-close-button {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
-  padding: 8px 12px;
   border: 1px solid rgba(246, 200, 107, 0.18);
   background: rgba(246, 200, 107, 0.06);
-  color: inherit;
+  color: rgba(247, 236, 215, 0.88);
   cursor: pointer;
+  font-size: 1.4rem;
+  line-height: 1;
 }
 
-.modal-tab.active {
-  background: linear-gradient(180deg, #f6c86b, #dd9d35);
-  border-color: transparent;
-  color: #14100a;
+.modal-close-button:hover {
+  background: rgba(246, 200, 107, 0.12);
 }
 
 .filter-row {
   display: flex;
   gap: 10px;
+  flex-wrap: nowrap;
 }
 
 .company-tab-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+  margin-bottom: -4px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.company-tab-row::-webkit-scrollbar {
+  display: none;
+}
+
+.company-tab-row .filter-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 8px 14px;
+  font-size: 0.94rem;
 }
 
 .filter-count {
@@ -1058,6 +1104,18 @@ input {
   background: rgba(6, 18, 14, 0.78);
   color: inherit;
   text-decoration: none;
+}
+
+.surface-card-selected {
+  border-color: rgba(246, 200, 107, 0.42);
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(246, 200, 107, 0.14),
+      transparent 42%
+    ),
+    rgba(8, 22, 17, 0.9);
+  box-shadow: 0 0 0 1px rgba(246, 200, 107, 0.18);
 }
 
 .spotlight-card {
@@ -1538,6 +1596,7 @@ input {
 }
 
 .login-modal {
+  position: relative;
   width: min(100%, 460px);
   border-radius: 28px;
   padding: 24px;
@@ -1742,8 +1801,13 @@ input {
     grid-template-columns: 1fr;
   }
 
+  .hero-topbar,
   .message-strip {
     align-items: stretch;
+  }
+
+  .hero-session-status {
+    margin-left: 0;
   }
 
   .session-status {
@@ -1841,6 +1905,8 @@ input {
 
   .feed-controls,
   .hero-actions,
+  .instruction-actions,
+  .hero-topbar,
   .agent-controls,
   .stake-row,
   .forum-topic-meta,

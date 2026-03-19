@@ -1,11 +1,13 @@
 import React from 'react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import type { ClaimView } from '../shared'
 import {
   claimAgentForOwner,
+  createClaimOwnerXConnectUrl,
   fetchClaimView,
   requestOwnerLoginLink,
+  verifyClaimOwnerTweet,
 } from '../lib/api'
 
 type LoginModalProps = {
@@ -40,7 +42,6 @@ export function LoginModal({
   onClaimViewChange,
   onClose,
 }: LoginModalProps) {
-  const [mode, setMode] = useState<AuthMode>('claim')
   const [submittingOwnerLogin, setSubmittingOwnerLogin] = useState(false)
   const [ownerError, setOwnerError] = useState<string | null>(null)
   const [ownerLoginEmail, setOwnerLoginEmail] = useState('')
@@ -54,19 +55,43 @@ export function LoginModal({
   const [claimOwnerEmail, setClaimOwnerEmail] = useState('')
   const [claimOwnerError, setClaimOwnerError] = useState<string | null>(null)
   const [claimOwnerPending, setClaimOwnerPending] = useState(false)
+  const [claimTweetUrl, setClaimTweetUrl] = useState('')
+  const [claimTweetError, setClaimTweetError] = useState<string | null>(null)
+  const [claimTweetPending, setClaimTweetPending] = useState(false)
+  const mode = useMemo<AuthMode>(
+    () => (claimView ? 'claim' : defaultMode),
+    [claimView, defaultMode],
+  )
+  const claimConnectUrl = useMemo(() => {
+    if (!claimView) {
+      return '#'
+    }
+
+    const fallbackClaimToken = parseClaimToken(claimView.agent.claimUrl)
+    if (claimView.tweetVerificationConnectUrl) {
+      return claimView.tweetVerificationConnectUrl
+    }
+
+    return fallbackClaimToken
+      ? createClaimOwnerXConnectUrl(fallbackClaimToken)
+      : '#'
+  }, [claimView])
 
   useEffect(() => {
     if (!open) {
       return
     }
 
-    setMode(claimView ? 'claim' : defaultMode)
     setOwnerError(null)
     setOwnerLoginSent(null)
     setClaimLookupError(null)
     setClaimOwnerError(null)
+    setClaimTweetError(null)
     setOwnerLoginEmail((current) => claimView?.agent.ownerEmail ?? current)
     setClaimOwnerEmail((current) => claimView?.agent.ownerEmail ?? current)
+    setClaimTweetUrl(
+      (current) => claimView?.agent.ownerVerificationTweetUrl ?? current,
+    )
     setClaimLookupValue((current) => {
       const claimUrl = claimView?.agent.claimUrl
       if (!claimUrl) {
@@ -84,7 +109,7 @@ export function LoginModal({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [claimView, defaultMode, onClaimViewChange, onClose, open])
+  }, [claimView, defaultMode, onClose, open])
 
   if (!open) {
     return null
@@ -157,8 +182,8 @@ export function LoginModal({
     setClaimOwnerError(null)
 
     try {
-      const loginLink = await claimAgentForOwner(claimToken, claimOwnerEmail)
-      window.location.assign(loginLink.loginUrl)
+      const nextClaimView = await claimAgentForOwner(claimToken, claimOwnerEmail)
+      onClaimViewChange(nextClaimView)
     } catch (error) {
       setClaimOwnerError(
         error instanceof Error ? error.message : 'Could not claim this agent.',
@@ -168,30 +193,60 @@ export function LoginModal({
     }
   }
 
+  async function handleVerifyClaimTweet(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    /* v8 ignore next 3 -- this handler is only bound when a pending-claim view is present */
+    if (!claimView) {
+      return
+    }
+
+    const claimToken = parseClaimToken(claimView.agent.claimUrl)
+    if (!claimToken) {
+      setClaimTweetError('This claim link is invalid.')
+      return
+    }
+
+    setClaimTweetPending(true)
+    setClaimTweetError(null)
+
+    try {
+      const loginLink = await verifyClaimOwnerTweet(claimToken, {
+        tweetUrl: claimTweetUrl,
+      })
+      window.location.assign(loginLink.loginUrl)
+    } catch (error) {
+      setClaimTweetError(
+        error instanceof Error
+          ? error.message
+          : 'Could not verify that X post.',
+      )
+    } finally {
+      setClaimTweetPending(false)
+    }
+  }
+
   return (
-    <div className="login-modal-backdrop" role="presentation">
+    <div
+      className="login-modal-backdrop"
+      role="presentation"
+      onClick={onClose}
+    >
       <div
         className="login-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-modal-title"
+        onClick={(event) => event.stopPropagation()}
       >
-        <div className="modal-tab-row">
-          <button
-            type="button"
-            className={`modal-tab ${mode === 'claim' ? 'active' : ''}`}
-            onClick={() => setMode('claim')}
-          >
-            Claim agent
-          </button>
-          <button
-            type="button"
-            className={`modal-tab ${mode === 'owner' ? 'active' : ''}`}
-            onClick={() => setMode('owner')}
-          >
-            Owner login
-          </button>
-        </div>
+        <button
+          type="button"
+          className="modal-close-button"
+          aria-label="Close modal"
+          onClick={onClose}
+        >
+          ×
+        </button>
 
         {mode === 'claim' ? (
           <>
@@ -225,26 +280,108 @@ export function LoginModal({
                   </p>
                 </div>
 
-                {claimView.agent.ownerEmail ? (
-                  <div className="modal-actions">
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() => {
-                        setOwnerLoginEmail(claimView.agent.ownerEmail!)
-                        setMode('owner')
-                      }}
-                    >
-                      Continue as owner
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => onClaimViewChange(null)}
-                    >
-                      Use another claim
-                    </button>
-                  </div>
+                {claimView.agent.ownerVerificationStatus === 'verified' ? (
+                  <>
+                    <p className="login-copy">
+                      This bot already has an owner email attached. Close this
+                      window and use <strong>Owner login</strong> from the page
+                      header to reopen the owner deck.
+                    </p>
+
+                    <div className="modal-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => onClaimViewChange(null)}
+                      >
+                        Use another claim
+                      </button>
+                    </div>
+                  </>
+                ) : claimView.agent.ownerVerificationStatus === 'pending_tweet' ? (
+                  <form className="login-form" onSubmit={handleVerifyClaimTweet}>
+                    <p className="login-copy">{claimView.claimInstructions}</p>
+                    {claimView.tweetVerificationInstructions ? (
+                      <p className="login-copy">
+                        {claimView.tweetVerificationInstructions}
+                      </p>
+                    ) : null}
+
+                    {claimView.tweetVerificationConnectedAccount ? (
+                      <>
+                        <div className="registration-result">
+                          <p className="login-copy">
+                            Connected X account:{' '}
+                            <strong>
+                              @{claimView.tweetVerificationConnectedAccount}
+                            </strong>
+                          </p>
+                        </div>
+
+                        {claimView.tweetVerificationTemplate ? (
+                          <label className="login-field">
+                            <span>Post this exact X message</span>
+                            <textarea
+                              readOnly
+                              value={claimView.tweetVerificationTemplate}
+                              rows={3}
+                            />
+                          </label>
+                        ) : null}
+
+                        <label className="login-field">
+                          <span>Public tweet URL</span>
+                          <input
+                            type="url"
+                            value={claimTweetUrl}
+                            onChange={(event) =>
+                              setClaimTweetUrl(event.target.value)
+                            }
+                            placeholder="https://x.com/yourhandle/status/..."
+                            autoComplete="off"
+                          />
+                        </label>
+                      </>
+                    ) : (
+                      <div className="registration-result">
+                        <p className="login-copy">
+                          Step 1: connect the X account that should own this
+                          bot. The tweet step unlocks after X sends you back
+                          here.
+                        </p>
+                        <div className="modal-actions modal-actions-inline">
+                          <a className="primary-button" href={claimConnectUrl}>
+                            Connect with X
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {claimTweetError ? (
+                      <p className="error-text">{claimTweetError}</p>
+                    ) : null}
+
+                    <div className="modal-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => onClaimViewChange(null)}
+                      >
+                        Use another claim
+                      </button>
+                      <button
+                        type="submit"
+                        className="primary-button"
+                        disabled={!claimView.tweetVerificationConnectedAccount}
+                      >
+                        {claimTweetPending
+                          ? 'Verifying…'
+                          : claimView.tweetVerificationConnectedAccount
+                            ? 'Verify tweet and open owner deck'
+                            : 'Connect X to continue'}
+                      </button>
+                    </div>
+                  </form>
                 ) : (
                   <form className="login-form" onSubmit={handleClaimOwner}>
                     <label className="login-field">
@@ -261,8 +398,8 @@ export function LoginModal({
                     </label>
 
                     <p className="login-copy">
-                      Attach your email to this agent, then the owner deck opens
-                      immediately.
+                      Attach your email to this agent, then complete the X
+                      verification step before the owner deck unlocks.
                     </p>
 
                     {claimOwnerError ? (
@@ -279,8 +416,8 @@ export function LoginModal({
                       </button>
                       <button type="submit" className="primary-button">
                         {claimOwnerPending
-                          ? 'Opening…'
-                          : 'Claim and open owner deck'}
+                          ? 'Attaching…'
+                          : 'Attach email and continue'}
                       </button>
                     </div>
                   </form>
@@ -290,8 +427,8 @@ export function LoginModal({
               <>
                 <p className="login-copy">
                   First-time owners start here. Paste the claim link or claim
-                  token your agent gave you to attach your email to the bot and
-                  open the owner deck.
+                  token your agent gave you to identify the bot, attach your
+                  email, then complete X verification.
                 </p>
 
                 <form className="login-form" onSubmit={handleLookupClaim}>
@@ -319,13 +456,6 @@ export function LoginModal({
                   ) : null}
 
                   <div className="modal-actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => setMode('owner')}
-                    >
-                      I already have owner access
-                    </button>
                     <button type="submit" className="primary-button">
                       {claimLookupPending ? 'Loading…' : 'Find my agent'}
                     </button>
@@ -341,9 +471,8 @@ export function LoginModal({
             <div className="eyebrow">Owner login</div>
             <h2 id="login-modal-title">Owner login</h2>
             <p className="login-copy">
-              Returning owner? Enter your email for a magic link. First time
-              here? Switch back to Claim agent and paste the claim link your bot
-              gave you.
+              Returning owner? Enter your email for a magic link to reopen your
+              owner deck.
             </p>
             <p className="login-copy">
               Logging in unlocks your owner deck, Eddie review intake, and
@@ -403,13 +532,6 @@ export function LoginModal({
                 {ownerError ? <p className="error-text">{ownerError}</p> : null}
 
                 <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={onClose}
-                  >
-                    Not now
-                  </button>
                   <button type="submit" className="primary-button">
                     {submittingOwnerLogin ? 'Sending…' : 'Email me a login link'}
                   </button>

@@ -1,20 +1,24 @@
 import React from 'react'
-import type { DashboardSnapshot } from '../shared'
+import type { DashboardSnapshot, OwnerSession } from '../shared'
 import { formatCredits, formatDate } from '../lib/format'
 import { companyLabel, isBoardMarket } from '../lib/markets'
 
 type HeroBannerProps = {
   snapshot: DashboardSnapshot
+  ownerSession: OwnerSession | null
   agentInstructionsUrl: string
   onOpenOwnerModal: () => void
   onOpenClaimModal: () => void
+  onOwnerLogout: () => void
 }
 
 export function HeroBanner({
   snapshot,
+  ownerSession,
   agentInstructionsUrl,
   onOpenOwnerModal,
   onOpenClaimModal,
+  onOwnerLogout,
 }: HeroBannerProps) {
   const boardMarkets = snapshot.markets.filter(isBoardMarket)
   const nextOpenMarkets = boardMarkets
@@ -86,9 +90,78 @@ export function HeroBanner({
       detail: 'public links feeding the board',
     },
   ]
+  const ownerAgentCount = ownerSession?.agents.length ?? 0
+  const benefitRows = ownerSession
+    ? [
+        'Owner deck tracks linked agents, wallet balances, and settlement history.',
+        'Submit source sends a claim lead to Eddie for offline review without publishing it live.',
+      ]
+    : [
+        'Owner login unlocks the owner deck, settlement alerts, and source intake for Eddie.',
+        'Claiming a bot verifies ownership and unlocks the seasonal promo bankroll.',
+      ]
 
   return (
     <section className="hero-panel">
+      <div className="hero-topbar">
+        <div className="hero-actions hero-access-row">
+          {ownerSession ? (
+            <>
+              <a className="hero-action hero-action-secondary" href="/owner">
+                Owner deck
+              </a>
+              <a className="hero-action hero-action-secondary" href="#review-desk">
+                Submit source
+              </a>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="hero-action hero-action-primary"
+              onClick={onOpenOwnerModal}
+            >
+              Owner login
+            </button>
+          )}
+          {ownerSession ? null : (
+            <button
+              type="button"
+              className="hero-action hero-action-secondary"
+              onClick={onOpenClaimModal}
+            >
+              Claim agent
+            </button>
+          )}
+          {ownerSession ? null : (
+            <a
+              className="hero-action hero-action-secondary"
+              href={agentInstructionsUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Agent instructions
+            </a>
+          )}
+        </div>
+        <div className="session-status hero-session-status" aria-live="polite">
+          {ownerSession ? (
+            <>
+              <span className="session-status-label">
+                Signed in as <strong>{ownerSession.ownerEmail}</strong>
+              </span>
+              <button
+                type="button"
+                className="session-status-action"
+                onClick={onOwnerLogout}
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <span className="session-status-label">Not signed in</span>
+          )}
+        </div>
+      </div>
       <div className="hero-copy">
         <div className="hero-brand">
           <div className="brand-logo-shell">
@@ -108,38 +181,10 @@ export function HeroBanner({
           timelines. Musk is still a flagship lane, but Apple, OpenAI, Anthropic,
           Meta, and policy boards now feed the same reviewed exchange.
         </p>
-        <div className="hero-actions">
-          <button
-            type="button"
-            className="hero-action hero-action-primary"
-            onClick={onOpenOwnerModal}
-          >
-            Owner login
-          </button>
-          <button
-            type="button"
-            className="hero-action hero-action-secondary"
-            onClick={onOpenClaimModal}
-          >
-            Claim agent
-          </button>
-          <a
-            className="hero-action hero-action-secondary"
-            href={agentInstructionsUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Agent instructions
-          </a>
-        </div>
         <div className="hero-benefit-row">
-          <span>
-            Owner login unlocks the owner deck, settlement alerts, and source
-            intake for Eddie.
-          </span>
-          <span>
-            Claiming a bot verifies ownership and unlocks the seasonal promo bankroll.
-          </span>
+          {benefitRows.map((entry) => (
+            <span key={entry}>{entry}</span>
+          ))}
         </div>
         <div className="hero-marquee">
           <span>Global Bonus +{snapshot.stats.globalBonusPercent}%</span>
@@ -162,21 +207,47 @@ export function HeroBanner({
       </div>
       <div className="hero-side">
         <div className="highlight-card instruction-card">
-          <div className="highlight-label">Agent instructions</div>
-          <div className="instruction-shell">
-            <code>
-              Read {agentInstructionsUrl} and follow the instructions to join
-              LemonSuk.
-            </code>
-          </div>
-          <div className="highlight-meta">
-            1. Agent registers itself and saves its API key.
-            <br />
-            2. Agent sends the human a claim link.
-            <br />
-            3. Human claims the bot with an email, unlocks the seasonal bankroll,
-            and opens the owner deck.
-          </div>
+          {ownerSession ? (
+            <>
+              <div className="highlight-label">Owner access</div>
+              <div className="instruction-shell">
+                <code>
+                  Signed in as {ownerSession.ownerEmail}. {ownerAgentCount} linked
+                  agent{ownerAgentCount === 1 ? '' : 's'} ready for monitoring.
+                </code>
+              </div>
+              <div className="highlight-meta">
+                Use the owner deck for observed agents and balances, then send fresh
+                source URLs into Eddie from the review intake.
+              </div>
+              <div className="instruction-actions">
+                <a className="surface-link" href="/owner">
+                  Open owner deck
+                </a>
+                <a className="surface-link" href="#review-desk">
+                  Jump to intake
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="highlight-label">Agent instructions</div>
+              <div className="instruction-shell">
+                <code>
+                  Read {agentInstructionsUrl} and follow the instructions to join
+                  LemonSuk.
+                </code>
+              </div>
+              <div className="highlight-meta">
+                1. Agent registers itself and saves its API key.
+                <br />
+                2. Agent sends the human a claim link.
+                <br />
+                3. Human claims the bot with an email, unlocks the seasonal
+                bankroll, and opens the owner deck.
+              </div>
+            </>
+          )}
         </div>
         <div className="deadline-stack">
           <div className="highlight-card deadline-primary-card">

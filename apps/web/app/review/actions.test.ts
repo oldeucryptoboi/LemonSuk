@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn((url: string) => {
     throw new Error(`redirect:${url}`)
   }),
+  isReviewConsoleAvailable: vi.fn(),
   isReviewConsoleAuthorized: vi.fn(),
   updateInternalLeadStatusServer: vi.fn(),
   applyInternalLeadReviewResultServer: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('../../src/lib/internal-server-api', () => ({
+  isReviewConsoleAvailable: mocks.isReviewConsoleAvailable,
   isReviewConsoleAuthorized: mocks.isReviewConsoleAuthorized,
   updateInternalLeadStatusServer: mocks.updateInternalLeadStatusServer,
   applyInternalLeadReviewResultServer: mocks.applyInternalLeadReviewResultServer,
@@ -30,6 +32,7 @@ describe('review actions', () => {
   })
 
   it('rejects unauthorized status updates', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(false)
 
     const { applyLeadStatusAction } = await import('./actions')
@@ -41,6 +44,7 @@ describe('review actions', () => {
   })
 
   it('updates lead status and redirects back to the filtered review page', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.updateInternalLeadStatusServer.mockResolvedValue(undefined)
 
@@ -66,6 +70,7 @@ describe('review actions', () => {
   })
 
   it('normalizes blank optional status fields and preserves numeric filters in the redirect', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.updateInternalLeadStatusServer.mockResolvedValue(undefined)
 
@@ -92,6 +97,7 @@ describe('review actions', () => {
   })
 
   it('redirects immediately when the lead id is missing', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
 
     const formData = new FormData()
@@ -107,6 +113,7 @@ describe('review actions', () => {
   })
 
   it('applies manual review results and generates a run id when one is not supplied', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.applyInternalLeadReviewResultServer.mockResolvedValue(undefined)
 
@@ -146,6 +153,7 @@ describe('review actions', () => {
   })
 
   it('redirects review failures back into the console with the error message', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.applyInternalLeadReviewResultServer.mockRejectedValue(
       new Error('Linked market not found.'),
@@ -165,6 +173,7 @@ describe('review actions', () => {
   })
 
   it('redirects status update errors back into the console with the error message', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.updateInternalLeadStatusServer.mockRejectedValue(
       new Error('Lead is already resolved.'),
@@ -182,6 +191,7 @@ describe('review actions', () => {
   })
 
   it('uses the generic status failure copy for non-error throws', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.updateInternalLeadStatusServer.mockRejectedValue('bad status write')
 
@@ -197,6 +207,7 @@ describe('review actions', () => {
   })
 
   it('uses provided review fields and the generic failure copy for non-error review throws', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.applyInternalLeadReviewResultServer.mockRejectedValue('bad review write')
 
@@ -226,6 +237,7 @@ describe('review actions', () => {
   })
 
   it('defaults missing confidence to zero when applying a review', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
     mocks.applyInternalLeadReviewResultServer.mockResolvedValue(undefined)
 
@@ -244,6 +256,15 @@ describe('review actions', () => {
       expect.objectContaining({
         confidence: 0,
       }),
+    )
+  })
+
+  it('rejects operator actions when the review console backend is unavailable', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(false)
+
+    const { applyLeadStatusAction } = await import('./actions')
+    await expect(applyLeadStatusAction(new FormData())).rejects.toThrow(
+      'Review desk is unavailable.',
     )
   })
 })

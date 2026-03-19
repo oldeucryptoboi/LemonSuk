@@ -11,6 +11,7 @@ import {
   ownerEmailSetupResponseSchema,
   ownerLoginLinkSchema,
   ownerSessionSchema,
+  claimOwnerTweetVerificationInputSchema,
   humanReviewSubmissionReceiptSchema,
   type DiscussionThread,
   type AgentRegistrationInput,
@@ -239,12 +240,34 @@ export async function fetchClaimView(claimToken: string): Promise<ClaimView> {
 export async function claimAgentForOwner(
   claimToken: string,
   ownerEmail: string,
-): Promise<OwnerLoginLink> {
+): Promise<ClaimView> {
   const response = await request<unknown>(
     `${apiBasePath}/auth/claims/${claimToken}/owner`,
     {
       method: 'POST',
       body: JSON.stringify({ ownerEmail }),
+    },
+  )
+
+  return claimViewSchema.parse(response)
+}
+
+export function createClaimOwnerXConnectUrl(claimToken: string): string {
+  return `${apiBasePath}/auth/claims/${claimToken}/connect-x`
+}
+
+export async function verifyClaimOwnerTweet(
+  claimToken: string,
+  input: {
+    xHandle?: string
+    tweetUrl: string
+  },
+): Promise<OwnerLoginLink> {
+  const response = await request<unknown>(
+    `${apiBasePath}/auth/claims/${claimToken}/verify-tweet`,
+    {
+      method: 'POST',
+      body: JSON.stringify(claimOwnerTweetVerificationInputSchema.parse(input)),
     },
   )
 

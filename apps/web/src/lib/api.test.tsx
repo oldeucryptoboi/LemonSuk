@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createSeedStore } from '../../../api/src/data/seed'
 import { createDashboardSnapshot } from '../../../api/src/services/bonus'
+import { createAgentProfile, createClaimedAgent } from '../../../../test/helpers/agents'
 import {
   claimAgentForOwner,
+  createClaimOwnerXConnectUrl,
   createDashboardLiveUrl,
   createMarketDiscussionPost,
   fetchBoardFamilies,
@@ -19,6 +21,7 @@ import {
   setupAgentOwnerEmail,
   submitHumanReviewSubmission,
   subscribeToDashboard,
+  verifyClaimOwnerTweet,
   voteOnDiscussionPost,
 } from './api'
 
@@ -148,20 +151,9 @@ describe('web api client', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            agent: {
-              id: 'agent-1',
-              handle: 'deadlinebot',
-              displayName: 'Deadline Bot',
-              ownerName: 'Owner',
-              modelProvider: 'OpenAI',
+            agent: createClaimedAgent({
               biography: 'Systematic counter-bettor that tracks deadlines.',
-              ownerEmail: null,
-              ownerVerifiedAt: null,
-              createdAt: '2026-03-16T00:00:00.000Z',
-              claimUrl: '/?claim=claim_1',
-              challengeUrl: '/api/v1/auth/claims/claim_1',
-              verificationPhrase: 'busted-oracle-42',
-            },
+            }),
             apiKey: 'lsk_live_1234567890',
             verifyInstructions: 'Verify me.',
             setupOwnerEmailEndpoint: '/api/v1/auth/agents/setup-owner-email',
@@ -173,19 +165,12 @@ describe('web api client', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            agent: {
-              id: 'agent-1',
-              handle: 'deadlinebot',
-              displayName: 'Deadline Bot',
-              ownerName: 'Owner',
-              modelProvider: 'OpenAI',
+            agent: createAgentProfile({
               biography: 'Systematic counter-bettor that tracks deadlines.',
               ownerEmail: 'owner@example.com',
               ownerVerifiedAt: '2026-03-16T00:00:00.000Z',
-              createdAt: '2026-03-16T00:00:00.000Z',
-              claimUrl: '/?claim=claim_1',
-              challengeUrl: '/api/v1/auth/claims/claim_1',
-            },
+              ownerVerificationStatus: 'verified',
+            }),
             ownerLoginHint: 'Open the owner deck.',
           }),
           { status: 200 },
@@ -219,33 +204,21 @@ describe('web api client', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            agent: {
-              id: 'agent-1',
-              handle: 'deadlinebot',
-              displayName: 'Deadline Bot',
-              ownerName: 'Owner',
-              modelProvider: 'OpenAI',
+            agent: createClaimedAgent({
               biography: 'Systematic counter-bettor that tracks deadlines.',
               ownerEmail: 'owner@example.com',
-              ownerVerifiedAt: '2026-03-16T00:00:00.000Z',
-              createdAt: '2026-03-16T00:00:00.000Z',
-              claimUrl: '/?claim=claim_1',
-              challengeUrl: '/api/v1/auth/claims/claim_1',
-              verificationPhrase: 'busted-oracle-42',
-            },
+              ownerVerificationStatus: 'pending_tweet',
+              ownerVerificationCode: 'REEF-1A2B',
+              ownerVerificationXUserId: null,
+              ownerVerificationXConnectedAt: null,
+            }),
             claimInstructions: 'Confirm the phrase.',
-          }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            sessionToken: 'owner_2',
-            ownerEmail: 'owner@example.com',
-            loginUrl: '/?owner_session=owner_2',
-            expiresAt: '2026-03-18T00:00:00.000Z',
-            agentHandles: ['deadlinebot'],
+            tweetVerificationInstructions: 'Post the exact template.',
+            tweetVerificationTemplate:
+              'Claiming @deadlinebot on LemonSuk. Human verification code: REEF-1A2B',
+            tweetVerificationConnectUrl:
+              'http://localhost:8787/api/v1/auth/claims/claim_1/connect-x',
+            tweetVerificationConnectedAccount: null,
           }),
           { status: 200 },
         ),
@@ -329,9 +302,6 @@ describe('web api client', () => {
     )
     expect((await fetchClaimView('claim_1')).agent.handle).toBe('deadlinebot')
     expect(
-      (await claimAgentForOwner('claim_1', 'owner@example.com')).sessionToken,
-    ).toBe('owner_2')
-    expect(
       (await fetchMarketDiscussion('cybercab-volume-2026')).commentCount,
     ).toBe(1)
     expect(
@@ -380,21 +350,11 @@ describe('web api client', () => {
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       12,
-      '/api/v1/auth/claims/claim_1/owner',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          ownerEmail: 'owner@example.com',
-        }),
-      }),
-    )
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      13,
       '/api/v1/markets/cybercab-volume-2026/discussion',
       expect.anything(),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      14,
+      13,
       '/api/v1/markets/cybercab-volume-2026/discussion/posts',
       expect.objectContaining({
         method: 'POST',
@@ -405,7 +365,7 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      15,
+      14,
       '/api/v1/discussion/posts/post-1/vote',
       expect.objectContaining({
         method: 'POST',
@@ -414,6 +374,82 @@ describe('web api client', () => {
           apiKey: 'lsk_live_1234567890',
           captchaChallengeId: 'captcha-1',
           captchaAnswer: 'solved',
+        }),
+      }),
+    )
+  })
+
+  it('supports the claim-email attach and tweet verification flow', async () => {
+    const fetchMock = vi.mocked(fetch)
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            agent: createClaimedAgent({
+              ownerEmail: 'owner@example.com',
+              ownerVerificationStatus: 'pending_tweet',
+              ownerVerificationCode: 'REEF-1A2B',
+              ownerVerificationXHandle: 'deadlinebot_owner',
+              ownerVerificationXUserId: 'x-user-1',
+              ownerVerificationXConnectedAt: '2026-03-16T00:00:00.000Z',
+            }),
+            claimInstructions: 'Confirm the phrase.',
+            tweetVerificationInstructions: 'Post the exact template.',
+            tweetVerificationTemplate:
+              'Claiming @deadlinebot on LemonSuk. Human verification code: REEF-1A2B',
+            tweetVerificationConnectUrl:
+              'http://localhost:8787/api/v1/auth/claims/claim_1/connect-x',
+            tweetVerificationConnectedAccount: 'deadlinebot_owner',
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            sessionToken: 'owner_2',
+            ownerEmail: 'owner@example.com',
+            loginUrl: '/?owner_session=owner_2',
+            expiresAt: '2026-03-18T00:00:00.000Z',
+            agentHandles: ['deadlinebot'],
+          }),
+          { status: 200 },
+        ),
+      )
+
+    expect(
+      (await claimAgentForOwner('claim_1', 'owner@example.com')).agent
+        .ownerVerificationStatus,
+    ).toBe('pending_tweet')
+    expect(createClaimOwnerXConnectUrl('claim_1')).toBe(
+      '/api/v1/auth/claims/claim_1/connect-x',
+    )
+    expect(
+      (
+        await verifyClaimOwnerTweet('claim_1', {
+          tweetUrl: 'https://x.com/deadlinebot_owner/status/123',
+        })
+      ).sessionToken,
+    ).toBe('owner_2')
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/auth/claims/claim_1/owner',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          ownerEmail: 'owner@example.com',
+        }),
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/auth/claims/claim_1/verify-tweet',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          tweetUrl: 'https://x.com/deadlinebot_owner/status/123',
         }),
       }),
     )
