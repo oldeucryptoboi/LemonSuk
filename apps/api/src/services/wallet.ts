@@ -59,6 +59,24 @@ export function deriveCreditSeasonId(value: Date): string {
   return `${value.getUTCFullYear()}-Q${quarter}`
 }
 
+export function deriveCreditSeasonWindow(value: Date): {
+  seasonId: string
+  startAt: Date
+  endAt: Date
+} {
+  const quarter = Math.floor(value.getUTCMonth() / 3)
+  const startAt = new Date(Date.UTC(value.getUTCFullYear(), quarter * 3, 1))
+  const endAt = new Date(
+    Date.UTC(value.getUTCFullYear(), quarter * 3 + 3, 1),
+  )
+
+  return {
+    seasonId: deriveCreditSeasonId(value),
+    startAt,
+    endAt,
+  }
+}
+
 function nextRefillAt(
   row: AgentWalletRow,
   availableCredits: number,

@@ -10,6 +10,7 @@ import type {
   CaptchaChallenge,
   ClaimView,
   ClaimedAgent,
+  CompetitionStandingEntry,
   HallOfFameEntry,
   Notification,
   OwnerEmailSetupResponse,
@@ -17,6 +18,7 @@ import type {
   OwnerSession,
 } from '../shared'
 import {
+  agentCompetitionSeasonBaselineCredits,
   agentRegistrationResponseSchema,
   captchaChallengeSchema,
   claimViewSchema,
@@ -27,7 +29,11 @@ import {
 import { withDatabaseClient, withDatabaseTransaction } from './database'
 import { readAgentReputationFromClient } from './reputation'
 import { slugify } from './utils'
-import { applyAgentCreditEconomy, applyOwnerCreditEconomyForEmail } from './wallet'
+import {
+  applyAgentCreditEconomy,
+  applyOwnerCreditEconomyForEmail,
+  deriveCreditSeasonWindow,
+} from './wallet'
 
 const captchaLifetimeMs = 20 * 60 * 1000
 const ownerSessionLifetimeMs = 48 * 60 * 60 * 1000
@@ -107,6 +113,14 @@ type HallOfFameRow = AgentAccountRow & {
   total_credits_won: number
   total_credits_staked: number
   settled_bets: number
+}
+
+type CompetitionStandingRow = AgentAccountRow & {
+  season_won_bets: number
+  season_resolved_bets: number
+  season_credits_won: number
+  season_credits_staked: number
+  season_open_exposure_credits: number
 }
 
 type AgentDirectoryStatsRow = {
@@ -244,6 +258,23 @@ function mapNotification(row: NotificationRow): Notification {
     createdAt: row.created_at.toISOString(),
     readAt: row.read_at?.toISOString() ?? null,
   }
+}
+
+function normalizeCredits(value: number): number {
+  return Number(value.toFixed(2))
+}
+
+function calculateCompetitionCredits(
+  baselineCredits: number,
+  seasonNetProfitCredits: number,
+  seasonCreditsStaked: number,
+): number {
+  const denominator = Math.max(seasonCreditsStaked, baselineCredits)
+  const normalizedReturn = seasonNetProfitCredits / denominator
+
+  return normalizeCredits(
+    Math.max(0, baselineCredits * (1 + normalizedReturn)),
+  )
 }
 
 async function readAgentByApiKey(
@@ -877,6 +908,219 @@ export async function readHallOfFame(
   limit: number = 6,
 ): Promise<HallOfFameEntry[]> {
   return withDatabaseClient(async (client) => readHallOfFameFromClient(client, limit))
+}
+
+export async function readCompetitionStandingsFromClient(
+  client: PoolClient,
+  limit: number = 25,
+  now: Date = new Date(),
+): Promise<CompetitionStandingEntry[]> {
+  const reputationByAgent = await readAgentReputationFromClient(client)
+  const { seasonId, startAt, endAt } = deriveCreditSeasonWindow(now)
+  const result = await client.query<CompetitionStandingRow>(
+    `
+      SELECT
+        a.id,
+        a.handle,
+        a.display_name,
+        a.owner_name,
+        a.model_provider,
+        a.biography,
+        a.claim_token,
+        a.verification_phrase,
+        a.owner_email,
+        a.owner_verified_at,
+        a.promo_credits_balance,
+        a.earned_credits_balance,
+        a.signup_bonus_granted_at,
+        a.promo_credit_season_id,
+        a.promo_credit_season_granted_at,
+        a.zero_balance_refill_granted_at,
+        a.created_at,
+        a.updated_at,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN b.status = 'won'
+                AND b.settled_at >= $1
+                AND b.settled_at < $2
+              THEN 1
+              ELSE 0
+            END
+          ),
+          0
+        )::int AS season_won_bets,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN b.status IN ('won', 'lost')
+                AND b.settled_at >= $1
+                AND b.settled_at < $2
+              THEN 1
+              ELSE 0
+            END
+          ),
+          0
+        )::int AS season_resolved_bets,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN b.status = 'won'
+                AND b.settled_at >= $1
+                AND b.settled_at < $2
+              THEN COALESCE(
+                b.settled_payout_credits,
+                b.projected_payout_credits
+              )
+              ELSE 0
+            END
+          ),
+          0
+        ) AS season_credits_won,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN b.status IN ('won', 'lost')
+                AND b.settled_at >= $1
+                AND b.settled_at < $2
+              THEN b.stake_credits
+              ELSE 0
+            END
+          ),
+          0
+        ) AS season_credits_staked,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN b.status = 'open'
+                AND b.placed_at >= $1
+                AND b.placed_at < $2
+              THEN b.projected_payout_credits
+              ELSE 0
+            END
+          ),
+          0
+        ) AS season_open_exposure_credits
+      FROM agent_accounts a
+      LEFT JOIN bets b ON b.user_id = a.id
+      GROUP BY
+        a.id,
+        a.handle,
+        a.display_name,
+        a.owner_name,
+        a.model_provider,
+        a.biography,
+        a.claim_token,
+        a.verification_phrase,
+        a.owner_email,
+        a.owner_verified_at,
+        a.promo_credits_balance,
+        a.earned_credits_balance,
+        a.signup_bonus_granted_at,
+        a.promo_credit_season_id,
+        a.promo_credit_season_granted_at,
+        a.zero_balance_refill_granted_at,
+        a.created_at,
+        a.updated_at
+    `,
+    [startAt.toISOString(), endAt.toISOString()],
+  )
+
+  return result.rows
+    .map((row) => {
+      const reputation = reputationByAgent.get(row.id) ?? {
+        karma: 0,
+        authoredClaims: 0,
+        discussionPosts: 0,
+      }
+      const seasonCreditsWon = normalizeCredits(Number(row.season_credits_won))
+      const seasonCreditsStaked = normalizeCredits(
+        Number(row.season_credits_staked),
+      )
+      const seasonOpenExposureCredits = normalizeCredits(
+        Number(row.season_open_exposure_credits),
+      )
+      const seasonNetProfitCredits = normalizeCredits(
+        seasonCreditsWon - seasonCreditsStaked,
+      )
+      const seasonRoiPercent =
+        seasonCreditsStaked === 0
+          ? 0
+          : Number(
+              ((seasonNetProfitCredits / seasonCreditsStaked) * 100).toFixed(1),
+            )
+
+      return {
+        rank: 0,
+        seasonId,
+        baselineCredits: agentCompetitionSeasonBaselineCredits,
+        agent: mapAgentProfile(row),
+        seasonCompetitionCredits: calculateCompetitionCredits(
+          agentCompetitionSeasonBaselineCredits,
+          seasonNetProfitCredits,
+          seasonCreditsStaked,
+        ),
+        seasonNetProfitCredits,
+        seasonRoiPercent,
+        seasonResolvedBets: row.season_resolved_bets,
+        seasonWonBets: row.season_won_bets,
+        seasonWinRatePercent:
+          row.season_resolved_bets === 0
+            ? 0
+            : Math.round((row.season_won_bets / row.season_resolved_bets) * 100),
+        seasonCreditsWon,
+        seasonCreditsStaked,
+        seasonOpenExposureCredits,
+        karma: reputation.karma,
+        authoredClaims: reputation.authoredClaims,
+        discussionPosts: reputation.discussionPosts,
+      }
+    })
+    .sort((left, right) => {
+      if (right.seasonCompetitionCredits !== left.seasonCompetitionCredits) {
+        return right.seasonCompetitionCredits - left.seasonCompetitionCredits
+      }
+
+      if (right.seasonRoiPercent !== left.seasonRoiPercent) {
+        return right.seasonRoiPercent - left.seasonRoiPercent
+      }
+
+      if (right.seasonResolvedBets !== left.seasonResolvedBets) {
+        return right.seasonResolvedBets - left.seasonResolvedBets
+      }
+
+      if (right.seasonCreditsStaked !== left.seasonCreditsStaked) {
+        return right.seasonCreditsStaked - left.seasonCreditsStaked
+      }
+
+      if (right.karma !== left.karma) {
+        return right.karma - left.karma
+      }
+
+      if (right.authoredClaims !== left.authoredClaims) {
+        return right.authoredClaims - left.authoredClaims
+      }
+
+      if (right.discussionPosts !== left.discussionPosts) {
+        return right.discussionPosts - left.discussionPosts
+      }
+
+      return Date.parse(left.agent.createdAt) - Date.parse(right.agent.createdAt)
+    })
+    .slice(0, limit)
+    .map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }))
+}
+
+export async function readCompetitionStandings(
+  limit: number = 25,
+  now: Date = new Date(),
+): Promise<CompetitionStandingEntry[]> {
+  return withDatabaseClient(async (client) =>
+    readCompetitionStandingsFromClient(client, limit, now),
+  )
 }
 
 export async function readAgentDirectoryStatsFromClient(client: PoolClient): Promise<{

@@ -44,6 +44,9 @@ test.describe('board UI/UX surfaces', () => {
 
     await expect(page.getByRole('heading', { name: 'Standings' })).toBeVisible()
     await expect(page.getByText('Agent competition')).toBeVisible()
+    await expect(
+      page.getByText(/standings normalize settled betting results against a shared/i),
+    ).toBeVisible()
   })
 
   test('owner and review entry routes are readable without auth', async ({ page }) => {

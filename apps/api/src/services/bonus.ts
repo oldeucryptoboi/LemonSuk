@@ -1,5 +1,6 @@
 import type {
   BetSlip,
+  CompetitionStandingEntry,
   DashboardSnapshot,
   DashboardStats,
   HallOfFameEntry,
@@ -117,6 +118,7 @@ export function createDashboardSnapshot(
     registeredAgents: 0,
     humanVerifiedAgents: 0,
   },
+  competitionStandings: CompetitionStandingEntry[] = [],
 ): DashboardSnapshot {
   const markets = sortMarkets(store.markets).map((market) =>
     enrichMarketForBoard(market, store, now),
@@ -132,6 +134,7 @@ export function createDashboardSnapshot(
       (notification) => notification.createdAt,
     ),
     hallOfFame,
+    competitionStandings,
     metadata: store.metadata,
   })
 }

@@ -11,6 +11,10 @@ describe('route helpers', () => {
     const readHallOfFameFromClient = vi.fn(async () => [
       'hall-entry-from-client',
     ])
+    const readCompetitionStandings = vi.fn(async () => ['competition-entry'])
+    const readCompetitionStandingsFromClient = vi.fn(async () => [
+      'competition-entry-from-client',
+    ])
     const readAgentDirectoryStats = vi.fn(async () => ({
       registeredAgents: 4,
       humanVerifiedAgents: 3,
@@ -71,6 +75,8 @@ describe('route helpers', () => {
       sendOwnerLoginLinkEmail,
     }))
     vi.doMock('../services/identity', () => ({
+      readCompetitionStandings,
+      readCompetitionStandingsFromClient,
       readHallOfFame,
       readHallOfFameFromClient,
       readAgentDirectoryStats,
@@ -118,6 +124,7 @@ describe('route helpers', () => {
     })
     expect(deliverPendingNotificationEmails).toHaveBeenCalledTimes(1)
     expect(readHallOfFame).toHaveBeenCalledTimes(1)
+    expect(readCompetitionStandings).toHaveBeenCalledTimes(1)
     expect(readAgentDirectoryStats).toHaveBeenCalledTimes(1)
     expect(readDiscussionStats).toHaveBeenCalledTimes(1)
     expect(createDashboardSnapshot).toHaveBeenCalledWith(
@@ -141,6 +148,7 @@ describe('route helpers', () => {
         registeredAgents: 4,
         humanVerifiedAgents: 3,
       },
+      ['competition-entry'],
     )
     expect(
       await helpers.createOperationalSnapshot(
@@ -152,6 +160,7 @@ describe('route helpers', () => {
       stats: { totalMarkets: 0 },
     })
     expect(readHallOfFameFromClient).toHaveBeenCalledTimes(1)
+    expect(readCompetitionStandingsFromClient).toHaveBeenCalledTimes(1)
     expect(readAgentDirectoryStatsFromClient).toHaveBeenCalledTimes(1)
     expect(readDiscussionStatsFromClient).toHaveBeenCalledTimes(1)
     expect(deliverPendingNotificationEmails).toHaveBeenCalledTimes(1)
@@ -176,6 +185,7 @@ describe('route helpers', () => {
         registeredAgents: 5,
         humanVerifiedAgents: 4,
       },
+      ['competition-entry-from-client'],
     )
 
     await helpers.dispatchOwnerLoginLink({
@@ -220,6 +230,8 @@ describe('route helpers', () => {
       sendOwnerLoginLinkEmail,
     }))
     vi.doMock('../services/identity', () => ({
+      readCompetitionStandings: vi.fn(async () => []),
+      readCompetitionStandingsFromClient: vi.fn(async () => []),
       readHallOfFame: vi.fn(async () => []),
       readHallOfFameFromClient: vi.fn(async () => []),
       readAgentDirectoryStats: vi.fn(async () => ({

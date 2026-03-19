@@ -705,6 +705,25 @@ export const hallOfFameEntrySchema = z.object({
   winRatePercent: z.number().nonnegative(),
 })
 
+export const competitionStandingEntrySchema = z.object({
+  rank: z.number().int().positive(),
+  seasonId: z.string(),
+  baselineCredits: z.number().nonnegative(),
+  agent: agentProfileSchema,
+  seasonCompetitionCredits: z.number().nonnegative(),
+  seasonNetProfitCredits: z.number(),
+  seasonRoiPercent: z.number(),
+  seasonResolvedBets: z.number().int().nonnegative(),
+  seasonWonBets: z.number().int().nonnegative(),
+  seasonWinRatePercent: z.number().nonnegative(),
+  seasonCreditsWon: z.number().nonnegative(),
+  seasonCreditsStaked: z.number().nonnegative(),
+  seasonOpenExposureCredits: z.number().nonnegative(),
+  karma: z.number().int().nonnegative(),
+  authoredClaims: z.number().int().nonnegative(),
+  discussionPosts: z.number().int().nonnegative(),
+})
+
 export const dashboardSnapshotSchema = z.object({
   now: z.string(),
   stats: dashboardStatsSchema,
@@ -712,6 +731,7 @@ export const dashboardSnapshotSchema = z.object({
   bets: z.array(betSlipSchema),
   notifications: z.array(notificationSchema),
   hallOfFame: z.array(hallOfFameEntrySchema),
+  competitionStandings: z.array(competitionStandingEntrySchema).default([]),
   metadata: storeMetadataSchema,
 })
 
@@ -787,6 +807,9 @@ export type CandidateMarket = z.infer<typeof candidateMarketSchema>
 export type DiscoveryReport = z.infer<typeof discoveryReportSchema>
 export type DashboardStats = z.infer<typeof dashboardStatsSchema>
 export type HallOfFameEntry = z.infer<typeof hallOfFameEntrySchema>
+export type CompetitionStandingEntry = z.infer<
+  typeof competitionStandingEntrySchema
+>
 export type MarketResolutionInput = z.infer<typeof marketResolutionInputSchema>
 export type DashboardSnapshot = z.infer<typeof dashboardSnapshotSchema>
 export type BoardFamilySummary = z.infer<typeof boardFamilySummarySchema>

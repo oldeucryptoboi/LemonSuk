@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import { createSeedStore } from '../data/seed'
-import type { HallOfFameEntry, StoreData } from '../shared'
+import type {
+  CompetitionStandingEntry,
+  HallOfFameEntry,
+  StoreData,
+} from '../shared'
 import { supportMarketId } from '../shared'
 import {
   calculateGlobalBonus,
@@ -45,6 +49,26 @@ describe('bonus services', () => {
         winRatePercent: 100,
       },
     ]
+    const competitionStandings: CompetitionStandingEntry[] = [
+      {
+        rank: 1,
+        seasonId: '2026-Q1',
+        baselineCredits: 100,
+        agent: hallOfFame[0]!.agent,
+        seasonCompetitionCredits: 118,
+        seasonNetProfitCredits: 18,
+        seasonRoiPercent: 18,
+        seasonResolvedBets: 3,
+        seasonWonBets: 2,
+        seasonWinRatePercent: 67,
+        seasonCreditsWon: 42,
+        seasonCreditsStaked: 24,
+        seasonOpenExposureCredits: 12,
+        karma: 12,
+        authoredClaims: 2,
+        discussionPosts: 2,
+      },
+    ]
     const stats = createDashboardStats(store, {
       registeredAgents: 3,
       humanVerifiedAgents: 2,
@@ -60,6 +84,7 @@ describe('bonus services', () => {
         registeredAgents: 3,
         humanVerifiedAgents: 2,
       },
+      competitionStandings,
     )
 
     expect(stats.totalMarkets).toBe(
@@ -74,6 +99,7 @@ describe('bonus services', () => {
     expect(snapshot.markets[0]?.oddsCommentary?.length).toBeGreaterThan(0)
     expect(snapshot.notifications).toEqual([])
     expect(snapshot.hallOfFame).toEqual(hallOfFame)
+    expect(snapshot.competitionStandings).toEqual(competitionStandings)
 
     const emptyStats = createDashboardStats({
       markets: [],

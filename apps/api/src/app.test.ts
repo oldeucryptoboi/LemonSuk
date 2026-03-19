@@ -45,6 +45,7 @@ describe('app routes', () => {
         (market) => market.id !== supportMarketId,
       ).length,
     )
+    expect(Array.isArray(dashboardResponse.body.competitionStandings)).toBe(true)
     const resolvedMarketsBefore = dashboardResponse.body.stats.resolvedMarkets
 
     const closedBetResponse = await request(app).post('/api/v1/bets').send({
@@ -412,6 +413,7 @@ describe('app routes', () => {
     )
     expect(maintenanceResponse.statusCode).toBe(200)
     expect(maintenanceResponse.body.hallOfFame.length).toBeGreaterThanOrEqual(1)
+    expect(maintenanceResponse.body.competitionStandings.length).toBeGreaterThanOrEqual(1)
 
     await context.pool.end()
   }, 10_000)

@@ -11,6 +11,8 @@ import {
   sendOwnerLoginLinkEmail,
 } from '../services/email'
 import {
+  readCompetitionStandingsFromClient,
+  readCompetitionStandings,
   readAgentDirectoryStatsFromClient,
   readAgentDirectoryStats,
   readHallOfFameFromClient,
@@ -45,14 +47,17 @@ export async function createOperationalSnapshot(
   if (!client && options.deliverEmails !== false) {
     await deliverPendingNotificationEmails()
   }
-  const [hallOfFame, agentDirectoryStats, discussionStats] = client
+  const [hallOfFame, competitionStandings, agentDirectoryStats, discussionStats] =
+    client
     ? await Promise.all([
         readHallOfFameFromClient(client),
+        readCompetitionStandingsFromClient(client, 25, now),
         readAgentDirectoryStatsFromClient(client),
         readDiscussionStatsFromClient(client),
       ])
     : await Promise.all([
         readHallOfFame(),
+        readCompetitionStandings(25, now),
         readAgentDirectoryStats(),
         readDiscussionStats(),
       ])
@@ -73,6 +78,7 @@ export async function createOperationalSnapshot(
     now,
     hallOfFame,
     agentDirectoryStats,
+    competitionStandings,
   )
 }
 
