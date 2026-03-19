@@ -17,7 +17,8 @@ test.describe('detail routes', () => {
     await expect(
       page.getByRole('heading', { name: /DOGE produces \$150 billion/i }),
     ).toBeVisible()
-    await expect(page.getByText('Pricing')).toBeVisible()
+    await expect(page.getByText('Current line')).toBeVisible()
+    await expect(page.getByText('Book limits')).toBeVisible()
     await expect(page.getByText('Sources')).toBeVisible()
     await expect(page.getByText('Related groups')).toBeVisible()
     await expect(page.getByText('Related markets')).toBeVisible()
