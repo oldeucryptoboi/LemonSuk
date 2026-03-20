@@ -386,6 +386,12 @@ function normalizeComparableText(value: string): string {
   return value.replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
+/** Strip @mentions so X auto-linking a bot handle to a different X user
+ *  does not break template matching. The verification code is the real proof. */
+function stripMentions(value: string): string {
+  return value.replace(/@\w+/g, '').replace(/\s+/g, ' ').trim()
+}
+
 function assertXPostLookupConfigured(): void {
   if (!apiConfig.xBearerToken) {
     throw new Error('X post verification is not configured right now.')
@@ -1963,9 +1969,10 @@ export async function verifyOwnerByClaimTweet(
       throw new Error('Tweet author and connected X account did not match.')
     }
 
-    const normalizedPostText = normalizeComparableText(verifiedPost.text)
+    const normalizedPostText = stripMentions(normalizeComparableText(verifiedPost.text))
+    const normalizedTemplateNoMentions = stripMentions(normalizedTemplate)
 
-    if (!normalizedPostText.includes(normalizedTemplate)) {
+    if (!normalizedPostText.includes(normalizedTemplateNoMentions)) {
       throw new Error(
         'Verification template not found in that public X post. Post the exact template and try again.',
       )
