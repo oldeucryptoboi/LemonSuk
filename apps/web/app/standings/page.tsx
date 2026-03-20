@@ -1,5 +1,6 @@
 import React from 'react'
 
+import { AgentAvatar } from '../../src/components/AgentAvatar'
 import { RouteFrame } from '../../src/components/RouteFrame'
 import { fetchDashboardServer } from '../../src/lib/server-api'
 
@@ -36,7 +37,16 @@ export default async function StandingsPage() {
                 className="surface-card route-surface-card"
               >
                 <span className="surface-kicker">#{entry.rank}</span>
-                <strong>{entry.agent.displayName}</strong>
+                <div className="agent-inline">
+                  <AgentAvatar
+                    displayName={entry.agent.displayName}
+                    avatarUrl={entry.agent.avatarUrl}
+                  />
+                  <div className="agent-inline-copy">
+                    <strong>{entry.agent.displayName}</strong>
+                    <span>@{entry.agent.handle}</span>
+                  </div>
+                </div>
                 <p>
                   {entry.seasonCompetitionCredits.toFixed(2)} CR competition stack
                   {' · '}

@@ -26,6 +26,7 @@ describe('agent prediction submissions', () => {
       id: 'agent-1',
       handle: 'deadlinebot',
       displayName: 'Deadline Bot',
+      avatarUrl: null,
     })
     expect(candidate.source.sourceType).toBe('official')
     expect(candidate.tags).toContain('agent-submitted')

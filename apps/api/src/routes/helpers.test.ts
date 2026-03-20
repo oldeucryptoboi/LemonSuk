@@ -66,12 +66,14 @@ describe('route helpers', () => {
     const createDashboardSnapshot = vi.fn(() => ({
       stats: { totalMarkets: 0 },
     }))
+    const sendClaimOwnerEmailVerificationEmail = vi.fn(async () => true)
     const sendOwnerLoginLinkEmail = vi.fn(async () => true)
     const publishDashboardSnapshot = vi.fn(() => true)
     const loadMaintainedStore = vi.fn(async () => store)
 
     vi.doMock('../services/email', () => ({
       deliverPendingNotificationEmails,
+      sendClaimOwnerEmailVerificationEmail,
       sendOwnerLoginLinkEmail,
     }))
     vi.doMock('../services/identity', () => ({
@@ -194,6 +196,12 @@ describe('route helpers', () => {
       expiresAt: '2026-03-18T00:00:00.000Z',
       agentHandles: ['deadlinebot'],
     })
+    await helpers.dispatchClaimOwnerEmailVerification({
+      claimUrl: '/api/v1/auth/claim-email/verify?token=claimmail_1',
+      ownerEmail: 'owner@example.com',
+      expiresAt: '2026-03-18T00:00:00.000Z',
+      agentHandle: 'deadlinebot',
+    })
     expect(
       helpers.publishOperationalSnapshot({
         stats: { totalMarkets: 0 },
@@ -215,6 +223,7 @@ describe('route helpers', () => {
       stats: { totalMarkets: 0 },
     })
     expect(sendOwnerLoginLinkEmail).toHaveBeenCalledTimes(1)
+    expect(sendClaimOwnerEmailVerificationEmail).toHaveBeenCalledTimes(1)
     expect(loadMaintainedStore).toHaveBeenCalledTimes(2)
     expect(deliverPendingNotificationEmails).toHaveBeenCalledTimes(1)
     expect(publishDashboardSnapshot).toHaveBeenCalledTimes(2)
@@ -270,5 +279,60 @@ describe('route helpers', () => {
       }),
     ).rejects.toThrow('Owner login email could not be delivered right now.')
     expect(sendOwnerLoginLinkEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws when claim email verification delivery fails', async () => {
+    vi.resetModules()
+
+    const sendClaimOwnerEmailVerificationEmail = vi.fn(async () => false)
+
+    vi.doMock('../services/email', () => ({
+      deliverPendingNotificationEmails: vi.fn(async () => 0),
+      sendClaimOwnerEmailVerificationEmail,
+      sendOwnerLoginLinkEmail: vi.fn(async () => true),
+    }))
+    vi.doMock('../services/identity', () => ({
+      readCompetitionStandings: vi.fn(async () => []),
+      readCompetitionStandingsFromClient: vi.fn(async () => []),
+      readHallOfFame: vi.fn(async () => []),
+      readHallOfFameFromClient: vi.fn(async () => []),
+      readAgentDirectoryStats: vi.fn(async () => ({
+        registeredAgents: 0,
+        humanVerifiedAgents: 0,
+      })),
+      readAgentDirectoryStatsFromClient: vi.fn(async () => ({
+        registeredAgents: 0,
+        humanVerifiedAgents: 0,
+      })),
+    }))
+    vi.doMock('../services/discussion', () => ({
+      readDiscussionStats: vi.fn(async () => new Map()),
+      readDiscussionStatsFromClient: vi.fn(async () => new Map()),
+    }))
+    vi.doMock('../services/bonus', () => ({
+      createDashboardSnapshot: vi.fn(() => ({
+        stats: { totalMarkets: 0 },
+      })),
+    }))
+    vi.doMock('../services/live-updates', () => ({
+      publishDashboardSnapshot: vi.fn(() => true),
+    }))
+    vi.doMock('../services/maintenance', () => ({
+      loadMaintainedStore: vi.fn(async () => createSeedStore()),
+    }))
+
+    const helpers = await import('./helpers')
+
+    await expect(
+      helpers.dispatchClaimOwnerEmailVerification({
+        claimUrl: '/api/v1/auth/claim-email/verify?token=claimmail_1',
+        ownerEmail: 'owner@example.com',
+        expiresAt: '2026-03-18T00:00:00.000Z',
+        agentHandle: 'deadlinebot',
+      }),
+    ).rejects.toThrow(
+      'Claim verification email could not be delivered right now.',
+    )
+    expect(sendClaimOwnerEmailVerificationEmail).toHaveBeenCalledTimes(1)
   })
 })

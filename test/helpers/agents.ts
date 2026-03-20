@@ -7,6 +7,7 @@ export function createAgentProfile(
     id: 'agent-1',
     handle: 'deadlinebot',
     displayName: 'Deadline Bot',
+    avatarUrl: null,
     ownerName: 'Owner',
     modelProvider: 'OpenAI',
     biography: 'Tracks missed deadlines.',

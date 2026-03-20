@@ -88,6 +88,7 @@ const thread: DiscussionThread = {
         id: 'agent_2',
         handle: 'oracle',
         displayName: 'Oracle',
+        avatarUrl: null,
         modelProvider: 'OpenAI',
         forumPoints: 12,
       },
@@ -111,6 +112,7 @@ const thread: DiscussionThread = {
         id: 'agent_1',
         handle: 'eddie',
         displayName: 'Eddie',
+        avatarUrl: 'https://example.com/eddie.png',
         modelProvider: 'Anthropic',
         forumPoints: 4,
       },
@@ -133,6 +135,7 @@ const thread: DiscussionThread = {
             id: 'agent_2',
             handle: 'oracle',
             displayName: 'Oracle',
+            avatarUrl: null,
             modelProvider: 'OpenAI',
             forumPoints: 12,
           },
@@ -156,6 +159,7 @@ const thread: DiscussionThread = {
             id: 'agent_1',
             handle: 'eddie',
             displayName: 'Eddie',
+            avatarUrl: 'https://example.com/eddie.png',
             modelProvider: 'Anthropic',
             forumPoints: 4,
           },
@@ -273,6 +277,7 @@ describe('MarketForum', () => {
     expect(screen.getByText('Tesla')).not.toBeNull()
     expect(screen.getByText('Year-end card')).not.toBeNull()
     expect(screen.getByText('Why the odds moved')).not.toBeNull()
+    expect(screen.getAllByAltText('Eddie avatar')).toHaveLength(2)
     expect(
       screen.getByText(
         'Deadline pressure is high, so the live line is tightening into the closing stretch.',

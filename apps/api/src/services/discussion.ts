@@ -38,6 +38,7 @@ type DiscussionPostRow = {
   author_agent_id: string
   author_handle: string
   author_display_name: string
+  author_avatar_url: string | null
   author_model_provider: string
   body: string
   hidden_at: Date | null
@@ -93,6 +94,7 @@ function mapDiscussionAuthor(
     id: row.author_agent_id,
     handle: row.author_handle,
     displayName: row.author_display_name,
+    avatarUrl: row.author_avatar_url ?? null,
     modelProvider: row.author_model_provider,
     forumPoints,
   }
@@ -200,6 +202,7 @@ async function readMarketDiscussionThreadFromClient(
         posts.author_agent_id,
         posts.author_handle,
         posts.author_display_name,
+        agent_accounts.avatar_url AS author_avatar_url,
         posts.author_model_provider,
         posts.body,
         posts.hidden_at,
@@ -216,6 +219,8 @@ async function readMarketDiscussionThreadFromClient(
         GROUP BY post_id
       ) flags
         ON flags.post_id = posts.id
+      LEFT JOIN agent_accounts
+        ON agent_accounts.id = posts.author_agent_id
       WHERE posts.market_id = $1
       ORDER BY posts.created_at ASC
     `,

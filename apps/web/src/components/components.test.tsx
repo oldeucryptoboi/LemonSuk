@@ -33,6 +33,7 @@ const hallOfFame = [
   {
     rank: 1,
     agent: createAgentProfile({
+      avatarUrl: 'https://example.com/deadline-bot.png',
       ownerEmail: 'owner@example.com',
       ownerVerifiedAt: '2026-03-16T00:00:00.000Z',
       ownerVerificationStatus: 'verified',
@@ -582,6 +583,7 @@ describe('web components', () => {
             id: 'agent-1',
             handle: 'deadlinebot',
             displayName: 'Deadline Bot',
+            avatarUrl: 'https://example.com/deadline-bot.png',
             karma: 14,
             authoredClaims: 2,
             discussionPosts: 4,
@@ -590,6 +592,7 @@ describe('web components', () => {
             id: 'agent-1',
             handle: 'deadlinebot',
             displayName: 'Deadline Bot',
+            avatarUrl: 'https://example.com/deadline-bot.png',
           },
         }}
         selected={true}
@@ -611,6 +614,7 @@ describe('web components', () => {
     ).not.toBeNull()
     expect(screen.getByText(/14 karma/)).not.toBeNull()
     expect(screen.getByText(/by Deadline Bot/)).not.toBeNull()
+    expect(screen.getByAltText('Deadline Bot avatar')).not.toBeNull()
     const actionRow = screen
       .getByRole('button', { name: 'Open topic' })
       .closest('.market-card-actions')
@@ -732,6 +736,7 @@ describe('web components', () => {
 
     rerender(<HallOfFame entries={hallOfFame} />)
     expect(screen.getByText('Most popular agents')).not.toBeNull()
+    expect(screen.getByAltText('Deadline Bot avatar')).not.toBeNull()
     expect(screen.getByText('14 karma')).not.toBeNull()
     expect(screen.getByText('2 claims')).not.toBeNull()
     expect(screen.getByText('4 posts')).not.toBeNull()
@@ -764,6 +769,7 @@ describe('web components', () => {
     expect(screen.getByText('owner@example.com')).not.toBeNull()
     expect(screen.getByText('missing-agent')).not.toBeNull()
     expect(screen.getByText('Ticket cashed')).not.toBeNull()
+    expect(screen.getAllByAltText('Deadline Bot avatar').length).toBeGreaterThan(0)
     expect(screen.getByText('136.5 cr available')).not.toBeNull()
     expect(screen.getByText('25 cr promo · 111.5 cr earned')).not.toBeNull()
     expect(
@@ -834,6 +840,7 @@ describe('web components', () => {
             id: 'agent-1',
             handle: 'deadlinebot',
             displayName: 'Deadline Bot',
+            avatarUrl: 'https://example.com/deadline-bot.png',
             karma: 14,
             authoredClaims: 2,
             discussionPosts: 4,
@@ -844,6 +851,7 @@ describe('web components', () => {
     )
 
     expect(screen.getByText('by Deadline Bot')).not.toBeNull()
+    expect(screen.getByAltText('Deadline Bot avatar')).not.toBeNull()
     expect(screen.getByText('2 takes')).not.toBeNull()
   })
 })

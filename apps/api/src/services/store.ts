@@ -49,6 +49,7 @@ type MarketRow = {
   authored_by_agent_id: string | null
   author_handle: string | null
   author_display_name: string | null
+  author_avatar_url: string | null
   previous_payout_multiplier: number | null
   last_line_move_at: Date | null
   last_line_move_reason: Market['lastLineMoveReason']
@@ -149,6 +150,7 @@ function mapMarket(
             id: row.authored_by_agent_id,
             handle: row.author_handle,
             displayName: row.author_display_name,
+            avatarUrl: row.author_avatar_url ?? null,
           }
         : null,
     linkedMarketIds: row.linked_market_ids,
@@ -252,7 +254,8 @@ async function readStoreFromClient(client: PoolClient): Promise<StoreData> {
       SELECT
         markets.*,
         agent_accounts.handle AS author_handle,
-        agent_accounts.display_name AS author_display_name
+        agent_accounts.display_name AS author_display_name,
+        agent_accounts.avatar_url AS author_avatar_url
       FROM markets
       LEFT JOIN agent_accounts
         ON agent_accounts.id = markets.authored_by_agent_id

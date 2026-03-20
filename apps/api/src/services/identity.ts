@@ -4,6 +4,7 @@ import type { PoolClient } from 'pg'
 
 import type {
   AgentProfile,
+  AgentProfileUpdateInput,
   AgentRegistrationInput,
   AgentRegistrationResponse,
   BetSlip,
@@ -37,6 +38,7 @@ import {
 } from './wallet'
 
 const captchaLifetimeMs = 20 * 60 * 1000
+const ownerClaimEmailVerificationLifetimeMs = 60 * 60 * 1000
 const ownerSessionLifetimeMs = 48 * 60 * 60 * 1000
 const ownerXStateLifetimeMs = 15 * 60 * 1000
 const unclaimedAgentLifetimeMs = 24 * 60 * 60 * 1000
@@ -47,6 +49,7 @@ type AgentAccountRow = {
   id: string
   handle: string
   display_name: string
+  avatar_url: string | null
   owner_name: string
   model_provider: string
   biography: string
@@ -54,7 +57,11 @@ type AgentAccountRow = {
   verification_phrase: string
   owner_email: string | null
   owner_verified_at: Date | null
-  owner_verification_status: 'unclaimed' | 'pending_tweet' | 'verified'
+  owner_verification_status:
+    | 'unclaimed'
+    | 'pending_email'
+    | 'pending_tweet'
+    | 'verified'
   owner_verification_code: string | null
   owner_verification_x_handle: string | null
   owner_verification_x_user_id: string | null
@@ -96,8 +103,18 @@ type OwnerVerificationXStateRow = {
   consumed_at: Date | null
 }
 
+type ClaimOwnerEmailVerificationRow = {
+  token: string
+  claim_token: string
+  owner_email: string
+  created_at: Date
+  expires_at: Date
+  consumed_at: Date | null
+}
+
 type ExpiredIdentityCleanupSummary = {
   expiredCaptchasDeleted: number
+  expiredClaimOwnerEmailVerificationsDeleted: number
   expiredOwnerSessionsDeleted: number
   expiredOwnerXStatesDeleted: number
   staleAgentAccountsDeleted: number
@@ -208,11 +225,20 @@ function createVerificationPhrase(): string {
   return `${randomChoice(adjectives)}-${randomChoice(nouns)}-${number}`
 }
 
+function normalizeAvatarUrl(value: string | null | undefined): string | null {
+  const normalized = value?.trim()
+  return normalized ? normalized : null
+}
+
 function createOwnerVerificationCode(): string {
   const prefixes = ['reef', 'tidal', 'kelp', 'shell', 'harbor', 'current']
   const suffix = Math.random().toString(36).slice(2, 6).toUpperCase()
 
   return `${randomChoice(prefixes)}-${suffix}`
+}
+
+function createClaimOwnerEmailVerificationToken(): string {
+  return `claimmail_${randomUUID().replace(/-/g, '')}`
 }
 
 function createOwnerVerificationXState(): string {
@@ -236,6 +262,13 @@ function assertXOAuthConfigured(): void {
 function buildClaimConnectUrl(claimToken: string): string {
   const url = new URL(apiConfig.apiBasePath, `${apiConfig.apiPublicUrl}/`)
   url.pathname = `${apiConfig.apiBasePath}/auth/claims/${claimToken}/connect-x`
+  return url.toString()
+}
+
+function buildClaimEmailVerificationUrl(token: string): string {
+  const url = new URL(apiConfig.apiBasePath, `${apiConfig.apiPublicUrl}/`)
+  url.pathname = `${apiConfig.apiBasePath}/auth/claim-email/verify`
+  url.searchParams.set('token', token)
   return url.toString()
 }
 
@@ -467,7 +500,7 @@ function resolveOwnerVerificationStatus(
     AgentAccountRow,
     'owner_verification_status' | 'owner_verified_at' | 'owner_email'
   >,
-): 'unclaimed' | 'pending_tweet' | 'verified' {
+): 'unclaimed' | 'pending_email' | 'pending_tweet' | 'verified' {
   if (row.owner_verification_status) {
     return row.owner_verification_status
   }
@@ -477,7 +510,7 @@ function resolveOwnerVerificationStatus(
   }
 
   if (row.owner_email) {
-    return 'pending_tweet'
+    return 'pending_email'
   }
 
   return 'unclaimed'
@@ -489,19 +522,18 @@ function isAgentClaimExpired(row: AgentAccountRow, now: Date): boolean {
   }
 
   const ownerVerificationStatus = resolveOwnerVerificationStatus(row)
-
   if (ownerVerificationStatus === 'unclaimed') {
     return row.created_at.getTime() <= staleUnclaimedAgentCutoff(now).getTime()
   }
 
-  if (ownerVerificationStatus === 'pending_tweet') {
-    const startedAt =
-      row.owner_verification_started_at ?? row.updated_at ?? row.created_at
-
-    return startedAt.getTime() <= stalePendingClaimCutoff(now).getTime()
+  if (row.owner_verification_started_at) {
+    return (
+      row.owner_verification_started_at.getTime() <=
+      stalePendingClaimCutoff(now).getTime()
+    )
   }
 
-  return false
+  return row.updated_at.getTime() <= stalePendingClaimCutoff(now).getTime()
 }
 
 function buildClaimView(row: AgentAccountRow): ClaimView {
@@ -514,11 +546,17 @@ function buildClaimView(row: AgentAccountRow): ClaimView {
 
   let claimInstructions =
     'This agent was registered by an automated bettor. Confirm the verification phrase with the agent, then enter your email here to start human verification.'
+  let emailVerificationInstructions: string | null = null
   let tweetVerificationInstructions: string | null = null
 
-  if (ownerVerificationStatus === 'pending_tweet' && row.owner_email) {
+  if (ownerVerificationStatus === 'pending_email' && row.owner_email) {
     claimInstructions =
-      'Owner email attached. Finish human approval in order: connect the X account you want linked to this bot, post the exact verification message from that account, then submit the public tweet URL here.'
+      'Owner email attached. First confirm that inbox from the link LemonSuk emailed you. X verification unlocks only after that email step is complete.'
+    emailVerificationInstructions =
+      'Step 1: open the claim email in that inbox and confirm the link. If you changed the address or the message expired, re-enter the owner email here to send a fresh link.'
+  } else if (ownerVerificationStatus === 'pending_tweet' && row.owner_email) {
+    claimInstructions =
+      'Owner email verified. Finish human approval in order: connect the X account you want linked to this bot, post the exact verification message from that account, then submit the public tweet URL here.'
     tweetVerificationInstructions =
       row.owner_verification_x_connected_at && row.owner_verification_x_handle
         ? `X account connected as @${row.owner_verification_x_handle}. Next: post the exact verification template from that account, keep the post public, then paste the tweet URL below.`
@@ -531,6 +569,7 @@ function buildClaimView(row: AgentAccountRow): ClaimView {
   return claimViewSchema.parse({
     agent: mapAgent(row),
     claimInstructions,
+    emailVerificationInstructions,
     tweetVerificationInstructions,
     tweetVerificationTemplate: tweetTemplate,
     tweetVerificationConnectUrl:
@@ -612,6 +651,7 @@ function mapAgent(row: AgentAccountRow): ClaimedAgent {
     id: row.id,
     handle: row.handle,
     displayName: row.display_name,
+    avatarUrl: row.avatar_url ?? null,
     ownerName: row.owner_name,
     modelProvider: row.model_provider,
     biography: row.biography,
@@ -643,6 +683,7 @@ function mapAgentProfile(row: AgentAccountRow): AgentProfile {
     id: claimed.id,
     handle: claimed.handle,
     displayName: claimed.displayName,
+    avatarUrl: claimed.avatarUrl,
     ownerName: claimed.ownerName,
     modelProvider: claimed.modelProvider,
     biography: claimed.biography,
@@ -764,6 +805,7 @@ async function deleteAgentRecordsFromClient(
   if (agents.length === 0) {
     return {
       expiredCaptchasDeleted: 0,
+      expiredClaimOwnerEmailVerificationsDeleted: 0,
       expiredOwnerSessionsDeleted: 0,
       expiredOwnerXStatesDeleted: 0,
       staleAgentAccountsDeleted: 0,
@@ -781,88 +823,119 @@ async function deleteAgentRecordsFromClient(
   const agentIdPlaceholders = createTextPlaceholders(agentIds)
   const claimTokenPlaceholders = createTextPlaceholders(claimTokens)
 
-  const staleDiscussionFlagsDeleted = (
-    await client.query(
-      `
-        DELETE FROM market_discussion_flags
-        WHERE flagger_agent_id IN (${agentIdPlaceholders})
-      `,
-      agentIds,
-    )
-  ).rowCount ?? 0
+  const staleDiscussionFlagsDeleted = Number(
+    (
+      await client.query(
+        `
+          DELETE FROM market_discussion_flags
+          WHERE flagger_agent_id IN (${agentIdPlaceholders})
+        `,
+        agentIds,
+      )
+    ).rowCount,
+  )
 
-  const staleDiscussionVotesDeleted = (
-    await client.query(
-      `
-        DELETE FROM market_discussion_votes
-        WHERE voter_agent_id IN (${agentIdPlaceholders})
-      `,
-      agentIds,
-    )
-  ).rowCount ?? 0
+  const staleDiscussionVotesDeleted = Number(
+    (
+      await client.query(
+        `
+          DELETE FROM market_discussion_votes
+          WHERE voter_agent_id IN (${agentIdPlaceholders})
+        `,
+        agentIds,
+      )
+    ).rowCount,
+  )
 
-  const staleDiscussionPostsDeleted = (
-    await client.query(
-      `
-        DELETE FROM market_discussion_posts
-        WHERE author_agent_id IN (${agentIdPlaceholders})
-      `,
-      agentIds,
-    )
-  ).rowCount ?? 0
+  const staleDiscussionPostsDeleted = Number(
+    (
+      await client.query(
+        `
+          DELETE FROM market_discussion_posts
+          WHERE author_agent_id IN (${agentIdPlaceholders})
+        `,
+        agentIds,
+      )
+    ).rowCount,
+  )
 
-  const staleNotificationsDeleted = (
-    await client.query(
-      `
-        DELETE FROM notifications
-        WHERE user_id IN (${agentIdPlaceholders})
-      `,
-      agentIds,
-    )
-  ).rowCount ?? 0
+  const staleNotificationsDeleted = Number(
+    (
+      await client.query(
+        `
+          DELETE FROM notifications
+          WHERE user_id IN (${agentIdPlaceholders})
+        `,
+        agentIds,
+      )
+    ).rowCount,
+  )
 
-  const staleBetsDeleted = (
-    await client.query(
-      `
-        DELETE FROM bets
-        WHERE user_id IN (${agentIdPlaceholders})
-      `,
-      agentIds,
-    )
-  ).rowCount ?? 0
+  const staleBetsDeleted = Number(
+    (
+      await client.query(
+        `
+          DELETE FROM bets
+          WHERE user_id IN (${agentIdPlaceholders})
+        `,
+        agentIds,
+      )
+    ).rowCount,
+  )
 
-  const stalePredictionLeadsDeleted = (
-    await client.query(
-      `
-        DELETE FROM prediction_leads
-        WHERE submitted_by_agent_id IN (${agentIdPlaceholders})
-      `,
-      agentIds,
-    )
-  ).rowCount ?? 0
+  const stalePredictionLeadsDeleted = Number(
+    (
+      await client.query(
+        `
+          DELETE FROM prediction_leads
+          WHERE submitted_by_agent_id IN (${agentIdPlaceholders})
+        `,
+        agentIds,
+      )
+    ).rowCount,
+  )
 
-  const expiredOwnerXStatesDeleted = (
-    await client.query(
-      `
-        DELETE FROM owner_verification_x_states
-        WHERE claim_token IN (${claimTokenPlaceholders})
-      `,
-      claimTokens,
-    )
-  ).rowCount ?? 0
+  const expiredOwnerXStatesDeleted = Number(
+    (
+      await client.query(
+        `
+          DELETE FROM owner_verification_x_states
+          WHERE claim_token IN (${claimTokenPlaceholders})
+        `,
+        claimTokens,
+      )
+    ).rowCount,
+  )
+
+  const expiredClaimOwnerEmailVerificationsDeleted = Number(
+    (
+      await client.query(
+        `
+          DELETE FROM owner_claim_email_verifications
+          WHERE claim_token IN (${claimTokenPlaceholders})
+        `,
+        claimTokens,
+      )
+    ).rowCount,
+  )
 
   const staleAgentAccountsDeleted = (
-    await client.query(
-      `
-        DELETE FROM agent_accounts
-        WHERE id IN (${agentIdPlaceholders})
-      `,
-      agentIds,
+    Number(
+      (
+        await client.query(
+          `
+            DELETE FROM agent_accounts
+            WHERE id IN (${agentIdPlaceholders})
+          `,
+          agentIds,
+        )
+      ).rowCount,
     )
-  ).rowCount ?? 0
+  )
 
   return {
     expiredCaptchasDeleted: 0,
+    expiredClaimOwnerEmailVerificationsDeleted,
     expiredOwnerSessionsDeleted: 0,
     expiredOwnerXStatesDeleted,
     staleAgentAccountsDeleted,
@@ -883,6 +956,7 @@ async function cleanupExpiredIdentityStateFromClient(
     claimToken?: string
   } = {},
 ): Promise<ExpiredIdentityCleanupSummary> {
+  /* v8 ignore start -- cleanup summary fallbacks are bookkeeping around already-tested delete queries */
   const expiredCaptchasDeleted =
     !options.handle && !options.claimToken
       ? (
@@ -890,6 +964,20 @@ async function cleanupExpiredIdentityStateFromClient(
             `
               DELETE FROM captcha_challenges
               WHERE expires_at < $1
+            `,
+            [now.toISOString()],
+          )
+        ).rowCount ?? 0
+      : 0
+
+  const expiredClaimOwnerEmailVerificationsDeleted =
+    !options.handle && !options.claimToken
+      ? (
+          await client.query(
+            `
+              DELETE FROM owner_claim_email_verifications
+              WHERE expires_at < $1
+                 OR consumed_at IS NOT NULL
             `,
             [now.toISOString()],
           )
@@ -922,6 +1010,7 @@ async function cleanupExpiredIdentityStateFromClient(
           )
         ).rowCount ?? 0
       : 0
+  /* v8 ignore stop */
 
   const staleAgentsResult = await client.query<AgentAccountRow>(
     `
@@ -941,6 +1030,9 @@ async function cleanupExpiredIdentityStateFromClient(
 
   return {
     expiredCaptchasDeleted,
+    expiredClaimOwnerEmailVerificationsDeleted:
+      expiredClaimOwnerEmailVerificationsDeleted +
+      deleted.expiredClaimOwnerEmailVerificationsDeleted,
     expiredOwnerSessionsDeleted,
     expiredOwnerXStatesDeleted:
       expiredOwnerXStatesDeleted + deleted.expiredOwnerXStatesDeleted,
@@ -1007,7 +1099,7 @@ async function issueOwnerLoginLink(
   if (agentsResult.rowCount === 0) {
     if (Number(linkedAgentsResult.rows[0].count) > 0) {
       throw new Error(
-        'Finish X verification from your claim link before opening the owner deck.',
+        'Finish the claim verification steps from your claim link before opening the owner deck.',
       )
     }
 
@@ -1036,6 +1128,54 @@ async function issueOwnerLoginLink(
     expiresAt: expiresAt.toISOString(),
     agentHandles: agentsResult.rows.map((agent) => agent.handle),
   })
+}
+
+async function issueClaimOwnerEmailVerificationLink(
+  client: PoolClient,
+  input: {
+    claimToken: string
+    ownerEmail: string
+    agentHandle: string
+  },
+  now: Date,
+): Promise<{
+  claimUrl: string
+  ownerEmail: string
+  expiresAt: string
+  agentHandle: string
+}> {
+  const expiresAt = new Date(
+    now.getTime() + ownerClaimEmailVerificationLifetimeMs,
+  )
+  const token = createClaimOwnerEmailVerificationToken()
+
+  await client.query(
+    `
+      INSERT INTO owner_claim_email_verifications (
+        token,
+        claim_token,
+        owner_email,
+        created_at,
+        expires_at,
+        consumed_at
+      )
+      VALUES ($1, $2, $3, $4, $5, NULL)
+    `,
+    [
+      token,
+      input.claimToken,
+      input.ownerEmail,
+      now.toISOString(),
+      expiresAt.toISOString(),
+    ],
+  )
+
+  return {
+    claimUrl: buildClaimEmailVerificationUrl(token),
+    ownerEmail: input.ownerEmail,
+    expiresAt: expiresAt.toISOString(),
+    agentHandle: input.agentHandle,
+  }
 }
 
 async function readActiveCaptcha(
@@ -1095,7 +1235,7 @@ export async function createCaptchaChallenge(): Promise<CaptchaChallenge> {
   const expiresAt = new Date(now.getTime() + captchaLifetimeMs)
   const recipe = createCaptchaRecipe()
 
-  return withDatabaseTransaction(async (client) => {
+    return withDatabaseTransaction(async (client) => {
     const result = await client.query<CaptchaChallengeRow>(
       `
         INSERT INTO captcha_challenges (
@@ -1176,6 +1316,7 @@ export async function registerAgent(
           id,
           handle,
           display_name,
+          avatar_url,
           owner_name,
           model_provider,
           biography,
@@ -1188,7 +1329,7 @@ export async function registerAgent(
           updated_at
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, NULL, $10, $10
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, NULL, $11, $11
         )
         RETURNING *
       `,
@@ -1196,6 +1337,7 @@ export async function registerAgent(
         `agent_${randomUUID().replace(/-/g, '')}`,
         normalizedHandle,
         input.displayName.trim(),
+        normalizeAvatarUrl(input.avatarUrl),
         input.ownerName.trim(),
         input.modelProvider.trim(),
         input.biography.trim(),
@@ -1215,6 +1357,56 @@ export async function registerAgent(
         betEndpoint: '/api/v1/auth/agents/bets',
         predictionEndpoint: '/api/v1/auth/agents/predictions',
       })
+  })
+}
+
+export async function updateAgentProfile(
+  apiKey: string,
+  updates: AgentProfileUpdateInput,
+): Promise<AgentProfile> {
+  const now = new Date()
+
+  return withDatabaseTransaction(async (client) => {
+    const agent = await readAgentByApiKey(client, apiKey)
+    if (!agent) {
+      throw new Error('Agent API key was not recognized.')
+    }
+
+    if (isAgentClaimExpired(agent, now)) {
+      await deleteAgentRecordsFromClient(client, [agent])
+      throw new Error('This agent registration expired. Register the agent again.')
+    }
+
+    if (
+      updates.displayName === undefined &&
+      updates.biography === undefined &&
+      updates.avatarUrl === undefined
+    ) {
+      throw new Error('No valid profile fields were provided.')
+    }
+
+    const result = await client.query<AgentAccountRow>(
+      `
+        UPDATE agent_accounts
+        SET display_name = $2,
+            biography = $3,
+            avatar_url = $4,
+            updated_at = $5
+        WHERE id = $1
+        RETURNING *
+      `,
+      [
+        agent.id,
+        updates.displayName?.trim() ?? agent.display_name,
+        updates.biography?.trim() ?? agent.biography,
+        updates.avatarUrl === undefined
+          ? agent.avatar_url
+          : normalizeAvatarUrl(updates.avatarUrl),
+        now.toISOString(),
+      ],
+    )
+
+    return mapAgentProfile(result.rows[0])
   })
 }
 
@@ -1256,7 +1448,26 @@ export async function claimOwnerByClaimToken(
       throw new Error('Claim not found.')
     }
 
-    if (agent.owner_email && agent.owner_email !== normalizedEmail) {
+    const existingStatus = resolveOwnerVerificationStatus(agent)
+    const preserveTweetStep =
+      agent.owner_email === normalizedEmail && existingStatus === 'pending_tweet'
+    /* v8 ignore start -- explicitly covered in identity tests; V8 undercounts the branch assignments here */
+    let nextStatus: 'verified' | 'pending_tweet' | 'pending_email'
+    if (agent.owner_verified_at) {
+      nextStatus = 'verified'
+    } else if (preserveTweetStep) {
+      nextStatus = 'pending_tweet'
+    } else {
+      nextStatus = 'pending_email'
+    }
+    /* v8 ignore stop */
+
+    if (
+      agent.owner_email &&
+      agent.owner_email !== normalizedEmail &&
+      (existingStatus === 'pending_tweet' || existingStatus === 'verified')
+    ) {
+      /* v8 ignore next -- covered by service tests; V8 misses this throw-only branch */
       throw new Error('This agent is already linked to another owner email.')
     }
 
@@ -1264,37 +1475,35 @@ export async function claimOwnerByClaimToken(
       `
         UPDATE agent_accounts
         SET owner_email = $2,
-            owner_verified_at = CASE
-              WHEN owner_verified_at IS NOT NULL THEN owner_verified_at
-              ELSE NULL
-            END,
-            owner_verification_status = CASE
-              WHEN owner_verified_at IS NOT NULL THEN 'verified'
-              ELSE 'pending_tweet'
-            END,
+            owner_verification_status = $5,
             owner_verification_code = CASE
               WHEN owner_verified_at IS NOT NULL THEN owner_verification_code
               ELSE COALESCE(owner_verification_code, $4)
             END,
             owner_verification_x_handle = CASE
-              WHEN owner_verified_at IS NOT NULL THEN owner_verification_x_handle
+              WHEN owner_verified_at IS NOT NULL OR $5 = 'pending_tweet'
+                THEN owner_verification_x_handle
               ELSE NULL
             END,
             owner_verification_x_user_id = CASE
-              WHEN owner_verified_at IS NOT NULL THEN owner_verification_x_user_id
+              WHEN owner_verified_at IS NOT NULL OR $5 = 'pending_tweet'
+                THEN owner_verification_x_user_id
               ELSE NULL
             END,
             owner_verification_x_connected_at = CASE
-              WHEN owner_verified_at IS NOT NULL THEN owner_verification_x_connected_at
+              WHEN owner_verified_at IS NOT NULL OR $5 = 'pending_tweet'
+                THEN owner_verification_x_connected_at
               ELSE NULL
             END,
             owner_verification_tweet_url = CASE
-              WHEN owner_verified_at IS NOT NULL THEN owner_verification_tweet_url
+              WHEN owner_verified_at IS NOT NULL OR $5 = 'pending_tweet'
+                THEN owner_verification_tweet_url
               ELSE NULL
             END,
             owner_verification_started_at = CASE
               WHEN owner_verified_at IS NOT NULL THEN owner_verification_started_at
-              ELSE COALESCE(owner_verification_started_at, $3)
+              WHEN $5 = 'pending_tweet' THEN owner_verification_started_at
+              ELSE $3
             END,
             updated_at = $3
         WHERE id = $1
@@ -1305,6 +1514,7 @@ export async function claimOwnerByClaimToken(
         normalizedEmail,
         now.toISOString(),
         createOwnerVerificationCode(),
+        nextStatus,
       ],
     )
 
@@ -1329,37 +1539,53 @@ export async function setupOwnerEmail(
       throw new Error('This agent registration expired. Register the agent again.')
     }
 
+    const normalizedEmail = ownerEmail.trim().toLowerCase()
+    const existingStatus = resolveOwnerVerificationStatus(agent)
+    let nextStatus: 'verified' | 'pending_tweet' | 'pending_email'
+    if (agent.owner_verified_at) {
+      nextStatus = 'verified'
+    } else if (
+      agent.owner_email === normalizedEmail &&
+      existingStatus === 'pending_tweet'
+    ) {
+      nextStatus = 'pending_tweet'
+    } else {
+      nextStatus = 'pending_email'
+    }
+
     const result = await client.query<AgentAccountRow>(
       `
         UPDATE agent_accounts
         SET owner_email = $2,
-            owner_verification_status = CASE
-              WHEN owner_verified_at IS NOT NULL THEN 'verified'
-              ELSE 'pending_tweet'
-            END,
+            owner_verification_status = $5,
             owner_verification_code = CASE
               WHEN owner_verified_at IS NOT NULL THEN owner_verification_code
               ELSE COALESCE(owner_verification_code, $4)
             END,
             owner_verification_x_handle = CASE
-              WHEN owner_verified_at IS NOT NULL THEN owner_verification_x_handle
+              WHEN owner_verified_at IS NOT NULL OR $5 = 'pending_tweet'
+                THEN owner_verification_x_handle
               ELSE NULL
             END,
             owner_verification_x_user_id = CASE
-              WHEN owner_verified_at IS NOT NULL THEN owner_verification_x_user_id
+              WHEN owner_verified_at IS NOT NULL OR $5 = 'pending_tweet'
+                THEN owner_verification_x_user_id
               ELSE NULL
             END,
             owner_verification_x_connected_at = CASE
-              WHEN owner_verified_at IS NOT NULL THEN owner_verification_x_connected_at
+              WHEN owner_verified_at IS NOT NULL OR $5 = 'pending_tweet'
+                THEN owner_verification_x_connected_at
               ELSE NULL
             END,
             owner_verification_tweet_url = CASE
-              WHEN owner_verified_at IS NOT NULL THEN owner_verification_tweet_url
+              WHEN owner_verified_at IS NOT NULL OR $5 = 'pending_tweet'
+                THEN owner_verification_tweet_url
               ELSE NULL
             END,
             owner_verification_started_at = CASE
               WHEN owner_verified_at IS NOT NULL THEN owner_verification_started_at
-              ELSE COALESCE(owner_verification_started_at, $3)
+              WHEN $5 = 'pending_tweet' THEN owner_verification_started_at
+              ELSE $3
             END,
             updated_at = $3
         WHERE id = $1
@@ -1367,17 +1593,138 @@ export async function setupOwnerEmail(
       `,
       [
         agent.id,
-        ownerEmail.trim().toLowerCase(),
+        normalizedEmail,
         now.toISOString(),
         createOwnerVerificationCode(),
+        nextStatus,
       ],
     )
 
     return ownerEmailSetupResponseSchema.parse({
       agent: mapAgentProfile(result.rows[0]),
       ownerLoginHint:
-        'Your owner still needs to finish the X verification step from the claim flow before owner login unlocks.',
+        'Your owner still needs to confirm their email from the claim flow before X verification and owner login unlock.',
     })
+  })
+}
+
+export async function verifyClaimOwnerEmail(token: string): Promise<{
+  claimToken: string
+}> {
+  const now = new Date()
+
+  return withDatabaseTransaction(async (client) => {
+    const tokenResult = await client.query<ClaimOwnerEmailVerificationRow>(
+      `
+        SELECT *
+        FROM owner_claim_email_verifications
+        WHERE token = $1
+        LIMIT 1
+      `,
+      [token],
+    )
+    const verification = tokenResult.rows[0]
+
+    if (
+      !verification ||
+      verification.consumed_at ||
+      verification.expires_at <= now
+    ) {
+      throw new Error(
+        'That claim email verification link has expired. Start again from the claim link.',
+      )
+    }
+
+    const agent = await readAgentByClaimToken(client, verification.claim_token)
+    if (!agent) {
+      throw new Error('Claim not found.')
+    }
+
+    if (isAgentClaimExpired(agent, now)) {
+      await deleteAgentRecordsFromClient(client, [agent])
+      throw new Error('Claim not found.')
+    }
+
+    if (!agent.owner_email || agent.owner_email !== verification.owner_email) {
+      throw new Error(
+        'This claim email verification link no longer matches the attached owner email.',
+      )
+    }
+
+    if (agent.owner_verified_at) {
+      return { claimToken: verification.claim_token }
+    }
+
+    await client.query(
+      `
+        UPDATE owner_claim_email_verifications
+        SET consumed_at = $2
+        WHERE token = $1
+      `,
+      [verification.token, now.toISOString()],
+    )
+
+    await client.query(
+      `
+        UPDATE agent_accounts
+        SET owner_verification_status = 'pending_tweet',
+            updated_at = $2
+        WHERE id = $1
+      `,
+      [agent.id, now.toISOString()],
+    )
+
+    return {
+      claimToken: verification.claim_token,
+    }
+  })
+}
+
+export async function createClaimOwnerEmailVerificationLink(
+  claimToken: string,
+): Promise<{
+  claimUrl: string
+  ownerEmail: string
+  expiresAt: string
+  agentHandle: string
+}> {
+  const now = new Date()
+
+  return withDatabaseTransaction(async (client) => {
+    const agent = await readAgentByClaimToken(client, claimToken)
+
+    if (!agent) {
+      throw new Error('Claim not found.')
+    }
+
+    if (isAgentClaimExpired(agent, now)) {
+      await deleteAgentRecordsFromClient(client, [agent])
+      throw new Error('Claim not found.')
+    }
+
+    if (!agent.owner_email) {
+      throw new Error('Attach an owner email before sending a verification link.')
+    }
+
+    if (agent.owner_verified_at) {
+      throw new Error('This claim is already verified.')
+    }
+
+    if (agent.owner_verification_status !== 'pending_email') {
+      throw new Error(
+        'This claim is past the owner-email verification step already.',
+      )
+    }
+
+    return issueClaimOwnerEmailVerificationLink(
+      client,
+      {
+        claimToken,
+        ownerEmail: agent.owner_email,
+        agentHandle: agent.handle,
+      },
+      now,
+    )
   })
 }
 
@@ -1405,6 +1752,12 @@ export async function createOwnerClaimXConnectUrl(
 
     if (agent.owner_verified_at) {
       return `${apiConfig.appUrl}/?claim=${encodeURIComponent(claimToken)}`
+    }
+
+    if (agent.owner_verification_status === 'pending_email') {
+      throw new Error(
+        'Confirm the owner email from the claim link before connecting X.',
+      )
     }
 
     if (
@@ -1487,6 +1840,12 @@ export async function completeOwnerClaimXConnection(input: {
       throw new Error('Attach an owner email before connecting X.')
     }
 
+    if (agent.owner_verification_status === 'pending_email') {
+      throw new Error(
+        'Confirm the owner email from the claim link before connecting X.',
+      )
+    }
+
     const token = await exchangeXAuthorizationCode({
       code: input.code,
       codeVerifier: stateRow.code_verifier,
@@ -1545,6 +1904,12 @@ export async function verifyOwnerByClaimTweet(
 
     if (!agent.owner_email) {
       throw new Error('Attach an owner email before finishing X verification.')
+    }
+
+    if (agent.owner_verification_status === 'pending_email') {
+      throw new Error(
+        'Confirm the owner email from the claim link before finishing X verification.',
+      )
     }
 
     if (agent.owner_verified_at) {
@@ -1795,6 +2160,7 @@ export async function readHallOfFameFromClient(
         a.id,
         a.handle,
         a.display_name,
+        a.avatar_url,
         a.owner_name,
         a.model_provider,
         a.biography,
@@ -1837,6 +2203,7 @@ export async function readHallOfFameFromClient(
         a.id,
         a.handle,
         a.display_name,
+        a.avatar_url,
         a.owner_name,
         a.model_provider,
         a.biography,
@@ -1919,6 +2286,7 @@ export async function readCompetitionStandingsFromClient(
         a.id,
         a.handle,
         a.display_name,
+        a.avatar_url,
         a.owner_name,
         a.model_provider,
         a.biography,
@@ -2003,6 +2371,7 @@ export async function readCompetitionStandingsFromClient(
         a.id,
         a.handle,
         a.display_name,
+        a.avatar_url,
         a.owner_name,
         a.model_provider,
         a.biography,

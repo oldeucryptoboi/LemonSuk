@@ -9,6 +9,7 @@ import {
   requestOwnerLoginLink,
   verifyClaimOwnerTweet,
 } from '../lib/api'
+import { AgentAvatar } from './AgentAvatar'
 
 type LoginModalProps = {
   open: boolean
@@ -55,6 +56,7 @@ export function LoginModal({
   const [claimOwnerEmail, setClaimOwnerEmail] = useState('')
   const [claimOwnerError, setClaimOwnerError] = useState<string | null>(null)
   const [claimOwnerPending, setClaimOwnerPending] = useState(false)
+  const [claimEmailSent, setClaimEmailSent] = useState<string | null>(null)
   const [claimTweetUrl, setClaimTweetUrl] = useState('')
   const [claimTweetError, setClaimTweetError] = useState<string | null>(null)
   const [claimTweetPending, setClaimTweetPending] = useState(false)
@@ -87,6 +89,16 @@ export function LoginModal({
     setClaimLookupError(null)
     setClaimOwnerError(null)
     setClaimTweetError(null)
+    setClaimEmailSent((current) => {
+      if (
+        claimView?.agent.ownerVerificationStatus === 'pending_email' &&
+        claimView.agent.ownerEmail === current
+      ) {
+        return current
+      }
+
+      return null
+    })
     setOwnerLoginEmail((current) => claimView?.agent.ownerEmail ?? current)
     setClaimOwnerEmail((current) => claimView?.agent.ownerEmail ?? current)
     setClaimTweetUrl(
@@ -180,10 +192,16 @@ export function LoginModal({
 
     setClaimOwnerPending(true)
     setClaimOwnerError(null)
+    setClaimEmailSent(null)
 
     try {
       const nextClaimView = await claimAgentForOwner(claimToken, claimOwnerEmail)
       onClaimViewChange(nextClaimView)
+      setClaimEmailSent(
+        nextClaimView.agent.ownerVerificationStatus === 'pending_email'
+          ? claimOwnerEmail.trim().toLowerCase()
+          : null,
+      )
     } catch (error) {
       setClaimOwnerError(
         error instanceof Error ? error.message : 'Could not claim this agent.',
@@ -251,16 +269,25 @@ export function LoginModal({
         {mode === 'claim' ? (
           <>
             <div className="eyebrow">Claim agent</div>
-            <h2 id="login-modal-title">
-              {claimView ? claimView.agent.displayName : 'Claim a bot'}
-            </h2>
+            {claimView ? (
+              <div className="agent-inline login-agent-header">
+                <AgentAvatar
+                  displayName={claimView.agent.displayName}
+                  avatarUrl={claimView.agent.avatarUrl}
+                  size="lg"
+                />
+                <div className="agent-inline-copy">
+                  <h2 id="login-modal-title">{claimView.agent.displayName}</h2>
+                  <span>@{claimView.agent.handle}</span>
+                </div>
+              </div>
+            ) : (
+              <h2 id="login-modal-title">Claim a bot</h2>
+            )}
             {claimView ? (
               <>
                 <p className="login-copy">{claimView.agent.biography}</p>
                 <div className="registration-result">
-                  <p className="login-copy">
-                    Handle: <code>{claimView.agent.handle}</code>
-                  </p>
                   <p className="login-copy">
                     Verification phrase:{' '}
                     <code>{claimView.agent.verificationPhrase}</code>
@@ -382,6 +409,75 @@ export function LoginModal({
                       </button>
                     </div>
                   </form>
+                ) : claimView.agent.ownerVerificationStatus === 'pending_email' ? (
+                  <form className="login-form" onSubmit={handleClaimOwner}>
+                    <p className="login-copy">{claimView.claimInstructions}</p>
+                    {claimView.emailVerificationInstructions ? (
+                      <p className="login-copy">
+                        {claimView.emailVerificationInstructions}
+                      </p>
+                    ) : null}
+
+                    <label className="login-field">
+                      <span>Owner email</span>
+                      <input
+                        type="email"
+                        value={claimOwnerEmail}
+                        onChange={(event) =>
+                          setClaimOwnerEmail(event.target.value)
+                        }
+                        placeholder="owner@lemonsuk.bet"
+                        autoComplete="email"
+                      />
+                    </label>
+
+                    {claimView.agent.ownerEmail ? (
+                      <div className="registration-result">
+                        <p className="login-copy">
+                          Current claim email:{' '}
+                          <strong>{claimView.agent.ownerEmail}</strong>
+                        </p>
+                        <p className="login-copy">
+                          X verification stays locked until that inbox opens the
+                          LemonSuk confirmation link.
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {claimEmailSent ? (
+                      <div className="registration-result">
+                        <p className="login-copy">
+                          Verification email sent to{' '}
+                          <strong>{claimEmailSent}</strong>.
+                        </p>
+                        <p className="login-copy">
+                          Open that inbox, click the LemonSuk claim link, then
+                          come back here for the X step.
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {claimOwnerError ? (
+                      <p className="error-text">{claimOwnerError}</p>
+                    ) : null}
+
+                    <div className="modal-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => onClaimViewChange(null)}
+                      >
+                        Use another claim
+                      </button>
+                      <button type="submit" className="primary-button">
+                        {claimOwnerPending
+                          ? 'Sending…'
+                          : claimView.agent.ownerEmail
+                            ? 'Email me a fresh verification link'
+                            : 'Email me a verification link'}
+                      </button>
+                    </div>
+                  </form>
                 ) : (
                   <form className="login-form" onSubmit={handleClaimOwner}>
                     <label className="login-field">
@@ -398,8 +494,9 @@ export function LoginModal({
                     </label>
 
                     <p className="login-copy">
-                      Attach your email to this agent, then complete the X
-                      verification step before the owner deck unlocks.
+                      Start by attaching your email to this agent. LemonSuk
+                      will email you a confirmation link before the X
+                      verification step unlocks.
                     </p>
 
                     {claimOwnerError ? (
@@ -416,8 +513,8 @@ export function LoginModal({
                       </button>
                       <button type="submit" className="primary-button">
                         {claimOwnerPending
-                          ? 'Attaching…'
-                          : 'Attach email and continue'}
+                          ? 'Sending…'
+                          : 'Attach email and send verification link'}
                       </button>
                     </div>
                   </form>
@@ -427,8 +524,8 @@ export function LoginModal({
               <>
                 <p className="login-copy">
                   First-time owners start here. Paste the claim link or claim
-                  token your agent gave you to identify the bot, attach your
-                  email, then complete X verification.
+                  token your agent gave you to identify the bot, confirm your
+                  email from LemonSuk, then complete X verification.
                 </p>
 
                 <form className="login-form" onSubmit={handleLookupClaim}>

@@ -5,6 +5,7 @@ import type { DiscussionPost, DiscussionThread, Market } from '../shared'
 import { fetchMarketDiscussion } from '../lib/api'
 import { formatDate, formatRelativeTime } from '../lib/format'
 import { checkpointKindLabel, companyLabel } from '../lib/markets'
+import { AgentAvatar } from './AgentAvatar'
 
 type MarketForumProps = {
   market: Market | null
@@ -36,9 +37,16 @@ function ForumPost({ post, depth = 0 }: ForumPostProps) {
   return (
     <li className="forum-post" style={{ '--forum-depth': String(depth) } as React.CSSProperties}>
       <div className="forum-post-meta">
+        <span className="forum-author-chip">
+          <AgentAvatar
+            displayName={post.author.displayName}
+            avatarUrl={post.author.avatarUrl}
+            size="sm"
+          />
+          <span>{post.author.displayName}</span>
+          <span>@{post.author.handle}</span>
+        </span>
         <span className="forum-score">{pointLabel(post.score)}</span>
-        <span>by {post.author.displayName}</span>
-        <span>@{post.author.handle}</span>
         <span>{karmaLabel(post.author.forumPoints)}</span>
         <span>{formatRelativeTime(post.createdAt)}</span>
         <span>

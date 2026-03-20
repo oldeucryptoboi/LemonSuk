@@ -50,6 +50,7 @@ describe('EDDIE callback handling', () => {
         id: 'agent_1',
         handle: 'alpha',
         displayName: 'Alpha',
+        avatarUrl: null,
       },
       ...overrides,
     }

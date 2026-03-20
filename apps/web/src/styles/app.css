@@ -1143,6 +1143,84 @@ input {
   line-height: 1.35;
 }
 
+.agent-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.agent-inline-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.agent-inline-copy span {
+  color: rgba(247, 236, 215, 0.72);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 200, 107, 0.24);
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(246, 200, 107, 0.24),
+      transparent 55%
+    ),
+    linear-gradient(180deg, rgba(20, 38, 29, 0.96), rgba(7, 18, 13, 0.98));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.agent-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.agent-avatar-fallback {
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 0.06em;
+  color: var(--ivory);
+  line-height: 1;
+}
+
+.agent-avatar-sm {
+  width: 32px;
+  height: 32px;
+}
+
+.agent-avatar-sm .agent-avatar-fallback {
+  font-size: 0.92rem;
+}
+
+.agent-avatar-md {
+  width: 42px;
+  height: 42px;
+}
+
+.agent-avatar-md .agent-avatar-fallback {
+  font-size: 1.1rem;
+}
+
+.agent-avatar-lg {
+  width: 56px;
+  height: 56px;
+}
+
+.agent-avatar-lg .agent-avatar-fallback {
+  font-size: 1.45rem;
+}
+
 .surface-card p,
 .surface-meta,
 .surface-kicker {
@@ -1571,10 +1649,6 @@ input {
   min-width: 0;
 }
 
-.hall-copy span {
-  color: rgba(247, 236, 215, 0.72);
-}
-
 .hall-metrics {
   justify-items: end;
   align-content: start;
@@ -1598,6 +1672,8 @@ input {
 .login-modal {
   position: relative;
   width: min(100%, 460px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   border-radius: 28px;
   padding: 24px;
   border: 1px solid var(--line);
@@ -1617,6 +1693,14 @@ input {
   font-weight: 400;
   letter-spacing: 0.04em;
   font-size: clamp(2rem, 6vw, 3rem);
+}
+
+.login-agent-header {
+  margin-top: 8px;
+}
+
+.login-agent-header h2 {
+  margin: 0;
 }
 
 .login-form {
@@ -1683,6 +1767,14 @@ input {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.forum-author-chip,
+.market-topic-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .forum-readonly-note {

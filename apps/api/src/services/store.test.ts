@@ -74,6 +74,7 @@ describe('store service', () => {
                   id: 'agent-1',
                   handle: 'deadlinebot',
                   displayName: 'Deadline Bot',
+                  avatarUrl: null,
                 },
                 sources: [],
                 lineHistory: [

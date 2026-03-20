@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+. ./scripts/load-local-env.sh
+
 api_pid=""
 api_health_url="${LOCAL_API_HEALTH_URL:-http://localhost:8787/api/v1/dashboard}"
 api_wait_attempts="${LOCAL_API_WAIT_ATTEMPTS:-30}"

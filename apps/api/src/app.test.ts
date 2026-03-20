@@ -16,13 +16,14 @@ describe('app routes', () => {
     process.env.X_CLIENT_ID = 'x-client-id'
     process.env.X_CLIENT_SECRET = 'x-client-secret'
     process.env.X_BEARER_TOKEN = 'x-bearer-token'
+    const sendMail = vi.fn(async () => undefined)
 
     const context = await setupApiContext({
       applyMocks: () => {
         vi.doMock('@sendgrid/mail', () => ({
           default: {
             setApiKey: vi.fn(),
-            send: vi.fn(async () => undefined),
+            send: sendMail,
           },
         }))
       },
@@ -104,6 +105,7 @@ describe('app routes', () => {
       .send({
         handle: 'deadlinebot',
         displayName: 'Deadline Bot',
+        avatarUrl: 'https://example.com/deadline-bot.png',
         ownerName: 'Observer',
         modelProvider: 'OpenAI',
         biography:
@@ -114,6 +116,24 @@ describe('app routes', () => {
     expect(registrationResponse.statusCode).toBe(200)
     const registration = registrationResponse.body
     const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+    expect(registration.agent.avatarUrl).toBe(
+      'https://example.com/deadline-bot.png',
+    )
+
+    const profileUpdateResponse = await request(app)
+      .patch('/api/v1/auth/agents/profile')
+      .set('x-agent-api-key', registration.apiKey)
+      .send({
+        displayName: 'Deadline Bot Prime',
+        biography:
+          'Systematic agent that fades optimistic Musk timelines and sharpens profile copy.',
+        avatarUrl: 'https://example.com/deadline-bot-prime.png',
+      })
+    expect(profileUpdateResponse.statusCode).toBe(200)
+    expect(profileUpdateResponse.body.displayName).toBe('Deadline Bot Prime')
+    expect(profileUpdateResponse.body.avatarUrl).toBe(
+      'https://example.com/deadline-bot-prime.png',
+    )
 
     expect(
       (await request(app).get(`/api/v1/auth/claims/${claimToken}`)).body.agent
@@ -150,7 +170,7 @@ describe('app routes', () => {
     expect(claimOwnerResponse.statusCode).toBe(200)
     expect(claimOwnerResponse.body.agent.ownerEmail).toBe('owner@example.com')
     expect(claimOwnerResponse.body.agent.ownerVerificationStatus).toBe(
-      'pending_tweet',
+      'pending_email',
     )
 
     expect(
@@ -193,7 +213,35 @@ describe('app routes', () => {
         })
       ).body.message,
     ).toBe(
-      'Finish X verification from your claim link before opening the owner deck.',
+      'Finish the claim verification steps from your claim link before opening the owner deck.',
+    )
+
+    const lockedConnectResponse = await request(app).get(
+      `/api/v1/auth/claims/${claimToken}/connect-x`,
+    )
+    expect(lockedConnectResponse.statusCode).toBe(400)
+    expect(lockedConnectResponse.body.message).toBe(
+      'Confirm the owner email from the claim link before connecting X.',
+    )
+
+    const firstClaimEmailCall = sendMail.mock.calls.at(0) as
+      | Array<Record<string, unknown>>
+      | undefined
+    const claimEmailMessage = (firstClaimEmailCall?.[0] ?? null) as
+      | { html?: string }
+      | null
+    const claimEmailUrlMatch = String(claimEmailMessage?.html ?? '').match(
+      /https?:\/\/[^"\s<]+/,
+    )
+    expect(claimEmailUrlMatch?.[0]).toBeTruthy()
+    const claimEmailUrl = new URL(claimEmailUrlMatch![0])
+
+    const verifyEmailResponse = await request(app).get(
+      `${claimEmailUrl.pathname}${claimEmailUrl.search}`,
+    )
+    expect(verifyEmailResponse.statusCode).toBe(302)
+    expect(verifyEmailResponse.headers.location).toContain(
+      `http://localhost:5173/?claim=${claimToken}&email_verified=1`,
     )
 
     const connectResponse = await request(app).get(
@@ -500,13 +548,14 @@ describe('app routes', () => {
     process.env.X_CLIENT_ID = 'x-client-id'
     process.env.X_CLIENT_SECRET = 'x-client-secret'
     process.env.X_BEARER_TOKEN = 'x-bearer-token'
+    const sendMail = vi.fn(async () => undefined)
 
     const context = await setupApiContext({
       applyMocks: () => {
         vi.doMock('@sendgrid/mail', () => ({
           default: {
             setApiKey: vi.fn(),
-            send: vi.fn(async () => undefined),
+            send: sendMail,
           },
         }))
       },
@@ -537,6 +586,22 @@ describe('app routes', () => {
         ownerEmail: 'owner@example.com',
       })
     expect(claimOwnerResponse.statusCode).toBe(200)
+    const secondClaimEmailCall = sendMail.mock.calls.at(0) as
+      | Array<Record<string, unknown>>
+      | undefined
+    const claimEmailMessage = (secondClaimEmailCall?.[0] ?? null) as
+      | { html?: string }
+      | null
+    const claimEmailUrlMatch = String(claimEmailMessage?.html ?? '').match(
+      /https?:\/\/[^"\s<]+/,
+    )
+    expect(claimEmailUrlMatch?.[0]).toBeTruthy()
+    const claimEmailUrl = new URL(claimEmailUrlMatch![0])
+    const verifyEmailResponse = await request(app).get(
+      `${claimEmailUrl.pathname}${claimEmailUrl.search}`,
+    )
+    expect(verifyEmailResponse.statusCode).toBe(302)
+
     const connectResponse = await request(app).get(
       `/api/v1/auth/claims/${claimToken}/connect-x`,
     )
@@ -721,7 +786,7 @@ describe('app routes', () => {
     })
 
     await context.pool.end()
-  })
+  }, 15000)
 
   it('uses the non-wildcard cors origin and fallback error messages', async () => {
     vi.resetModules()

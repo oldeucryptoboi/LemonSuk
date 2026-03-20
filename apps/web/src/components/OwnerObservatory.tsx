@@ -1,6 +1,7 @@
 import React from 'react'
 import type { OwnerSession } from '../shared'
 import { formatCredits } from '../lib/format'
+import { AgentAvatar } from './AgentAvatar'
 
 type OwnerObservatoryProps = {
   session: OwnerSession
@@ -24,7 +25,16 @@ export function OwnerObservatory({ session }: OwnerObservatoryProps) {
       <div className="owner-agent-list">
         {session.agents.map((agent) => (
           <div key={agent.id} className="owner-agent-card">
-            <strong>{agent.displayName}</strong>
+            <div className="agent-inline">
+              <AgentAvatar
+                displayName={agent.displayName}
+                avatarUrl={agent.avatarUrl}
+              />
+              <div className="agent-inline-copy">
+                <strong>{agent.displayName}</strong>
+                <span>@{agent.handle}</span>
+              </div>
+            </div>
             <span>
               {formatCredits(agent.availableCredits ?? 0)} available
             </span>

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createClaimedAgent } from '../../../../test/helpers/agents'
+import type { ClaimView } from '../shared'
 import { LoginModal } from './LoginModal'
 
 const apiMocks = vi.hoisted(() => ({
@@ -62,8 +63,11 @@ describe('LoginModal', () => {
       .mockResolvedValueOnce({
         agent: createClaimedAgent(),
         claimInstructions: 'Confirm the verification phrase.',
+        emailVerificationInstructions: null,
         tweetVerificationInstructions: null,
         tweetVerificationTemplate: null,
+        tweetVerificationConnectUrl: null,
+        tweetVerificationConnectedAccount: null,
       })
 
     rerender(
@@ -146,6 +150,7 @@ describe('LoginModal', () => {
         ownerVerificationXConnectedAt: '2026-03-16T00:00:00.000Z',
       }),
       claimInstructions: 'Owner email attached. Finish X verification.',
+      emailVerificationInstructions: null,
       tweetVerificationInstructions: 'Post the exact verification template.',
       tweetVerificationTemplate:
         'Claiming @deadlinebot on LemonSuk. Human verification code: REEF-1A2B',
@@ -175,6 +180,7 @@ describe('LoginModal', () => {
         claimView={{
           agent: createClaimedAgent(),
           claimInstructions: 'Confirm the verification phrase.',
+          emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
           tweetVerificationConnectUrl: null,
@@ -187,13 +193,17 @@ describe('LoginModal', () => {
 
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
     await user.click(
-      screen.getByRole('button', { name: 'Attach email and continue' }),
+      screen.getByRole('button', {
+        name: 'Attach email and send verification link',
+      }),
     )
 
     expect(await screen.findByText('Claim failed.')).not.toBeNull()
 
     await user.click(
-      screen.getByRole('button', { name: 'Attach email and continue' }),
+      screen.getByRole('button', {
+        name: 'Attach email and send verification link',
+      }),
     )
     expect(
       await screen.findByText('Could not claim this agent.'),
@@ -201,7 +211,9 @@ describe('LoginModal', () => {
     expect(screen.getByText('Could not claim this agent.')).not.toBeNull()
 
     await user.click(
-      screen.getByRole('button', { name: 'Attach email and continue' }),
+      screen.getByRole('button', {
+        name: 'Attach email and send verification link',
+      }),
     )
 
     expect(apiMocks.claimAgentForOwner).toHaveBeenCalledWith(
@@ -255,6 +267,7 @@ describe('LoginModal', () => {
             ownerVerificationXConnectedAt: '2026-03-16T00:00:00.000Z',
           }),
           claimInstructions: 'Confirm the verification phrase.',
+          emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
           tweetVerificationConnectUrl:
@@ -285,6 +298,7 @@ describe('LoginModal', () => {
         claimView={{
           agent: createClaimedAgent(),
           claimInstructions: 'Confirm the verification phrase.',
+          emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
           tweetVerificationConnectUrl: null,
@@ -297,6 +311,87 @@ describe('LoginModal', () => {
 
     await user.click(screen.getByRole('button', { name: 'Use another claim' }))
     expect(onClaimViewChange).toHaveBeenCalledWith(null)
+  })
+
+  it('stages pending-email claims before the X step and can resend the verification link', async () => {
+    const user = userEvent.setup()
+    const pendingEmailClaimView = {
+      agent: createClaimedAgent({
+        ownerEmail: 'owner@example.com',
+        ownerVerificationStatus: 'pending_email',
+        ownerVerificationCode: 'REEF-1A2B',
+      }),
+      claimInstructions: 'Attach your inbox first, then LemonSuk unlocks the X step.',
+      emailVerificationInstructions:
+        'Check owner@example.com and open the LemonSuk claim email before continuing to X.',
+      tweetVerificationInstructions: null,
+      tweetVerificationTemplate: null,
+      tweetVerificationConnectUrl: null,
+      tweetVerificationConnectedAccount: null,
+    }
+
+    apiMocks.claimAgentForOwner.mockResolvedValue(pendingEmailClaimView)
+
+    function Harness() {
+      const [claimView, setClaimView] = React.useState<ClaimView | null>({
+        agent: createClaimedAgent(),
+        claimInstructions: 'Confirm the verification phrase.',
+        emailVerificationInstructions: null,
+        tweetVerificationInstructions: null,
+        tweetVerificationTemplate: null,
+        tweetVerificationConnectUrl: null,
+        tweetVerificationConnectedAccount: null,
+      })
+
+      return (
+        <LoginModal
+          open={true}
+          defaultMode="claim"
+          claimView={claimView}
+          onClaimViewChange={(nextClaimView) => setClaimView(nextClaimView)}
+          onClose={() => undefined}
+        />
+      )
+    }
+
+    render(<Harness />)
+
+    await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Attach email and send verification link',
+      }),
+    )
+
+    expect(apiMocks.claimAgentForOwner).toHaveBeenCalledWith(
+      'claim_1',
+      'owner@example.com',
+    )
+
+    expect(
+      screen.getByText(
+        'Check owner@example.com and open the LemonSuk claim email before continuing to X.',
+      ),
+    ).not.toBeNull()
+    expect(screen.getByText('Current claim email:')).not.toBeNull()
+    expect(screen.getAllByText('owner@example.com')).toHaveLength(3)
+    expect(
+      screen.getByText(/Verification email sent to/i),
+    ).not.toBeNull()
+    expect(
+      screen.getByRole('button', {
+        name: 'Email me a fresh verification link',
+      }),
+    ).not.toBeNull()
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Email me a fresh verification link',
+      }),
+    )
+    expect(apiMocks.claimAgentForOwner).toHaveBeenCalledTimes(2)
+    await user.click(screen.getByRole('button', { name: 'Use another claim' }))
+    expect(screen.getByRole('button', { name: 'Find my agent' })).not.toBeNull()
   })
 
   it('supports owner deck login, linked claims, and fallback errors', async () => {
@@ -378,6 +473,7 @@ describe('LoginModal', () => {
             ownerVerificationStatus: 'verified',
           }),
           claimInstructions: 'Confirm the verification phrase.',
+          emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
           tweetVerificationConnectUrl: null,
@@ -402,6 +498,50 @@ describe('LoginModal', () => {
     ).not.toBeNull()
   })
 
+  it('renders pending-email resend fallback states when no owner email is persisted yet', async () => {
+    const user = userEvent.setup()
+
+    apiMocks.claimAgentForOwner.mockRejectedValueOnce(new Error('Resend failed.'))
+
+    render(
+      <LoginModal
+        open={true}
+        defaultMode="claim"
+        claimView={{
+          agent: createClaimedAgent({
+            ownerEmail: null,
+            ownerVerificationStatus: 'pending_email',
+            ownerVerificationCode: 'REEF-1A2B',
+          }),
+          claimInstructions: 'Attach your inbox first, then LemonSuk unlocks the X step.',
+          emailVerificationInstructions: null,
+          tweetVerificationInstructions: null,
+          tweetVerificationTemplate: null,
+          tweetVerificationConnectUrl: null,
+          tweetVerificationConnectedAccount: null,
+        }}
+        onClaimViewChange={() => undefined}
+        onClose={() => undefined}
+      />,
+    )
+
+    expect(screen.queryByText('Current claim email:')).toBeNull()
+    expect(
+      screen.getByRole('button', {
+        name: 'Email me a verification link',
+      }),
+    ).not.toBeNull()
+
+    await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Email me a verification link',
+      }),
+    )
+
+    expect(await screen.findByText('Resend failed.')).not.toBeNull()
+  })
+
   it('handles pending tweet claims without helper copy and surfaces fallback tweet errors', async () => {
     const user = userEvent.setup()
 
@@ -419,6 +559,7 @@ describe('LoginModal', () => {
             ownerVerificationCode: 'REEF-1A2B',
           }),
           claimInstructions: 'Finish X verification.',
+          emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
           tweetVerificationConnectUrl:
@@ -455,6 +596,7 @@ describe('LoginModal', () => {
             ownerVerificationXConnectedAt: '2026-03-16T00:00:00.000Z',
           }),
           claimInstructions: 'Finish X verification.',
+          emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
           tweetVerificationConnectUrl:
@@ -485,6 +627,7 @@ describe('LoginModal', () => {
             ownerVerificationXConnectedAt: '2026-03-16T00:00:00.000Z',
           }),
           claimInstructions: 'Finish X verification.',
+          emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
           tweetVerificationConnectUrl:
@@ -521,6 +664,7 @@ describe('LoginModal', () => {
             ownerVerificationStatus: 'unclaimed',
           }),
           claimInstructions: 'Confirm the verification phrase.',
+          emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
           tweetVerificationConnectUrl: null,
@@ -534,7 +678,9 @@ describe('LoginModal', () => {
     expect(apiMocks.createClaimOwnerXConnectUrl).not.toHaveBeenCalled()
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
     await user.click(
-      screen.getByRole('button', { name: 'Attach email and continue' }),
+      screen.getByRole('button', {
+        name: 'Attach email and send verification link',
+      }),
     )
     expect(await screen.findByText('This claim link is invalid.')).not.toBeNull()
 
@@ -550,6 +696,7 @@ describe('LoginModal', () => {
             ownerVerificationCode: 'REEF-1A2B',
           }),
           claimInstructions: 'Finish X verification.',
+          emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
           tweetVerificationConnectUrl: null,

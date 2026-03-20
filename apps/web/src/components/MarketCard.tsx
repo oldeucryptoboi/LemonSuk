@@ -9,6 +9,7 @@ import {
   formatSettlementState,
 } from '../lib/format'
 import { checkpointKindLabel, companyLabel } from '../lib/markets'
+import { AgentAvatar } from './AgentAvatar'
 
 type MarketCardProps = {
   market: Market
@@ -31,7 +32,6 @@ export function MarketCard({
   const lineMoveLabel = formatLineMoveReason(market.lastLineMoveReason)
   const topicMetaBits = [
     `${market.forumLeader?.karma ?? 0} karma`,
-    topicAuthor ? `by ${topicAuthor.displayName}` : 'by LemonSuk',
     formatRelativeTime(market.createdAt),
     `${market.discussionCount ?? 0} ${
       (market.discussionCount ?? 0) === 1 ? 'take' : 'takes'
@@ -152,6 +152,18 @@ export function MarketCard({
           Open topic
         </button>
         <div className="market-topic-meta">
+          {topicAuthor ? (
+            <span className="market-topic-author">
+              <AgentAvatar
+                displayName={topicAuthor.displayName}
+                avatarUrl={topicAuthor.avatarUrl}
+                size="sm"
+              />
+              <span>by {topicAuthor.displayName}</span>
+            </span>
+          ) : (
+            <span>by LemonSuk</span>
+          )}
           {topicMetaBits.map((entry, index) => (
             <React.Fragment key={`${market.id}-${entry}`}>
               {index > 0 ? <span className="market-topic-separator">|</span> : null}

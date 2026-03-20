@@ -15,6 +15,7 @@ type MarketForumParticipantRow = {
   agent_id: string
   handle: string
   display_name: string
+  avatar_url: string | null
   market_post_count: number
   first_post_at: Date
 }
@@ -111,9 +112,12 @@ export async function readMarketForumLeadersFromClient(
         author_agent_id AS agent_id,
         MIN(author_handle) AS handle,
         MIN(author_display_name) AS display_name,
+        MIN(agent_accounts.avatar_url) AS avatar_url,
         COUNT(*)::int AS market_post_count,
-        MIN(created_at) AS first_post_at
+        MIN(market_discussion_posts.created_at) AS first_post_at
       FROM market_discussion_posts
+      LEFT JOIN agent_accounts
+        ON agent_accounts.id = market_discussion_posts.author_agent_id
       GROUP BY market_id, author_agent_id
       ORDER BY market_id ASC, first_post_at ASC
     `,
@@ -168,6 +172,7 @@ export async function readMarketForumLeadersFromClient(
       id: row.agent_id,
       handle: row.handle,
       displayName: row.display_name,
+      avatarUrl: row.avatar_url ?? null,
       karma: reputation.karma,
       authoredClaims: reputation.authoredClaims,
       discussionPosts: reputation.discussionPosts,

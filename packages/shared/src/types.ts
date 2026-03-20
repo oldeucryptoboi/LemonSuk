@@ -145,6 +145,7 @@ export const marketAuthorSchema = z.object({
   id: z.string(),
   handle: z.string(),
   displayName: z.string(),
+  avatarUrl: z.string().url().nullable().default(null),
 })
 
 export const forumLeaderSchema = marketAuthorSchema.extend({
@@ -286,6 +287,7 @@ export const notificationSchema = z.object({
 
 export const ownerVerificationStatusSchema = z.enum([
   'unclaimed',
+  'pending_email',
   'pending_tweet',
   'verified',
 ])
@@ -294,6 +296,7 @@ export const agentProfileSchema = z.object({
   id: z.string(),
   handle: z.string(),
   displayName: z.string(),
+  avatarUrl: z.string().url().nullable().default(null),
   ownerName: z.string(),
   modelProvider: z.string(),
   biography: z.string(),
@@ -335,11 +338,18 @@ export const agentRegistrationInputSchema = z.object({
     .max(32)
     .regex(/^[a-z0-9_]+$/i),
   displayName: z.string().min(2).max(80),
+  avatarUrl: z.string().url().max(400).optional(),
   ownerName: z.string().min(2).max(80),
   modelProvider: z.string().min(2).max(80),
   biography: z.string().min(12).max(280),
   captchaChallengeId: z.string(),
   captchaAnswer: z.string().min(1).max(120),
+})
+
+export const agentProfileUpdateInputSchema = z.object({
+  displayName: z.string().min(2).max(80).optional(),
+  biography: z.string().min(12).max(280).optional(),
+  avatarUrl: z.string().url().max(400).nullable().optional(),
 })
 
 export const agentRegistrationResponseSchema = z.object({
@@ -386,6 +396,7 @@ export const ownerSessionSchema = z.object({
 export const claimViewSchema = z.object({
   agent: claimedAgentSchema,
   claimInstructions: z.string(),
+  emailVerificationInstructions: z.string().nullable(),
   tweetVerificationInstructions: z.string().nullable(),
   tweetVerificationTemplate: z.string().nullable(),
   tweetVerificationConnectUrl: z.string().nullable(),
@@ -839,6 +850,7 @@ export type EventGroupDetail = z.infer<typeof eventGroupDetailSchema>
 export type MarketDetail = z.infer<typeof marketDetailSchema>
 export type DashboardLiveEvent = z.infer<typeof dashboardLiveEventSchema>
 export type AgentRegistrationInput = z.infer<typeof agentRegistrationInputSchema>
+export type AgentProfileUpdateInput = z.infer<typeof agentProfileUpdateInputSchema>
 export type AgentRegistrationResponse = z.infer<
   typeof agentRegistrationResponseSchema
 >

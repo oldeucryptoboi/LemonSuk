@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import {
+  agentProfileUpdateInputSchema,
   agentPredictionSubmissionInputSchema,
   agentRegistrationInputSchema,
   claimOwnerInputSchema,
@@ -24,19 +25,23 @@ import {
   claimOwnerByClaimToken,
   completeOwnerClaimXConnection,
   createCaptchaChallenge,
+  createClaimOwnerEmailVerificationLink,
   createOwnerClaimXConnectUrl,
   createOwnerLoginLink,
+  verifyClaimOwnerEmail,
   readAgentProfileByIdFromClient,
   readCaptchaChallenge,
   readClaimView,
   readOwnerSession,
   registerAgent,
   setupOwnerEmail,
+  updateAgentProfile,
   verifyOwnerByClaimTweet,
 } from '../services/identity'
 import { withStoreTransaction } from '../services/store'
 import {
   createOperationalSnapshot,
+  dispatchClaimOwnerEmailVerification,
   dispatchOwnerLoginLink,
   publishCurrentOperationalSnapshot,
   publishOperationalSnapshot,
@@ -194,6 +199,11 @@ export function createAuthRouter(): Router {
           params.claimToken,
           body.ownerEmail,
         )
+        if (claimView.agent.ownerVerificationStatus === 'pending_email') {
+          await dispatchClaimOwnerEmailVerification(
+            await createClaimOwnerEmailVerificationLink(params.claimToken),
+          )
+        }
         await publishCurrentOperationalSnapshot(new Date())
         response.json(claimView)
       } catch (error) {
@@ -202,6 +212,46 @@ export function createAuthRouter(): Router {
         response
           .status(message === 'Claim not found.' ? 404 : 400)
           .json({ message })
+      }
+    }),
+  )
+
+  router.get(
+    '/claim-email/verify',
+    asyncHandler(async (request, response) => {
+      const query = z
+        .object({
+          token: z.string().optional(),
+        })
+        .parse(request.query)
+
+      if (!query.token) {
+        response.redirect(
+          buildAppRedirect({
+            email_error: 'missing_email_verification_token',
+          }),
+        )
+        return
+      }
+
+      try {
+        const result = await verifyClaimOwnerEmail(query.token)
+        response.redirect(
+          buildAppRedirect({
+            claim: result.claimToken,
+            email_verified: '1',
+          }),
+        )
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not verify that owner email.'
+        response.redirect(
+          buildAppRedirect({
+            email_error: message,
+          }),
+        )
       }
     }),
   )
@@ -350,6 +400,39 @@ export function createAuthRouter(): Router {
             error instanceof Error
               ? error.message
               : 'Could not set owner email.',
+        })
+      }
+    }),
+  )
+
+  router.patch(
+    '/agents/profile',
+    createRateLimitMiddleware({
+      bucket: 'agent-profile-update',
+      limit: 30,
+      windowMs: 60 * 60 * 1_000,
+    }),
+    asyncHandler(async (request, response) => {
+      const body = agentProfileUpdateInputSchema
+        .merge(apiKeyBodySchema)
+        .parse(request.body)
+      const apiKey = readApiKey(request.header('x-agent-api-key'), body.apiKey)
+
+      if (!apiKey) {
+        response.status(401).json({ message: 'Agent API key is required.' })
+        return
+      }
+
+      try {
+        const agent = await updateAgentProfile(apiKey, body)
+        await publishCurrentOperationalSnapshot(new Date())
+        response.json(agent)
+      } catch (error) {
+        response.status(400).json({
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Could not update agent profile.',
         })
       }
     }),

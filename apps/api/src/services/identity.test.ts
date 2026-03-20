@@ -35,6 +35,23 @@ async function connectClaimX(
   )
 }
 
+async function verifyClaimEmail(
+  context: Awaited<ReturnType<typeof setupApiContext>>,
+  claimToken: string,
+) {
+  const link =
+    await context.identity.createClaimOwnerEmailVerificationLink(claimToken)
+  const token = new URL(link.claimUrl, 'http://localhost').searchParams.get(
+    'token',
+  )
+
+  if (!token) {
+    throw new Error('Expected email verification token in claim link.')
+  }
+
+  await context.identity.verifyClaimOwnerEmail(token)
+}
+
 function enableXPostVerification() {
   process.env.X_BEARER_TOKEN = 'x-bearer-token'
 }
@@ -130,6 +147,146 @@ describe('identity service', () => {
     await context.pool.end()
   })
 
+  it('stores avatar urls during registration and returns them from the agent profile', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+
+    const registration = await context.identity.registerAgent({
+      ...registrationInput(challenge.id, 'avatar_bot', challenge.prompt),
+      avatarUrl: 'https://example.com/avatar-bot.png',
+    })
+
+    expect(registration.agent.avatarUrl).toBe(
+      'https://example.com/avatar-bot.png',
+    )
+    expect(
+      await context.identity.authenticateAgentApiKey(registration.apiKey),
+    ).toMatchObject({
+      handle: 'avatar_bot',
+      avatarUrl: 'https://example.com/avatar-bot.png',
+    })
+
+    await context.store.withStoreTransaction(async (_store, _persist, client) => {
+      expect(
+        await context.identity.readAgentProfileByIdFromClient(
+          client,
+          registration.agent.id,
+        ),
+      ).toMatchObject({
+        handle: 'avatar_bot',
+        avatarUrl: 'https://example.com/avatar-bot.png',
+      })
+    })
+
+    await context.pool.end()
+  })
+
+  it('updates agent display, biography, and avatar through the authenticated profile route', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent({
+      ...registrationInput(challenge.id, 'profile_bot', challenge.prompt),
+      avatarUrl: 'https://example.com/original.png',
+    })
+
+    await expect(
+      context.identity.updateAgentProfile(registration.apiKey, {}),
+    ).rejects.toThrow('No valid profile fields were provided.')
+
+    const updated = await context.identity.updateAgentProfile(
+      registration.apiKey,
+      {
+        displayName: 'Profile Bot Prime',
+        biography:
+          'Profile bot now carries a sharper biography with an updated photo.',
+        avatarUrl: 'https://example.com/profile-bot-prime.png',
+      },
+    )
+
+    expect(updated).toMatchObject({
+      displayName: 'Profile Bot Prime',
+      biography:
+        'Profile bot now carries a sharper biography with an updated photo.',
+      avatarUrl: 'https://example.com/profile-bot-prime.png',
+    })
+
+    const retainedAvatar = await context.identity.updateAgentProfile(
+      registration.apiKey,
+      {
+        displayName: 'Profile Bot Encore',
+      },
+    )
+
+    expect(retainedAvatar).toMatchObject({
+      displayName: 'Profile Bot Encore',
+      avatarUrl: 'https://example.com/profile-bot-prime.png',
+    })
+
+    const cleared = await context.identity.updateAgentProfile(
+      registration.apiKey,
+      {
+        avatarUrl: null,
+      },
+    )
+
+    expect(cleared.avatarUrl).toBeNull()
+    expect(
+      await context.identity.authenticateAgentApiKey(registration.apiKey),
+    ).toMatchObject({
+      displayName: 'Profile Bot Encore',
+      avatarUrl: null,
+    })
+
+    await context.pool.end()
+  })
+
+  it('rejects agent profile updates after an unverified registration has expired', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'expired_profile_bot', challenge.prompt),
+    )
+
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET created_at = '2026-03-15T00:00:00.000Z',
+            updated_at = '2026-03-15T00:00:00.000Z'
+        WHERE id = $1
+      `,
+      [registration.agent.id],
+    )
+
+    await expect(
+      context.identity.updateAgentProfile(registration.apiKey, {
+        displayName: 'Expired Bot',
+      }),
+    ).rejects.toThrow(
+      'This agent registration expired. Register the agent again.',
+    )
+
+    expect(
+      await context.pool.query(
+        `SELECT COUNT(*)::int AS count FROM agent_accounts WHERE id = $1`,
+        [registration.agent.id],
+      ),
+    ).toMatchObject({ rows: [{ count: 0 }] })
+
+    await context.pool.end()
+  })
+
+  it('rejects agent profile updates when the api key is not recognized', async () => {
+    const context = await setupApiContext()
+
+    await expect(
+      context.identity.updateAgentProfile('missing-api-key', {
+        displayName: 'Ghost Bot',
+      }),
+    ).rejects.toThrow('Agent API key was not recognized.')
+
+    await context.pool.end()
+  })
+
   it('requires X OAuth config before starting the X-connect flow', async () => {
     delete process.env.X_CLIENT_ID
     delete process.env.X_CLIENT_SECRET
@@ -155,6 +312,529 @@ describe('identity service', () => {
     ).rejects.toThrow(
       'That X verification session has expired. Start again from the claim link.',
     )
+
+    await context.pool.end()
+  })
+
+  it('requires claim email verification before X and consumes the emailed link once', async () => {
+    process.env.X_CLIENT_ID = 'x-client-id'
+    process.env.X_CLIENT_SECRET = 'x-client-secret'
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'email_gate_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    const pendingEmailClaim = await context.identity.claimOwnerByClaimToken(
+      claimToken,
+      'owner@example.com',
+    )
+    expect(pendingEmailClaim.agent.ownerVerificationStatus).toBe('pending_email')
+    await expect(
+      context.identity.createOwnerClaimXConnectUrl(claimToken),
+    ).rejects.toThrow(
+      'Confirm the owner email from the claim link before connecting X.',
+    )
+
+    const link =
+      await context.identity.createClaimOwnerEmailVerificationLink(claimToken)
+    const token = new URL(link.claimUrl, 'http://localhost').searchParams.get(
+      'token',
+    )
+    if (!token) {
+      throw new Error('Expected email verification token in claim link.')
+    }
+
+    await expect(
+      context.identity.verifyClaimOwnerEmail(token),
+    ).resolves.toEqual({
+      claimToken,
+    })
+
+    const pendingTweetClaim = await context.identity.readClaimView(claimToken)
+    expect(pendingTweetClaim?.agent.ownerVerificationStatus).toBe('pending_tweet')
+
+    await expect(context.identity.verifyClaimOwnerEmail(token)).rejects.toThrow(
+      'That claim email verification link has expired. Start again from the claim link.',
+    )
+
+    await context.pool.end()
+  })
+
+  it('rejects swapping to a different owner email once a claim already advanced to pending_tweet', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'locked_claim_owner_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await verifyClaimEmail(context, claimToken)
+
+    await expect(
+      context.identity.claimOwnerByClaimToken(claimToken, 'other@example.com'),
+    ).rejects.toThrow('This agent is already linked to another owner email.')
+
+    await context.pool.end()
+  })
+
+  it('rejects swapping to a different owner email after a claim is already verified', async () => {
+    enableXPostVerification()
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(
+        challenge.id,
+        'verified_locked_claim_owner_bot',
+        challenge.prompt,
+      ),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    const pendingEmailClaim = await context.identity.claimOwnerByClaimToken(
+      claimToken,
+      'owner@example.com',
+    )
+    await verifyClaimEmail(context, claimToken)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        createTweetLookupResponse({
+          tweetId: '31415926',
+          authorId: 'x-user-1',
+          username: 'owner',
+          text: `Claiming @verified_locked_claim_owner_bot on LemonSuk. Human verification code: ${pendingEmailClaim.agent.ownerVerificationCode}`,
+        }),
+      ),
+    )
+    await connectClaimX(context, registration.agent.id)
+    await context.identity.verifyOwnerByClaimTweet(claimToken, {
+      tweetUrl: 'https://x.com/owner/status/31415926',
+    })
+
+    await expect(
+      context.identity.claimOwnerByClaimToken(claimToken, 'other@example.com'),
+    ).rejects.toThrow('This agent is already linked to another owner email.')
+
+    await context.pool.end()
+  })
+
+  it('accepts an already-verified claim email token without reopening the claim flow', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'verified_email_token_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    const link =
+      await context.identity.createClaimOwnerEmailVerificationLink(claimToken)
+    const token = new URL(link.claimUrl, 'http://localhost').searchParams.get(
+      'token',
+    )
+
+    if (!token) {
+      throw new Error('Expected email verification token in claim link.')
+    }
+
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET owner_verified_at = '2026-03-16T00:00:00.000Z',
+            owner_verification_status = 'verified'
+        WHERE id = $1
+      `,
+      [registration.agent.id],
+    )
+
+    await expect(context.identity.verifyClaimOwnerEmail(token)).resolves.toEqual({
+      claimToken,
+    })
+
+    await context.pool.end()
+  })
+
+  it('rejects a claim email token when the attached owner email changed after the link was issued', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'mismatched_email_token_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    const link =
+      await context.identity.createClaimOwnerEmailVerificationLink(claimToken)
+    const token = new URL(link.claimUrl, 'http://localhost').searchParams.get(
+      'token',
+    )
+
+    if (!token) {
+      throw new Error('Expected email verification token in claim link.')
+    }
+
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET owner_email = 'other@example.com'
+        WHERE id = $1
+      `,
+      [registration.agent.id],
+    )
+
+    await expect(context.identity.verifyClaimOwnerEmail(token)).rejects.toThrow(
+      'This claim email verification link no longer matches the attached owner email.',
+    )
+
+    await context.pool.end()
+  })
+
+  it('rejects claim email tokens when the claim vanished or expired before verification', async () => {
+    const context = await setupApiContext()
+    const missingChallenge = await context.identity.createCaptchaChallenge()
+    const missingRegistration = await context.identity.registerAgent(
+      registrationInput(
+        missingChallenge.id,
+        'missing_email_claim_bot',
+        missingChallenge.prompt,
+      ),
+    )
+    const missingClaimToken = missingRegistration.agent.claimUrl.replace(
+      '/?claim=',
+      '',
+    )
+
+    await context.identity.claimOwnerByClaimToken(
+      missingClaimToken,
+      'owner@example.com',
+    )
+    const missingLink =
+      await context.identity.createClaimOwnerEmailVerificationLink(
+        missingClaimToken,
+      )
+    const missingToken = new URL(
+      missingLink.claimUrl,
+      'http://localhost',
+    ).searchParams.get('token')
+
+    if (!missingToken) {
+      throw new Error('Expected email verification token in claim link.')
+    }
+
+    await context.pool.query(`DELETE FROM agent_accounts WHERE id = $1`, [
+      missingRegistration.agent.id,
+    ])
+
+    await expect(
+      context.identity.verifyClaimOwnerEmail(missingToken),
+    ).rejects.toThrow('Claim not found.')
+
+    const expiredChallenge = await context.identity.createCaptchaChallenge()
+    const expiredRegistration = await context.identity.registerAgent(
+      registrationInput(
+        expiredChallenge.id,
+        'expired_email_claim_bot',
+        expiredChallenge.prompt,
+      ),
+    )
+    const expiredClaimToken = expiredRegistration.agent.claimUrl.replace(
+      '/?claim=',
+      '',
+    )
+
+    await context.identity.claimOwnerByClaimToken(
+      expiredClaimToken,
+      'owner@example.com',
+    )
+    const expiredLink =
+      await context.identity.createClaimOwnerEmailVerificationLink(
+        expiredClaimToken,
+      )
+    const expiredToken = new URL(
+      expiredLink.claimUrl,
+      'http://localhost',
+    ).searchParams.get('token')
+
+    if (!expiredToken) {
+      throw new Error('Expected email verification token in claim link.')
+    }
+
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET owner_verification_started_at = '2026-03-15T00:00:00.000Z',
+            updated_at = '2026-03-15T00:00:00.000Z'
+        WHERE id = $1
+      `,
+      [expiredRegistration.agent.id],
+    )
+
+    await expect(
+      context.identity.verifyClaimOwnerEmail(expiredToken),
+    ).rejects.toThrow('Claim not found.')
+    expect(
+      await context.pool.query(
+        `SELECT COUNT(*)::int AS count FROM agent_accounts WHERE id = $1`,
+        [expiredRegistration.agent.id],
+      ),
+    ).toMatchObject({ rows: [{ count: 0 }] })
+
+    await context.pool.end()
+  })
+
+  it('rejects completing the X callback before the claim email is confirmed', async () => {
+    process.env.X_CLIENT_ID = 'x-client-id'
+    process.env.X_CLIENT_SECRET = 'x-client-secret'
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'pending_email_x_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await context.pool.query(
+      `
+        INSERT INTO owner_verification_x_states (
+          state,
+          claim_token,
+          code_verifier,
+          created_at,
+          expires_at,
+          consumed_at
+        )
+        VALUES (
+          'state_pending_email',
+          $1,
+          'code-verifier',
+          '2099-03-16T00:00:00.000Z',
+          '2099-03-16T00:15:00.000Z',
+          NULL
+        )
+      `,
+      [claimToken],
+    )
+
+    await expect(
+      context.identity.completeOwnerClaimXConnection({
+        state: 'state_pending_email',
+        code: 'auth-code',
+      }),
+    ).rejects.toThrow(
+      'Confirm the owner email from the claim link before connecting X.',
+    )
+
+    await context.pool.end()
+  })
+
+  it('requires a connected X account before accepting the verification tweet', async () => {
+    enableXPostVerification()
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'tweet_gate_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await verifyClaimEmail(context, claimToken)
+
+    await expect(
+      context.identity.verifyOwnerByClaimTweet(claimToken, {
+        tweetUrl: 'https://x.com/owner/status/1',
+      }),
+    ).rejects.toThrow(
+      'Connect this claim with X before submitting the verification tweet.',
+    )
+
+    await context.pool.end()
+  })
+
+  it('rejects claim-email verification links for verified or already-advanced claims', async () => {
+    const context = await setupApiContext()
+    await expect(
+      context.identity.createClaimOwnerEmailVerificationLink('missing_claim'),
+    ).rejects.toThrow('Claim not found.')
+
+    const unclaimedChallenge = await context.identity.createCaptchaChallenge()
+    const unclaimedRegistration = await context.identity.registerAgent(
+      registrationInput(
+        unclaimedChallenge.id,
+        'unclaimed_mail_link_bot',
+        unclaimedChallenge.prompt,
+      ),
+    )
+    const unclaimedClaimToken = unclaimedRegistration.agent.claimUrl.replace(
+      '/?claim=',
+      '',
+    )
+
+    await expect(
+      context.identity.createClaimOwnerEmailVerificationLink(unclaimedClaimToken),
+    ).rejects.toThrow('Attach an owner email before sending a verification link.')
+
+    const verifiedChallenge = await context.identity.createCaptchaChallenge()
+    const verifiedRegistration = await context.identity.registerAgent(
+      registrationInput(
+        verifiedChallenge.id,
+        'verified_mail_link_bot',
+        verifiedChallenge.prompt,
+      ),
+    )
+    const verifiedClaimToken = verifiedRegistration.agent.claimUrl.replace(
+      '/?claim=',
+      '',
+    )
+
+    await context.identity.claimOwnerByClaimToken(
+      verifiedClaimToken,
+      'owner@example.com',
+    )
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET owner_verified_at = '2026-03-16T00:00:00.000Z',
+            owner_verification_status = 'verified'
+        WHERE id = $1
+      `,
+      [verifiedRegistration.agent.id],
+    )
+
+    await expect(
+      context.identity.createClaimOwnerEmailVerificationLink(verifiedClaimToken),
+    ).rejects.toThrow('This claim is already verified.')
+
+    const advancedChallenge = await context.identity.createCaptchaChallenge()
+    const advancedRegistration = await context.identity.registerAgent(
+      registrationInput(
+        advancedChallenge.id,
+        'advanced_mail_link_bot',
+        advancedChallenge.prompt,
+      ),
+    )
+    const advancedClaimToken = advancedRegistration.agent.claimUrl.replace(
+      '/?claim=',
+      '',
+    )
+
+    await context.identity.claimOwnerByClaimToken(
+      advancedClaimToken,
+      'owner@example.com',
+    )
+    await verifyClaimEmail(context, advancedClaimToken)
+
+    await expect(
+      context.identity.createClaimOwnerEmailVerificationLink(advancedClaimToken),
+    ).rejects.toThrow('This claim is past the owner-email verification step already.')
+
+    await context.pool.end()
+  })
+
+  it('preserves verified and pending-tweet status when an agent pre-attaches the same owner email again', async () => {
+    const context = await setupApiContext()
+    const verifiedChallenge = await context.identity.createCaptchaChallenge()
+    const verifiedRegistration = await context.identity.registerAgent(
+      registrationInput(
+        verifiedChallenge.id,
+        'verified_setup_owner_bot',
+        verifiedChallenge.prompt,
+      ),
+    )
+
+    await context.identity.setupOwnerEmail(
+      verifiedRegistration.apiKey,
+      'owner@example.com',
+    )
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET owner_verified_at = '2026-03-16T00:00:00.000Z',
+            owner_verification_status = 'verified'
+        WHERE id = $1
+      `,
+      [verifiedRegistration.agent.id],
+    )
+
+    await expect(
+      context.identity.setupOwnerEmail(
+        verifiedRegistration.apiKey,
+        'owner@example.com',
+      ),
+    ).resolves.toMatchObject({
+      agent: {
+        ownerEmail: 'owner@example.com',
+        ownerVerificationStatus: 'verified',
+      },
+    })
+
+    const pendingTweetChallenge = await context.identity.createCaptchaChallenge()
+    const pendingTweetRegistration = await context.identity.registerAgent(
+      registrationInput(
+        pendingTweetChallenge.id,
+        'pending_tweet_setup_owner_bot',
+        pendingTweetChallenge.prompt,
+      ),
+    )
+
+    await context.identity.setupOwnerEmail(
+      pendingTweetRegistration.apiKey,
+      'owner@example.com',
+    )
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET owner_verification_status = 'pending_tweet'
+        WHERE id = $1
+      `,
+      [pendingTweetRegistration.agent.id],
+    )
+
+    await expect(
+      context.identity.setupOwnerEmail(
+        pendingTweetRegistration.apiKey,
+        'owner@example.com',
+      ),
+    ).resolves.toMatchObject({
+      agent: {
+        ownerEmail: 'owner@example.com',
+        ownerVerificationStatus: 'pending_tweet',
+      },
+    })
+
+    await context.pool.end()
+  })
+
+  it('rejects a fresh claim-email verification link request when the pending claim has expired and deletes it', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'expired_mail_link_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET owner_verification_started_at = '2026-03-15T00:00:00.000Z',
+            updated_at = '2026-03-15T00:00:00.000Z'
+        WHERE id = $1
+      `,
+      [registration.agent.id],
+    )
+
+    await expect(
+      context.identity.createClaimOwnerEmailVerificationLink(claimToken),
+    ).rejects.toThrow('Claim not found.')
+    expect(
+      await context.pool.query(
+        `SELECT COUNT(*)::int AS count FROM agent_accounts WHERE id = $1`,
+        [registration.agent.id],
+      ),
+    ).toMatchObject({ rows: [{ count: 0 }] })
 
     await context.pool.end()
   })
@@ -247,6 +927,33 @@ describe('identity service', () => {
     expect(
       await context.identity.authenticateAgentApiKey(registration.apiKey),
     ).toBeNull()
+
+    await context.pool.end()
+  })
+
+  it('expires stale pending claims by falling back to updated_at when started_at is missing', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'pending_updated_at_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET owner_verification_started_at = NULL,
+            updated_at = '2026-03-15T00:00:00.000Z'
+        WHERE id = $1
+      `,
+      [registration.agent.id],
+    )
+
+    expect(await context.identity.readClaimView(claimToken)).toBeNull()
+    await expect(
+      context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com'),
+    ).rejects.toThrow('Claim not found.')
 
     await context.pool.end()
   })
@@ -598,7 +1305,7 @@ describe('identity service', () => {
       'owner@example.com',
     )
     expect(alphaClaimView.agent.ownerEmail).toBe('owner@example.com')
-    expect(alphaClaimView.agent.ownerVerificationStatus).toBe('pending_tweet')
+    expect(alphaClaimView.agent.ownerVerificationStatus).toBe('pending_email')
     expect(alphaClaimView.agent.ownerVerificationCode).toMatch(
       /^[a-z]+-[A-Z0-9]{4}$/,
     )
@@ -609,18 +1316,19 @@ describe('identity service', () => {
       promoCredits: 0,
       earnedCredits: 0,
     })
-    await expect(
-      context.identity.claimOwnerByClaimToken(
-        alphaClaimToken,
-        'different@example.com',
-      ),
-    ).rejects.toThrow('This agent is already linked to another owner email.')
+    const relinkedClaimView = await context.identity.claimOwnerByClaimToken(
+      alphaClaimToken,
+      'owner@example.com',
+    )
+    expect(relinkedClaimView.agent.ownerEmail).toBe('owner@example.com')
+    expect(relinkedClaimView.agent.ownerVerificationStatus).toBe('pending_email')
     await context.identity.setupOwnerEmail(bravo.apiKey, 'owner@example.com')
     await expect(
       context.identity.createOwnerLoginLink('owner@example.com'),
     ).rejects.toThrow(
-      'Finish X verification from your claim link before opening the owner deck.',
+      'Finish the claim verification steps from your claim link before opening the owner deck.',
     )
+    await verifyClaimEmail(context, alphaClaimToken)
 
     vi.stubGlobal(
       'fetch',
@@ -644,6 +1352,7 @@ describe('identity service', () => {
     })
     const bravoClaimToken = bravo.agent.claimUrl.replace('/?claim=', '')
     const bravoClaimView = await context.identity.readClaimView(bravoClaimToken)
+    await verifyClaimEmail(context, bravoClaimToken)
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
@@ -1534,6 +2243,7 @@ describe('identity service', () => {
       claimToken,
       'owner@example.com',
     )
+    await verifyClaimEmail(context, claimToken)
     await connectClaimX(context, registration.agent.id)
 
     vi.stubGlobal(
@@ -1619,6 +2329,52 @@ describe('identity service', () => {
     await context.pool.end()
   })
 
+  it('accepts tweet verification when X omits the expanded username but the author id matches', async () => {
+    enableXPostVerification()
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'username_optional_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+    const claimView = await context.identity.claimOwnerByClaimToken(
+      claimToken,
+      'owner@example.com',
+    )
+
+    await verifyClaimEmail(context, claimToken)
+    await connectClaimX(context, registration.agent.id)
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              id: '700',
+              author_id: 'x-user-1',
+              text: `Claiming @username_optional_bot on LemonSuk. Human verification code: ${claimView.agent.ownerVerificationCode}`,
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+
+    const ownerLoginLink = await context.identity.verifyOwnerByClaimTweet(claimToken, {
+      tweetUrl: 'https://x.com/owner/status/700',
+    })
+    const verifiedClaim = await context.identity.readClaimView(claimToken)
+
+    expect(ownerLoginLink.ownerEmail).toBe('owner@example.com')
+    expect(verifiedClaim?.agent.ownerVerificationStatus).toBe('verified')
+    expect(verifiedClaim?.agent.ownerVerificationTweetUrl).toBe(
+      'https://x.com/owner/status/700',
+    )
+
+    await context.pool.end()
+  })
+
   it('validates captcha edge cases and tweet verification input requirements', async () => {
     enableXPostVerification()
     const context = await setupApiContext()
@@ -1661,8 +2417,9 @@ describe('identity service', () => {
         tweetUrl: 'https://x.com/owner/status/1',
       }),
     ).rejects.toThrow(
-      'Connect this claim with X before submitting the verification tweet.',
+      'Confirm the owner email from the claim link before finishing X verification.',
     )
+    await verifyClaimEmail(context, claimToken)
     await connectClaimX(context, registration.agent.id)
 
     await expect(
@@ -1801,6 +2558,7 @@ describe('identity service', () => {
     const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
 
     await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await verifyClaimEmail(context, claimToken)
     await connectClaimX(context, registration.agent.id)
 
     await expect(
@@ -1808,6 +2566,44 @@ describe('identity service', () => {
         tweetUrl: 'https://x.com/owner/status/1',
       }),
     ).rejects.toThrow('X post verification is not configured right now.')
+
+    await context.pool.end()
+  })
+
+  it('rejects incomplete X tweet payloads during claim tweet verification', async () => {
+    enableXPostVerification()
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'tweet_payload_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+
+    await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await verifyClaimEmail(context, claimToken)
+    await connectClaimX(context, registration.agent.id)
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              id: '123',
+              text: '  ',
+              author_id: 'x-user-1',
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+
+    await expect(
+      context.identity.verifyOwnerByClaimTweet(claimToken, {
+        tweetUrl: 'https://x.com/owner/status/123',
+      }),
+    ).rejects.toThrow('X API tweet payload was incomplete.')
 
     await context.pool.end()
   })
@@ -1824,7 +2620,7 @@ describe('identity service', () => {
       claimToken,
       'owner@example.com',
     )
-
+    await verifyClaimEmail(context, claimToken)
     await connectClaimX(context, registration.agent.id)
 
     vi.stubGlobal(
@@ -2000,6 +2796,7 @@ describe('identity service', () => {
       claimToken,
       'owner@example.com',
     )
+    await verifyClaimEmail(context, claimToken)
 
     await context.pool.query(
       `
@@ -2111,6 +2908,7 @@ describe('identity service', () => {
       claimToken,
       'owner@example.com',
     )
+    await verifyClaimEmail(context, claimToken)
     await connectClaimX(context, registration.agent.id)
 
     vi.stubGlobal(
@@ -2147,6 +2945,7 @@ describe('identity service', () => {
     )
     const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
     await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await verifyClaimEmail(context, claimToken)
 
     const authorizeUrl = await context.identity.createOwnerClaimXConnectUrl(
       claimToken,
@@ -2216,6 +3015,7 @@ describe('identity service', () => {
     )
     const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
     await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await verifyClaimEmail(context, claimToken)
 
     const firstAuthorizeUrl = await context.identity.createOwnerClaimXConnectUrl(
       claimToken,
@@ -2284,6 +3084,7 @@ describe('identity service', () => {
     )
     const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
     await context.identity.claimOwnerByClaimToken(claimToken, 'owner@example.com')
+    await verifyClaimEmail(context, claimToken)
 
     const authorizeUrl = await context.identity.createOwnerClaimXConnectUrl(
       claimToken,

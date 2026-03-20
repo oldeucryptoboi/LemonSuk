@@ -53,6 +53,16 @@ describe('createAuthRouter fallback errors', () => {
       setupOwnerEmail: vi.fn(async () => {
         throw 'owner-email'
       }),
+      updateAgentProfile: vi
+        .fn(async () => {
+          throw 'profile-update'
+        })
+        .mockImplementationOnce(async () => {
+          throw 'profile-update'
+        })
+        .mockImplementationOnce(async () => {
+          throw new Error('Profile validation failed.')
+        }),
       verifyOwnerByClaimTweet: vi
         .fn(async () => {
           throw new Error('Tweet mismatch.')
@@ -131,6 +141,38 @@ describe('createAuthRouter fallback errors', () => {
           })
       ).body.message,
     ).toBe('Could not set owner email.')
+
+    expect(
+      (
+        await request(app)
+          .patch('/api/v1/auth/agents/profile')
+          .send({
+            displayName: 'Deadline Bot Prime',
+          })
+      ).body.message,
+    ).toBe('Agent API key is required.')
+
+    expect(
+      (
+        await request(app)
+          .patch('/api/v1/auth/agents/profile')
+          .send({
+            apiKey: 'lsk_live_1234567890',
+            displayName: 'Deadline Bot Prime',
+          })
+      ).body.message,
+    ).toBe('Could not update agent profile.')
+
+    expect(
+      (
+        await request(app)
+          .patch('/api/v1/auth/agents/profile')
+          .send({
+            apiKey: 'lsk_live_1234567890',
+            displayName: 'Deadline Bot Prime',
+          })
+      ).body.message,
+    ).toBe('Profile validation failed.')
 
     expect(
       (
@@ -771,5 +813,80 @@ describe('createAuthRouter fallback errors', () => {
     )
     expect(errorResponse.statusCode).toBe(400)
     expect(errorResponse.body.message).toBe('Connect start failed hard.')
+  })
+
+  it('redirects claim-email verification success, missing-token, and fallback failures back into the app shell', async () => {
+    vi.resetModules()
+
+    vi.doMock('../services/identity', () => ({
+      authenticateAgentApiKey: vi.fn(async () => null),
+      authenticateOwnerSession: vi.fn(async () => null),
+      claimOwnerByClaimToken: vi.fn(),
+      completeOwnerClaimXConnection: vi.fn(),
+      createCaptchaChallenge: vi.fn(),
+      createClaimOwnerEmailVerificationLink: vi.fn(),
+      createOwnerClaimXConnectUrl: vi.fn(),
+      createOwnerLoginLink: vi.fn(),
+      readAgentProfileByIdFromClient: vi.fn(),
+      readCaptchaChallenge: vi.fn(),
+      readClaimView: vi.fn(),
+      readOwnerSession: vi.fn(),
+      registerAgent: vi.fn(),
+      setupOwnerEmail: vi.fn(),
+      verifyClaimOwnerEmail: vi
+        .fn(async () => ({
+          claimToken: 'claim_1',
+        }))
+        .mockImplementationOnce(async () => {
+          throw 'claim-email-fallback'
+        })
+        .mockImplementationOnce(async () => {
+          throw new Error('claim-email-error')
+        }),
+      verifyOwnerByClaimTweet: vi.fn(),
+    }))
+    vi.doMock('./helpers', () => ({
+      createOperationalSnapshot: vi.fn(async () => ({})),
+      dispatchClaimOwnerEmailVerification: vi.fn(async () => undefined),
+      dispatchOwnerLoginLink: vi.fn(async () => undefined),
+      publishCurrentOperationalSnapshot: vi.fn(async () => ({})),
+      publishOperationalSnapshot: vi.fn(async () => true),
+      readApiKey: () => null,
+    }))
+
+    const { createAuthRouter } = await import('./auth')
+    const app = express()
+    app.use(express.json())
+    app.use('/api/v1/auth', createAuthRouter())
+
+    const missingToken = await request(app).get('/api/v1/auth/claim-email/verify')
+    expect(missingToken.statusCode).toBe(302)
+    expect(missingToken.headers.location).toContain(
+      'email_error=missing_email_verification_token',
+    )
+
+    const fallback = await request(app).get(
+      '/api/v1/auth/claim-email/verify?token=claimmail_1',
+    )
+    expect(fallback.statusCode).toBe(302)
+    expect(fallback.headers.location).toContain(
+      'email_error=Could+not+verify+that+owner+email.',
+    )
+
+    const explicitError = await request(app).get(
+      '/api/v1/auth/claim-email/verify?token=claimmail_2',
+    )
+    expect(explicitError.statusCode).toBe(302)
+    expect(explicitError.headers.location).toContain(
+      'email_error=claim-email-error',
+    )
+
+    const success = await request(app).get(
+      '/api/v1/auth/claim-email/verify?token=claimmail_3',
+    )
+    expect(success.statusCode).toBe(302)
+    expect(success.headers.location).toContain(
+      'claim=claim_1&email_verified=1',
+    )
   })
 })

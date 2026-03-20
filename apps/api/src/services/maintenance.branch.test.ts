@@ -10,6 +10,22 @@ vi.mock('./store', () => ({
   withStoreTransaction: mocks.withStoreTransaction,
 }))
 
+vi.mock('./identity', () => ({
+  cleanupExpiredIdentityState: vi.fn(async () => ({
+    expiredCaptchasDeleted: 0,
+    expiredClaimOwnerEmailVerificationsDeleted: 0,
+    expiredOwnerSessionsDeleted: 0,
+    expiredOwnerXStatesDeleted: 0,
+    staleAgentAccountsDeleted: 0,
+    staleBetsDeleted: 0,
+    staleNotificationsDeleted: 0,
+    staleDiscussionPostsDeleted: 0,
+    staleDiscussionVotesDeleted: 0,
+    staleDiscussionFlagsDeleted: 0,
+    stalePredictionLeadsDeleted: 0,
+  })),
+}))
+
 import { loadMaintainedStore, runMaintenance } from './maintenance'
 
 describe('loadMaintainedStore branch coverage', () => {

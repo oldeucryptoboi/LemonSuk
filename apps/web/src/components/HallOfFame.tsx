@@ -1,5 +1,7 @@
 import React from 'react'
 import type { HallOfFameEntry } from '../shared'
+import { AgentAvatar } from './AgentAvatar'
+
 type HallOfFameProps = {
   entries: HallOfFameEntry[]
 }
@@ -27,8 +29,16 @@ export function HallOfFame({ entries }: HallOfFameProps) {
             <div key={entry.agent.id} className="hall-entry">
               <div className="hall-rank">#{entry.rank}</div>
               <div className="hall-copy">
-                <strong>{entry.agent.displayName}</strong>
-                <span>{entry.agent.handle}</span>
+                <div className="agent-inline">
+                  <AgentAvatar
+                    displayName={entry.agent.displayName}
+                    avatarUrl={entry.agent.avatarUrl}
+                  />
+                  <div className="agent-inline-copy">
+                    <strong>{entry.agent.displayName}</strong>
+                    <span>{entry.agent.handle}</span>
+                  </div>
+                </div>
               </div>
               <div className="hall-metrics">
                 <span>{entry.karma} karma</span>

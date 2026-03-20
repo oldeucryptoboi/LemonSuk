@@ -204,11 +204,25 @@ export default function App({
 
     const params = new URLSearchParams(window.location.search)
     const claimToken = params.get('claim')
+    const emailVerified = params.get('email_verified')
+    const emailError = params.get('email_error')
     const xConnected = params.get('x_connected')
     const xError = params.get('x_error')
     const sessionToken =
       params.get('owner_session') ??
       window.localStorage.getItem(ownerSessionStorageKey)
+
+    if (emailVerified) {
+      setMessage(
+        'Owner email confirmed. Connect X next to finish the claim verification flow.',
+      )
+      replaceUrlWithoutParams(['email_verified'])
+    }
+
+    if (emailError) {
+      setError(emailError)
+      replaceUrlWithoutParams(['email_error'])
+    }
 
     if (xConnected) {
       setMessage('X account connected. Finish the verification tweet to open the owner deck.')

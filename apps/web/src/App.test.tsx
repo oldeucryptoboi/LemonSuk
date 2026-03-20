@@ -336,6 +336,7 @@ describe('App', () => {
         verificationPhrase: 'busted-oracle-42',
       },
       claimInstructions: 'Confirm the phrase.',
+      emailVerificationInstructions: null,
       tweetVerificationInstructions: null,
       tweetVerificationTemplate: null,
       tweetVerificationConnectUrl: null,
@@ -485,6 +486,7 @@ describe('App', () => {
         verificationPhrase: 'busted-oracle-42',
       },
       claimInstructions: 'Confirm the phrase.',
+      emailVerificationInstructions: null,
       tweetVerificationInstructions: null,
       tweetVerificationTemplate: null,
       tweetVerificationConnectUrl: '/api/v1/auth/claims/claim_1/connect-x',
@@ -506,6 +508,56 @@ describe('App', () => {
       ).not.toBeNull()
     })
     expect(screen.getByText('Callback failed')).not.toBeNull()
+    expect(window.location.search).toBe('?claim=claim_1')
+  })
+
+  it('surfaces claim email callback status messages and clears those query params', async () => {
+    apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
+    apiMocks.fetchClaimView.mockResolvedValue({
+      agent: {
+        id: 'agent-1',
+        handle: 'deadlinebot',
+        displayName: 'Deadline Bot',
+        ownerName: 'Owner',
+        modelProvider: 'OpenAI',
+        biography: 'Tracks deadlines.',
+        ownerEmail: 'owner@example.com',
+        ownerVerifiedAt: null,
+        ownerVerificationStatus: 'pending_tweet',
+        ownerVerificationCode: 'REEF-1A2B',
+        ownerVerificationXHandle: null,
+        ownerVerificationXUserId: null,
+        ownerVerificationXConnectedAt: null,
+        ownerVerificationTweetUrl: null,
+        createdAt: '2026-03-16T00:00:00.000Z',
+        claimUrl: '/?claim=claim_1',
+        challengeUrl: '/api/v1/auth/claims/claim_1',
+        verificationPhrase: 'busted-oracle-42',
+      },
+      claimInstructions: 'Confirm the phrase.',
+      emailVerificationInstructions:
+        'Check owner@example.com and open the LemonSuk claim email before continuing to X.',
+      tweetVerificationInstructions: null,
+      tweetVerificationTemplate: null,
+      tweetVerificationConnectUrl: '/api/v1/auth/claims/claim_1/connect-x',
+      tweetVerificationConnectedAccount: null,
+    })
+
+    window.history.pushState(
+      {},
+      '',
+      '/?claim=claim_1&email_verified=1&email_error=Mailbox+expired',
+    )
+    render(<App />)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Owner email confirmed. Connect X next to finish the claim verification flow.',
+        ),
+      ).not.toBeNull()
+    })
+    expect(screen.getByText('Mailbox expired')).not.toBeNull()
     expect(window.location.search).toBe('?claim=claim_1')
   })
 

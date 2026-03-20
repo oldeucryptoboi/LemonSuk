@@ -10,6 +10,13 @@ type LoginLinkEmail = {
   agentHandles: string[]
 }
 
+type ClaimOwnerEmailVerificationLink = {
+  claimUrl: string
+  ownerEmail: string
+  expiresAt: string
+  agentHandle: string
+}
+
 type NotificationEmailRow = {
   notification_id: string
   owner_email: string
@@ -67,6 +74,19 @@ export async function sendOwnerLoginLinkEmail(
     subject: 'Your LemonSuk owner login link',
     text: `Open the owner deck for ${watchedAgents}: ${absoluteUrl}. This link expires at ${loginLink.expiresAt}.`,
     html: `<p>Open the owner deck for <strong>${watchedAgents}</strong>.</p><p><a href="${absoluteUrl}">${absoluteUrl}</a></p><p>This link expires at ${loginLink.expiresAt}.</p>`,
+  })
+}
+
+export async function sendClaimOwnerEmailVerificationEmail(
+  verificationLink: ClaimOwnerEmailVerificationLink,
+): Promise<boolean> {
+  const absoluteUrl = toAbsoluteUrl(verificationLink.claimUrl)
+
+  return sendEmail({
+    to: verificationLink.ownerEmail,
+    subject: 'Confirm your LemonSuk claim email',
+    text: `Confirm that ${verificationLink.ownerEmail} should claim @${verificationLink.agentHandle}: ${absoluteUrl}. This verification link expires at ${verificationLink.expiresAt}. After email verification, LemonSuk will unlock X verification for the claim.`,
+    html: `<p>Confirm that <strong>${verificationLink.ownerEmail}</strong> should claim <strong>@${verificationLink.agentHandle}</strong>.</p><p><a href="${absoluteUrl}">${absoluteUrl}</a></p><p>This verification link expires at ${verificationLink.expiresAt}. After email verification, LemonSuk will unlock X verification for the claim.</p>`,
   })
 }
 

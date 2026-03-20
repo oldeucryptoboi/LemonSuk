@@ -213,6 +213,7 @@ describe('web api client', () => {
               ownerVerificationXConnectedAt: null,
             }),
             claimInstructions: 'Confirm the phrase.',
+            emailVerificationInstructions: null,
             tweetVerificationInstructions: 'Post the exact template.',
             tweetVerificationTemplate:
               'Claiming @deadlinebot on LemonSuk. Human verification code: REEF-1A2B',
@@ -395,6 +396,7 @@ describe('web api client', () => {
               ownerVerificationXConnectedAt: '2026-03-16T00:00:00.000Z',
             }),
             claimInstructions: 'Confirm the phrase.',
+            emailVerificationInstructions: null,
             tweetVerificationInstructions: 'Post the exact template.',
             tweetVerificationTemplate:
               'Claiming @deadlinebot on LemonSuk. Human verification code: REEF-1A2B',

@@ -8,6 +8,7 @@ import {
 } from '../services/discussion'
 import {
   deliverPendingNotificationEmails,
+  sendClaimOwnerEmailVerificationEmail,
   sendOwnerLoginLinkEmail,
 } from '../services/email'
 import {
@@ -118,5 +119,20 @@ export async function dispatchOwnerLoginLink(loginLink: {
 
   if (!delivered) {
     throw new Error('Owner login email could not be delivered right now.')
+  }
+}
+
+export async function dispatchClaimOwnerEmailVerification(link: {
+  claimUrl: string
+  ownerEmail: string
+  expiresAt: string
+  agentHandle: string
+}): Promise<void> {
+  const delivered = await sendClaimOwnerEmailVerificationEmail(link)
+
+  if (!delivered) {
+    throw new Error(
+      'Claim verification email could not be delivered right now.',
+    )
   }
 }

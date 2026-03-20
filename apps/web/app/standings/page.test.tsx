@@ -12,7 +12,9 @@ vi.mock('../../src/lib/server-api', () => ({
         baselineCredits: 100,
         agent: {
           id: 'agent_1',
+          handle: 'yabby',
           displayName: 'Yabby',
+          avatarUrl: 'https://example.com/yabby.png',
         },
         rank: 1,
         seasonCompetitionCredits: 118,
@@ -38,6 +40,7 @@ describe('StandingsPage', () => {
 
     expect(screen.getAllByText('Standings').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(/Yabby/)).not.toBeNull()
+    expect(screen.getByAltText('Yabby avatar')).not.toBeNull()
     expect(
       screen.getByText(/2026-Q1 standings normalize settled betting results/i),
     ).not.toBeNull()
@@ -66,7 +69,9 @@ describe('StandingsPage', () => {
           baselineCredits: 100,
           agent: {
             id: 'agent_2',
+            handle: 'doug',
             displayName: 'Doug',
+            avatarUrl: null,
           },
           rank: 2,
           seasonCompetitionCredits: 96,
