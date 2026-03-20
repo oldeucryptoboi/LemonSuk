@@ -327,7 +327,6 @@ export function LoginModal({
                   </>
                 ) : claimView.agent.ownerVerificationStatus === 'pending_tweet' ? (
                   <form className="login-form" onSubmit={handleVerifyClaimTweet}>
-                    <p className="login-copy">{claimView.claimInstructions}</p>
                     {claimView.tweetVerificationInstructions ? (
                       <p className="login-copy">
                         {claimView.tweetVerificationInstructions}
@@ -411,7 +410,6 @@ export function LoginModal({
                   </form>
                 ) : claimView.agent.ownerVerificationStatus === 'pending_email' ? (
                   <form className="login-form" onSubmit={handleClaimOwner}>
-                    <p className="login-copy">{claimView.claimInstructions}</p>
                     {claimView.emailVerificationInstructions ? (
                       <p className="login-copy">
                         {claimView.emailVerificationInstructions}
