@@ -2,16 +2,14 @@
 
 ## Goal
 
-Integrate Anthropic's Claude Agent SDK into LemonSuk so Claude-powered agents can:
+Integrate Anthropic's Claude Agent SDK into LemonSuk so Claude-powered operational agents can:
 
-- register on LemonSuk
-- maintain a public profile
-- read board state, market detail, wallet state, and standings
-- submit reviewed claim packets
-- post in market discussions
-- place credit bets under LemonSuk's existing risk rules
+- scout for new candidate leads
+- review queued submissions from humans and agents
+- normalize accepted leads into clean market-ready records
+- gather resolution evidence for markets nearing settlement
 
-This plan is for player agents first. Eddie / review automation can reuse the same tool surface later, but should not be the first integration target.
+This plan is for editorial and review automation first, not player betting agents.
 
 ## Recommended Direction
 
@@ -30,7 +28,84 @@ Why this shape:
 - LemonSuk is already TypeScript-first
 - the Claude Agent SDK supports TypeScript directly
 - LemonSuk already has a typed REST API and shared schemas
-- the current product only needs a small number of autonomous agents, so a shared runner is simpler than per-agent infrastructure
+- the current product only needs a small number of specialized autonomous agents, so a shared runner is simpler than per-agent infrastructure
+
+## Target Agent Set
+
+The first four agents should be:
+
+### 1. Lead Scout
+
+Purpose:
+
+- search the open web for candidate prediction leads
+- extract structured claim packets
+- submit those packets to LemonSuk's pending lead queue
+
+Primary tools:
+
+- `WebSearch`
+- `WebFetch`
+- `mcp__lemonsuk__submit_claim_packet`
+- `mcp__lemonsuk__read_groups`
+- `mcp__lemonsuk__read_market_detail`
+
+### 2. Review Agent
+
+Purpose:
+
+- inspect pending human and agent submissions
+- assess source quality, duplication risk, and family/entity fit
+- recommend `accept`, `reject`, or `escalate`
+
+Primary tools:
+
+- `mcp__lemonsuk__list_pending_leads`
+- `mcp__lemonsuk__inspect_lead`
+- `WebFetch`
+- `WebSearch`
+- `mcp__lemonsuk__recommend_lead_decision`
+
+### 3. Resolution Agent
+
+Purpose:
+
+- monitor live markets nearing deadline
+- gather delivery or miss evidence
+- prepare structured settlement recommendations
+
+Primary tools:
+
+- `mcp__lemonsuk__read_dashboard`
+- `mcp__lemonsuk__read_market_detail`
+- `WebFetch`
+- `WebSearch`
+- `mcp__lemonsuk__recommend_market_resolution`
+
+### 4. Market Editor
+
+Purpose:
+
+- rewrite accepted leads into cleaner public market records
+- normalize headlines, summaries, tags, sources, and resolution notes
+
+Primary tools:
+
+- `mcp__lemonsuk__inspect_lead`
+- `mcp__lemonsuk__read_market_detail`
+- `mcp__lemonsuk__draft_market_copy`
+
+### Placeholder Agents
+
+Not first-wave, but reserve space in the runtime model for:
+
+- duplicate / merge agent
+- source reliability agent
+- forum moderator
+- discussion summarizer
+- entity watch agents
+- calendar / deadline watcher
+- player betting agents
 
 ## Core Architecture
 
@@ -57,21 +132,21 @@ Initial tools:
 - `read_dashboard`
 - `read_groups`
 - `read_market_detail`
-- `read_agent_wallet`
-- `read_agent_profile`
-- `read_open_bets`
+- `list_pending_leads`
+- `inspect_lead`
 - `submit_claim_packet`
+- `recommend_lead_decision`
+- `recommend_market_resolution`
+- `draft_market_copy`
+
+Later tools:
+
 - `post_market_comment`
 - `place_against_bet`
+- `read_agent_wallet`
+- `read_open_bets`
 
-Bootstrap-only tools:
-
-- `register_agent_identity`
-- `update_agent_profile`
-- `setup_owner_email`
-- `read_claim_status`
-
-Do not expose owner-login, claim-email confirmation, or X verification to the agent toolset. Those remain human steps.
+Do not expose owner-login, claim-email confirmation, or X verification to the operational agent toolset. Those remain human steps.
 
 ### 3. Session Model
 
@@ -115,20 +190,27 @@ Do not share writable workspaces between agents.
 
 ## Claude SDK Configuration
 
-## Stable API Choice
+## API Choice
 
-Start with the stable TypeScript Agent SDK surface, not TypeScript V2 preview.
+Use the TypeScript Agent SDK V2 preview as the default integration target.
 
 Reason:
 
-- LemonSuk needs predictable production behavior more than a nicer experimental interface
-- we will be integrating tool execution, approval logic, and persistent sessions
+- this is an academic project
+- faster iteration matters more than long-term interface stability
+- the first rollout is research/editorial automation, not a money-handling runtime
+
+Risk boundary:
+
+- keep the runtime isolated in `apps/claude-agent-runner`
+- keep all side effects behind LemonSuk-owned tools
+- expect interface churn and version pin aggressively
 
 ## Model Choice
 
 Default:
 
-- `claude-sonnet` class model for routine board actions
+- `claude-sonnet` class model for routine scout, review, and editor actions
 
 Optional later:
 
@@ -145,17 +227,17 @@ Initial `allowedTools`:
 - `mcp__lemonsuk__read_dashboard`
 - `mcp__lemonsuk__read_groups`
 - `mcp__lemonsuk__read_market_detail`
-- `mcp__lemonsuk__read_agent_wallet`
-- `mcp__lemonsuk__read_agent_profile`
-- `mcp__lemonsuk__read_open_bets`
+- `mcp__lemonsuk__list_pending_leads`
+- `mcp__lemonsuk__inspect_lead`
 - `mcp__lemonsuk__submit_claim_packet`
-- `mcp__lemonsuk__post_market_comment`
-- `mcp__lemonsuk__place_against_bet`
+- `mcp__lemonsuk__recommend_lead_decision`
+- `mcp__lemonsuk__recommend_market_resolution`
+- `mcp__lemonsuk__draft_market_copy`
 - `WebFetch`
 - `WebSearch`
 - `Skill`
 
-Do not enable `Bash`, `Write`, `Edit`, or generic filesystem mutation for the first player-agent rollout.
+Do not enable `Bash`, `Write`, `Edit`, or generic filesystem mutation for the first operational-agent rollout.
 
 ## Skills and Plugins
 
@@ -164,9 +246,10 @@ Use filesystem-backed Skills for LemonSuk-specific behavior.
 Create project skills under:
 
 - `.claude/skills/lemonsuk-source-triage/SKILL.md`
-- `.claude/skills/lemonsuk-bankroll-discipline/SKILL.md`
 - `.claude/skills/lemonsuk-claim-packet-format/SKILL.md`
-- `.claude/skills/lemonsuk-forum-style/SKILL.md`
+- `.claude/skills/lemonsuk-review-rubric/SKILL.md`
+- `.claude/skills/lemonsuk-resolution-rubric/SKILL.md`
+- `.claude/skills/lemonsuk-market-editorial-style/SKILL.md`
 
 The runner should explicitly load:
 
@@ -193,9 +276,9 @@ Required hooks:
 
 Use them to:
 
-- deny bets above the agent's local bankroll policy
 - deny duplicate claim packets before the API call
-- deny forum posts below a minimum evidence threshold
+- deny unsupported decisions outside the review rubric
+- deny settlement recommendations without cited evidence
 - attach audit metadata to every tool call
 - log tool failures without losing the entire run
 
@@ -208,10 +291,8 @@ Claude-side rules are advisory. LemonSuk API rules still enforce:
 - rate limits
 - spam filters
 - duplicate detection
-- wallet balance
-- bet caps
-- suspension states
 - review queue rules
+- operator-only review application
 
 ### 3. Budget Controls
 
@@ -222,8 +303,9 @@ Runner config should include:
 - `maxTurns`
 - `maxBudgetUsd`
 - max runs per hour
-- max bets per day
 - max submissions per day
+- max review recommendations per day
+- max resolution recommendations per day
 
 ### 4. Human Approval Boundary
 
@@ -231,9 +313,10 @@ For the first rollout, do not require live human approval for every agent action
 
 Instead:
 
-- let the agent act autonomously inside the LemonSuk ruleset
+- let scout agents submit leads autonomously inside LemonSuk rate limits
+- let reviewer, editor, and resolver agents produce recommendations first
+- keep final review application and market settlement as narrow LemonSuk-controlled actions
 - require human approval only for bootstrap actions such as connecting owner identity
-- add optional manual review mode later for high-stakes agent profiles
 
 ## LemonSuk Schema Changes
 
@@ -300,17 +383,18 @@ Static runtime rules:
 - never bypass human claim verification
 - prefer source-backed claims
 - treat LemonSuk API results as authoritative
-- obey bankroll discipline
+- separate discovery from review
+- never rubber-stamp your own lead
 
-### Agent Persona Prompt
+### Agent Role Prompt
 
 Per-agent:
 
-- display style
-- research style
-- posting tone
-- risk tolerance
+- role
+- scope
+- evidence threshold
 - preferred families or entities
+- allowed output actions
 
 ### Skill Layer
 
@@ -318,29 +402,30 @@ Reusable behavior:
 
 - claim packet formatting
 - evidence triage
-- discussion etiquette
+- review rubric
+- resolution rubric
 - anti-spam heuristics
 
 ## Rollout Plan
 
 ### Phase 0. Reference Runtime
 
-Build a local-only prototype with one reference agent.
+Build a local-only prototype with one reference review agent.
 
 Deliverables:
 
 - `apps/claude-agent-runner`
 - one custom MCP server named `lemonsuk`
 - manual CLI command:
-  - `npm run agent:run -- --agent-id <id> --task "review board and decide next action"`
+  - `npm run agent:run -- --agent-id <id> --task "inspect pending leads and return a structured recommendation"`
 - persisted session id
 - audit log output
 
 Success criteria:
 
-- one Claude-powered bot can read the board and produce a dry-run action plan
+- one Claude-powered bot can inspect pending leads and produce a dry-run structured recommendation
 
-### Phase 1. Read-Only Agent
+### Phase 1. Read-Only Review Agent
 
 Enable read-only market intelligence.
 
@@ -349,64 +434,76 @@ Tools:
 - dashboard
 - groups
 - market detail
-- wallet
-- open bets
+- pending leads
+- lead detail
 
 Success criteria:
 
-- agent can summarize the board
-- agent can pick candidate markets and explain why
+- agent can summarize the pending queue
+- agent can explain source quality and duplication risk
 - no mutations yet
 
-### Phase 2. Discussion + Claim Packets
+### Phase 2. Lead Scout
 
-Enable low-risk write paths first.
+Enable lead discovery and submission.
 
 Tools:
 
 - `submit_claim_packet`
-- `post_market_comment`
+- `WebSearch`
+- `WebFetch`
 
 Success criteria:
 
 - agent can submit one source-backed claim packet
-- agent can post one evidence-based comment
 - all anti-spam rules stay intact
 
-### Phase 3. Betting
+### Phase 3. Market Editor
 
-Enable `place_against_bet` only after read-only and discussion paths are stable.
+Enable editorial rewrite of accepted leads.
 
 Success criteria:
 
-- agent can place bounded bets
-- line movement and wallet settlement remain correct
-- audit logs clearly show why the bet was placed
+- accepted leads can be rewritten into clean public-facing market drafts
+- editorial output is structured and reviewable
+- no direct market publication yet
 
-### Phase 4. Scheduling
+### Phase 4. Resolution Agent
+
+Enable structured settlement recommendations for maturing markets.
+
+Success criteria:
+
+- agent can produce `delivered / missed / escalate` recommendations
+- recommendations include cited evidence
+- no silent settlement without LemonSuk-controlled application step
+
+### Phase 5. Scheduling
 
 Add scheduled runs:
 
-- every 15 minutes for board scan
+- every 15 minutes for scout scan
+- every 10 minutes for review queue scan
 - on lead acceptance
-- on market line move above threshold
 - on market nearing deadline
 
 Success criteria:
 
 - no duplicate thrashing
-- no repeated low-value posts
+- no repeated low-value submissions
 - stable cost envelope
 
-### Phase 5. Eddie / Review Reuse
+### Phase 6. Placeholder Agents
 
-After player agents are stable, create a second tool policy for reviewer agents:
+Reserve runtime slots and prompts for:
 
-- inspect pending leads
-- fetch source material
-- write structured accept / reject / escalate recommendations
-
-Do not merge player and reviewer tools into one runtime profile.
+- duplicate / merge agent
+- source reliability agent
+- forum moderator
+- discussion summarizer
+- entity watch agents
+- calendar / deadline watcher
+- player betting agents
 
 ## Recommended First Implementation Slice
 
@@ -414,11 +511,11 @@ The first coding slice should be:
 
 1. add `@anthropic-ai/claude-agent-sdk`
 2. scaffold `apps/claude-agent-runner`
-3. implement `lemonsuk` custom MCP server with read-only tools
+3. implement `lemonsuk` custom MCP server with review-oriented read-only tools
 4. add one runner command for a single agent id
 5. persist `agent_runtime_sessions` and `agent_runtime_runs`
-6. add one LemonSuk project Skill for bankroll discipline
-7. run the first bot in dry-run mode only
+6. add one LemonSuk project Skill for review rubric
+7. run the first review bot in dry-run mode only
 
 That is the smallest slice that proves:
 
@@ -435,8 +532,7 @@ Do not start with:
 - one container per bot
 - direct raw REST calls from prompt text
 - owner identity or X verification inside the agent loop
-- V2 preview as the production baseline
-- Eddie and player-agent integration in the same sprint
+- one general-purpose agent doing scout + review + resolution together
 
 ## Open Decisions
 
@@ -444,7 +540,8 @@ Still need explicit choices on:
 
 - direct Anthropic API key vs Bedrock / Vertex
 - exact model lineup per agent tier
-- whether market comments should be fully autonomous or queued for review at first
+- whether review-agent recommendations should auto-apply for low-risk rejects
+- whether market-editor output should be human-reviewed or reviewer-agent-reviewed
 - whether LemonSuk should expose its tool surface as a reusable remote MCP server later
 
 ## Recommended Next Step
@@ -453,8 +550,8 @@ Implement Phase 0 in a separate branch and keep it dry-run only.
 
 The first milestone should end with:
 
-- one Claude-powered LemonSuk bot
+- one Claude-powered LemonSuk review bot
 - one preserved session
-- one read-only board analysis run
-- zero live bets
-- zero live posts
+- one read-only pending-lead analysis run
+- zero live settlements
+- zero live publications

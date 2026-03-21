@@ -2958,7 +2958,12 @@ describe('identity service', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input)
+        const url =
+          input instanceof URL
+            ? input.toString()
+            : input instanceof Request
+              ? input.url
+              : input
         if (url.includes('/oauth2/token')) {
           return new Response(
             JSON.stringify({
@@ -3048,7 +3053,12 @@ describe('identity service', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input)
+        const url =
+          input instanceof URL
+            ? input.toString()
+            : input instanceof Request
+              ? input.url
+              : input
         if (url.includes('/oauth2/token')) {
           return new Response(
             JSON.stringify({
@@ -3097,7 +3107,12 @@ describe('identity service', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input)
+        const url =
+          input instanceof URL
+            ? input.toString()
+            : input instanceof Request
+              ? input.url
+              : input
         if (url.includes('/oauth2/token')) {
           return new Response(
             JSON.stringify({

@@ -315,6 +315,36 @@ describe('LoginModal', () => {
 
   it('stages pending-email claims before the X step and can resend the verification link', async () => {
     const user = userEvent.setup()
+    const pendingEmailClaimViewForReset = {
+      agent: createClaimedAgent({
+        ownerEmail: 'owner@example.com',
+        ownerVerificationStatus: 'pending_email',
+        ownerVerificationCode: 'REEF-1A2B',
+      }),
+      claimInstructions: 'Attach your inbox first, then LemonSuk unlocks the X step.',
+      emailVerificationInstructions:
+        'Check owner@example.com and open the LemonSuk claim email before continuing to X.',
+      tweetVerificationInstructions: null,
+      tweetVerificationTemplate: null,
+      tweetVerificationConnectUrl: null,
+      tweetVerificationConnectedAccount: null,
+    }
+    const onResetClaimViewChange = vi.fn()
+
+    const resetHarness = render(
+      <LoginModal
+        open={true}
+        defaultMode="claim"
+        claimView={pendingEmailClaimViewForReset}
+        onClaimViewChange={onResetClaimViewChange}
+        onClose={() => undefined}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Use another claim' }))
+    expect(onResetClaimViewChange).toHaveBeenCalledWith(null)
+    resetHarness.unmount()
+
     const pendingEmailClaimView = {
       agent: createClaimedAgent({
         ownerEmail: 'owner@example.com',
@@ -417,6 +447,128 @@ describe('LoginModal', () => {
     expect(screen.getByRole('link', { name: 'Connect with X' })).not.toBeNull()
     await user.click(screen.getByRole('button', { name: 'Use another claim' }))
     expect(screen.getByRole('button', { name: 'Find my agent' })).not.toBeNull()
+  })
+
+  it('shows refresh errors for both pending-email and pending-tweet claim states', async () => {
+    const user = userEvent.setup()
+    const onClaimViewChange = vi.fn()
+
+    apiMocks.fetchClaimView.mockRejectedValueOnce('refresh-string')
+
+    const { rerender } = render(
+      <LoginModal
+        open={true}
+        defaultMode="claim"
+        claimView={{
+          agent: createClaimedAgent({
+            ownerEmail: 'owner@example.com',
+            ownerVerificationStatus: 'pending_email',
+          }),
+          claimInstructions: 'Verify email first.',
+          emailVerificationInstructions: 'Check your inbox first.',
+          tweetVerificationInstructions: null,
+          tweetVerificationTemplate: null,
+          tweetVerificationConnectUrl: null,
+          tweetVerificationConnectedAccount: null,
+        }}
+        onClaimViewChange={onClaimViewChange}
+        onClose={() => undefined}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Refresh claim status' }))
+    expect(
+      await screen.findByText('Could not refresh this claim right now.'),
+    ).not.toBeNull()
+
+    apiMocks.fetchClaimView.mockRejectedValueOnce('refresh-string')
+
+    rerender(
+      <LoginModal
+        open={true}
+        defaultMode="claim"
+        claimView={{
+          agent: createClaimedAgent({
+            ownerEmail: 'owner@example.com',
+            ownerVerificationStatus: 'pending_tweet',
+            ownerVerificationCode: 'REEF-1A2B',
+            ownerVerificationXHandle: 'deadlinebot_owner',
+            ownerVerificationXUserId: 'x-user-1',
+            ownerVerificationXConnectedAt: '2026-03-16T00:00:00.000Z',
+          }),
+          claimInstructions: 'Connect X and post the verification tweet.',
+          emailVerificationInstructions: null,
+          tweetVerificationInstructions: 'Post the exact verification template.',
+          tweetVerificationTemplate:
+            'Claiming @deadlinebot on LemonSuk. Human verification code: REEF-1A2B',
+          tweetVerificationConnectUrl:
+            'http://localhost:8787/api/v1/auth/claims/claim_1/connect-x',
+          tweetVerificationConnectedAccount: 'deadlinebot_owner',
+        }}
+        onClaimViewChange={onClaimViewChange}
+        onClose={() => undefined}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Refresh claim status' }))
+    expect(
+      await screen.findByText('Could not refresh this claim right now.'),
+    ).not.toBeNull()
+  })
+
+  it('surfaces invalid claim links and error-based refresh failures explicitly', async () => {
+    const user = userEvent.setup()
+
+    apiMocks.fetchClaimView.mockRejectedValueOnce(new Error('Refresh failed.'))
+
+    const { rerender } = render(
+      <LoginModal
+        open={true}
+        defaultMode="claim"
+        claimView={{
+          agent: createClaimedAgent({
+            claimUrl: '',
+            ownerEmail: 'owner@example.com',
+            ownerVerificationStatus: 'pending_email',
+          }),
+          claimInstructions: 'Verify email first.',
+          emailVerificationInstructions: 'Check your inbox first.',
+          tweetVerificationInstructions: null,
+          tweetVerificationTemplate: null,
+          tweetVerificationConnectUrl: null,
+          tweetVerificationConnectedAccount: null,
+        }}
+        onClaimViewChange={() => undefined}
+        onClose={() => undefined}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Refresh claim status' }))
+    expect(await screen.findByText('This claim link is invalid.')).not.toBeNull()
+
+    rerender(
+      <LoginModal
+        open={true}
+        defaultMode="claim"
+        claimView={{
+          agent: createClaimedAgent({
+            ownerEmail: 'owner@example.com',
+            ownerVerificationStatus: 'pending_email',
+          }),
+          claimInstructions: 'Verify email first.',
+          emailVerificationInstructions: 'Check your inbox first.',
+          tweetVerificationInstructions: null,
+          tweetVerificationTemplate: null,
+          tweetVerificationConnectUrl: null,
+          tweetVerificationConnectedAccount: null,
+        }}
+        onClaimViewChange={() => undefined}
+        onClose={() => undefined}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Refresh claim status' }))
+    expect(await screen.findByText('Refresh failed.')).not.toBeNull()
   })
 
   it('supports owner deck login, linked claims, and fallback errors', async () => {

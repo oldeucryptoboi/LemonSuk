@@ -317,12 +317,8 @@ export function LoginModal({
     }
   }
 
-  async function handleRefreshClaimView() {
-    if (!claimView) {
-      return
-    }
-
-    const claimToken = parseClaimToken(claimView.agent.claimUrl)
+  async function handleRefreshClaimView(activeClaimView: ClaimView) {
+    const claimToken = parseClaimToken(activeClaimView.agent.claimUrl)
     if (!claimToken) {
       setClaimRefreshError('This claim link is invalid.')
       return
@@ -538,7 +534,7 @@ export function LoginModal({
                       <button
                         type="button"
                         className="secondary-button"
-                        onClick={handleRefreshClaimView}
+                        onClick={() => handleRefreshClaimView(claimView)}
                       >
                         {claimRefreshPending ? 'Refreshing…' : 'Refresh claim status'}
                       </button>
@@ -621,7 +617,7 @@ export function LoginModal({
                       <button
                         type="button"
                         className="secondary-button"
-                        onClick={handleRefreshClaimView}
+                        onClick={() => handleRefreshClaimView(claimView)}
                       >
                         {claimRefreshPending ? 'Refreshing…' : 'Refresh claim status'}
                       </button>

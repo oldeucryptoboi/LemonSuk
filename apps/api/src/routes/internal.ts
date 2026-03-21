@@ -2,11 +2,21 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import {
+  claudeReviewAgentClaimNextInputSchema,
+  claudeReviewAgentCompleteRunInputSchema,
+  claudeReviewAgentFailRunInputSchema,
+  claudeReviewAgentRunEventInputSchema,
   internalPredictionSubmissionReviewResultInputSchema,
   internalPredictionSubmissionStatusInputSchema,
 } from '../shared'
 import { apiConfig } from '../config'
 import { asyncHandler } from '../middleware/async-handler'
+import {
+  appendClaudeReviewAgentRunEvent,
+  claimNextPredictionLeadForClaudeReviewAgent,
+  completeClaudeReviewAgentRun,
+  failClaudeReviewAgentRun,
+} from '../services/claude-review-agent'
 import {
   applyPredictionLeadReviewResultForInternal,
   readPredictionLeadInspectionForInternal,
@@ -105,6 +115,84 @@ export function createInternalRouter(): Router {
       }
 
       response.json(detail)
+    }),
+  )
+
+  router.post(
+    '/internal/claude-review-agent/claim-next',
+    asyncHandler(async (request, response) => {
+      const body = claudeReviewAgentClaimNextInputSchema.parse(request.body)
+      response.json(await claimNextPredictionLeadForClaudeReviewAgent(body))
+    }),
+  )
+
+  router.post(
+    '/internal/claude-review-agent/runs/:runId/events',
+    asyncHandler(async (request, response) => {
+      const params = z
+        .object({
+          runId: z.string(),
+        })
+        .parse(request.params)
+      const body = claudeReviewAgentRunEventInputSchema.parse(request.body)
+
+      try {
+        response.json(await appendClaudeReviewAgentRunEvent(params.runId, body))
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not append Claude review run event.'
+        response
+          .status(message === 'Claude review run not found.' ? 404 : 400)
+          .json({ message })
+      }
+    }),
+  )
+
+  router.post(
+    '/internal/claude-review-agent/runs/:runId/complete',
+    asyncHandler(async (request, response) => {
+      const params = z
+        .object({
+          runId: z.string(),
+        })
+        .parse(request.params)
+      const body = claudeReviewAgentCompleteRunInputSchema.parse(request.body)
+
+      try {
+        response.json(await completeClaudeReviewAgentRun(params.runId, body))
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not complete Claude review run.'
+        response
+          .status(message === 'Claude review run not found.' ? 404 : 400)
+          .json({ message })
+      }
+    }),
+  )
+
+  router.post(
+    '/internal/claude-review-agent/runs/:runId/fail',
+    asyncHandler(async (request, response) => {
+      const params = z
+        .object({
+          runId: z.string(),
+        })
+        .parse(request.params)
+      const body = claudeReviewAgentFailRunInputSchema.parse(request.body)
+
+      try {
+        response.json(await failClaudeReviewAgentRun(params.runId, body))
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Could not fail Claude review run.'
+        response
+          .status(message === 'Claude review run not found.' ? 404 : 400)
+          .json({ message })
+      }
     }),
   )
 

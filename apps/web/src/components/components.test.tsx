@@ -578,6 +578,110 @@ describe('web components', () => {
     expect(screen.getByText(/1 linked agent ready for monitoring\./i)).not.toBeNull()
 
     rerender(
+      <HeroBanner
+        snapshot={heroSnapshot}
+        ownerSession={{
+          sessionToken: 'owner_1',
+          ownerEmail: 'owner@example.com',
+          expiresAt: '2026-03-18T00:00:00.000Z',
+          agents: [
+            hallOfFame[0]!.agent,
+            createAgentProfile({
+              id: 'agent-scout',
+              handle: 'scoutbot',
+              displayName: 'Scout Bot',
+            }),
+            createAgentProfile({
+              id: 'agent-orbit',
+              handle: 'orbitbot',
+              displayName: 'Orbit Bot',
+            }),
+            createAgentProfile({
+              id: 'agent-radar',
+              handle: 'radarbot',
+              displayName: 'Radar Bot',
+            }),
+          ],
+          bets: [],
+          notifications: [],
+        }}
+        agentInstructionsUrl="https://lemonsuk.com/agent.md"
+        onOpenOwnerModal={onOpenOwnerModal}
+        onOpenClaimModal={onOpenClaimModal}
+        onOwnerLogout={onOpenOwnerModal}
+      />,
+    )
+    expect(screen.getByText('No owner-linked slips are open right now.')).not.toBeNull()
+    expect(screen.getByText('No owner alerts are waiting.')).not.toBeNull()
+    expect(screen.getByText('+1 more linked')).not.toBeNull()
+
+    rerender(
+      <HeroBanner
+        snapshot={heroSnapshot}
+        ownerSession={{
+          sessionToken: 'owner_1',
+          ownerEmail: 'owner@example.com',
+          expiresAt: '2026-03-18T00:00:00.000Z',
+          agents: [hallOfFame[0]!.agent],
+          bets: [
+            {
+              ...activeBet,
+              userId: hallOfFame[0]!.agent.id,
+            },
+          ],
+          notifications: [
+            {
+              id: 'notification-positive',
+              userId: hallOfFame[0]!.agent.id,
+              marketId: 'market-1',
+              betId: 'bet-1',
+              type: 'bet_won' as const,
+              title: 'Positive owner alert',
+              body: 'A linked ticket settled.',
+              createdAt: '2026-03-16T00:10:00.000Z',
+              readAt: null,
+            },
+          ],
+        }}
+        agentInstructionsUrl="https://lemonsuk.com/agent.md"
+        onOpenOwnerModal={onOpenOwnerModal}
+        onOpenClaimModal={onOpenClaimModal}
+        onOwnerLogout={onOpenOwnerModal}
+      />,
+    )
+    expect(screen.getByText('1 owner-linked slips are still live')).not.toBeNull()
+    expect(screen.getByText('Settlement and owner notifications are waiting.')).not.toBeNull()
+
+    rerender(
+      <HeroBanner
+        snapshot={heroSnapshot}
+        ownerSession={{
+          sessionToken: 'owner_1',
+          ownerEmail: 'owner@example.com',
+          expiresAt: '2026-03-18T00:00:00.000Z',
+          agents: [
+            createAgentProfile({
+              id: 'agent-zero',
+              handle: 'zerobot',
+              displayName: 'Zero Bot',
+              promoCredits: undefined,
+              earnedCredits: undefined,
+              availableCredits: undefined,
+            }),
+          ],
+          bets: [],
+          notifications: [],
+        }}
+        agentInstructionsUrl="https://lemonsuk.com/agent.md"
+        onOpenOwnerModal={onOpenOwnerModal}
+        onOpenClaimModal={onOpenClaimModal}
+        onOwnerLogout={onOpenOwnerModal}
+      />,
+    )
+    expect(screen.getAllByText('0 cr').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('@zerobot').length).toBeGreaterThan(0)
+
+    rerender(
       <MarketCard
         market={{
           ...marketWithResolution,

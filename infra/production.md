@@ -50,6 +50,12 @@ npm run prod:render-secrets
 npm run prod:compose -- up -d api web review-orchestrator
 ```
 
+The Claude review runner is deployed as a manual-profile service so it does not spend model budget continuously by default. Run one review pass explicitly with:
+
+```bash
+npm run prod:compose -- --profile manual run --rm claude-agent-runner
+```
+
 ## Local production rehearsal
 
 ```bash

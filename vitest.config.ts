@@ -5,6 +5,7 @@ export default defineConfig({
     fileParallelism: false,
     include: [
       'apps/api/src/**/*.test.ts',
+      'apps/claude-agent-runner/src/**/*.test.ts',
       'apps/review-orchestrator/src/**/*.test.ts',
       'apps/web/src/**/*.test.ts',
       'apps/web/src/**/*.test.tsx',
@@ -21,6 +22,7 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'apps/api/src/**/*.ts',
+        'apps/claude-agent-runner/src/**/*.ts',
         'apps/review-orchestrator/src/**/*.ts',
         'apps/web/app/**/*.ts',
         'apps/web/app/**/*.tsx',

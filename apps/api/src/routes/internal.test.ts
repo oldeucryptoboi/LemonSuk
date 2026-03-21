@@ -55,6 +55,54 @@ describe('createInternalRouter', () => {
     }
   }
 
+  function buildClaudeRun(id: string) {
+    return {
+      id,
+      agentKey: 'review-default',
+      leadId: 'lead_1',
+      sessionId: 'session_1',
+      providerRunId: 'provider_1',
+      status: 'running',
+      trigger: 'manual',
+      workspaceCwd: '/tmp/review-default',
+      promptSummary: 'Inspect next pending lead.',
+      finalSummary: null,
+      errorMessage: null,
+      costUsd: 0,
+      tokenUsage: null,
+      toolUsage: null,
+      recommendation: null,
+      startedAt: '2026-03-21T00:00:00.000Z',
+      completedAt: null,
+      createdAt: '2026-03-21T00:00:00.000Z',
+      updatedAt: '2026-03-21T00:00:00.000Z',
+    }
+  }
+
+  function buildClaudeRecommendation() {
+    return {
+      verdict: 'accept',
+      confidence: 0.82,
+      summary:
+        'The source is specific and deserves operator review as a viable market candidate.',
+      evidence: [
+        {
+          url: 'https://example.com/source',
+          excerpt: 'This source is specific and dated.',
+        },
+      ],
+      needsHumanReview: false,
+      recommendedFamilySlug: 'product_ship_date',
+      recommendedEntitySlug: 'apple',
+      duplicateLeadIds: [],
+      duplicateMarketIds: [],
+      normalizedHeadline: 'Apple ships the referenced feature by the stated deadline.',
+      normalizedSummary:
+        'The source maps cleanly onto a product ship-date market and is ready for operator review.',
+      escalationReason: null,
+    }
+  }
+
   async function buildRouteApp() {
     const { createInternalRouter } = await import('./internal')
     const app = express()
@@ -109,10 +157,74 @@ describe('createInternalRouter', () => {
         runId: 'run_2',
       },
     }))
+    const claimNextPredictionLeadForClaudeReviewAgent = vi.fn(async () => ({
+      claimed: true,
+      run: buildClaudeRun('claude_run_1'),
+      lead: {
+        lead: buildLead('lead_1'),
+        relatedPendingLeads: [],
+        recentReviewedLeads: [],
+        recentReviewResults: [],
+      },
+      resumeSessionId: 'session_0',
+    }))
+    const appendClaudeReviewAgentRunEvent = vi.fn(async () => ({
+      id: 'claude_event_1',
+      runId: 'claude_run_1',
+      eventType: 'claude_review_started',
+      payload: { leadId: 'lead_1' },
+      createdAt: '2026-03-21T00:00:10.000Z',
+    }))
+    const completeClaudeReviewAgentRun = vi.fn(async () => ({
+      run: {
+        ...buildClaudeRun('claude_run_1'),
+        status: 'completed',
+        finalSummary: 'Completed review.',
+        completedAt: '2026-03-21T00:01:00.000Z',
+        updatedAt: '2026-03-21T00:01:00.000Z',
+        costUsd: 0.01,
+        recommendation: buildClaudeRecommendation(),
+      },
+      reviewResult: {
+        runId: 'claude_run_1',
+        leadId: 'lead_1',
+        submissionId: 'submission_1',
+        reviewer: 'review-default',
+        verdict: 'accept',
+        confidence: 0.82,
+        summary:
+          'The source is specific and deserves operator review as a viable market candidate.',
+        evidence: [
+          {
+            url: 'https://example.com/source',
+            excerpt: 'This source is specific and dated.',
+          },
+        ],
+        needsHumanReview: false,
+        snapshotRef: null,
+        providerRunId: 'provider_1',
+        createdAt: '2026-03-21T00:01:00.000Z',
+      },
+    }))
+    const failClaudeReviewAgentRun = vi.fn(async () => ({
+      run: {
+        ...buildClaudeRun('claude_run_1'),
+        status: 'failed',
+        errorMessage: 'Claude review failed.',
+        completedAt: '2026-03-21T00:01:00.000Z',
+        updatedAt: '2026-03-21T00:01:00.000Z',
+      },
+    }))
     const publishCurrentOperationalSnapshot = vi.fn(async () => ({}))
 
     vi.doMock('../services/lead-intake', () => ({
       readPendingPredictionLeads,
+    }))
+    vi.doMock('../services/claude-review-agent', () => ({
+      claimNextPredictionLeadForClaudeReviewAgent,
+      appendClaudeReviewAgentRunEvent,
+      completeClaudeReviewAgentRun,
+      failClaudeReviewAgentRun,
     }))
     vi.doMock('../services/lead-review-workflow', () => ({
       readPredictionLeadForInternal,
@@ -215,6 +327,67 @@ describe('createInternalRouter', () => {
     ).toBe(200)
     expect(applyPredictionLeadReviewResultForInternal).toHaveBeenCalledTimes(1)
     expect(publishCurrentOperationalSnapshot).toHaveBeenCalledTimes(2)
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/claim-next')
+          .set(authorization)
+          .send({
+            agentKey: 'review-default',
+            trigger: 'manual',
+            promptSummary: 'Inspect next pending lead.',
+            workspaceCwd: '/tmp/review-default',
+            leaseSeconds: 900,
+          })
+      ).body.claimed,
+    ).toBe(true)
+    expect(claimNextPredictionLeadForClaudeReviewAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentKey: 'review-default',
+      }),
+    )
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/events')
+          .set(authorization)
+          .send({
+            eventType: 'claude_review_started',
+            payload: { leadId: 'lead_1' },
+          })
+      ).body.eventType,
+    ).toBe('claude_review_started')
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/complete')
+          .set(authorization)
+          .send({
+            sessionId: 'session_1',
+            providerRunId: 'provider_1',
+            finalSummary: 'Completed review.',
+            costUsd: 0.01,
+            tokenUsage: { input: 1000 },
+            toolUsage: { webFetchCalls: 1 },
+            recommendation: buildClaudeRecommendation(),
+          })
+      ).body.run.status,
+    ).toBe('completed')
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/fail')
+          .set(authorization)
+          .send({
+            errorMessage: 'Claude review failed.',
+            costUsd: 0,
+          })
+      ).body.run.status,
+    ).toBe('failed')
   })
 
   it('maps lead workflow errors and fallback messages', async () => {
@@ -242,9 +415,36 @@ describe('createInternalRouter', () => {
       .mockRejectedValueOnce(new Error('Prediction lead not found.'))
       .mockRejectedValueOnce(new Error('Linked market not found.'))
       .mockRejectedValueOnce('result-failed')
+    const claimNextPredictionLeadForClaudeReviewAgent = vi
+      .fn()
+      .mockRejectedValueOnce('claim-failed')
+    const appendClaudeReviewAgentRunEvent = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Claude review run not found.'))
+      .mockRejectedValueOnce('event-failed')
+    const completeClaudeReviewAgentRun = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Claude review run not found.'))
+      .mockRejectedValueOnce(
+        new Error('Claude review run no longer owns a pending lead claim.'),
+      )
+      .mockRejectedValueOnce('complete-failed')
+    const failClaudeReviewAgentRun = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Claude review run not found.'))
+      .mockRejectedValueOnce(
+        new Error('Claude review run no longer owns a pending lead claim.'),
+      )
+      .mockRejectedValueOnce('fail-failed')
 
     vi.doMock('../services/lead-intake', () => ({
       readPendingPredictionLeads,
+    }))
+    vi.doMock('../services/claude-review-agent', () => ({
+      claimNextPredictionLeadForClaudeReviewAgent,
+      appendClaudeReviewAgentRunEvent,
+      completeClaudeReviewAgentRun,
+      failClaudeReviewAgentRun,
     }))
     vi.doMock('../services/lead-review-workflow', () => ({
       readPredictionLeadForInternal,
@@ -385,6 +585,113 @@ describe('createInternalRouter', () => {
           })
       ).body.message,
     ).toBe('Could not apply prediction lead review result.')
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/claim-next')
+          .set(authorization)
+          .send({
+            agentKey: 'review-default',
+            trigger: 'manual',
+            promptSummary: 'Inspect next pending lead.',
+            workspaceCwd: '/tmp/review-default',
+            leaseSeconds: 900,
+          })
+      ).body.message,
+    ).toBe('Internal server error.')
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/events')
+          .set(authorization)
+          .send({
+            eventType: 'claude_review_started',
+            payload: { leadId: 'lead_1' },
+          })
+      ).statusCode,
+    ).toBe(404)
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/events')
+          .set(authorization)
+          .send({
+            eventType: 'claude_review_started',
+            payload: { leadId: 'lead_1' },
+          })
+      ).body.message,
+    ).toBe('Could not append Claude review run event.')
+
+    const validCompleteBody = {
+      sessionId: 'session_1',
+      providerRunId: 'provider_1',
+      finalSummary: 'Completed review.',
+      costUsd: 0.01,
+      tokenUsage: { input: 1000 },
+      toolUsage: { webFetchCalls: 1 },
+      recommendation: buildClaudeRecommendation(),
+    }
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/complete')
+          .set(authorization)
+          .send(validCompleteBody)
+      ).statusCode,
+    ).toBe(404)
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/complete')
+          .set(authorization)
+          .send(validCompleteBody)
+      ).statusCode,
+    ).toBe(400)
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/complete')
+          .set(authorization)
+          .send(validCompleteBody)
+      ).body.message,
+    ).toBe('Could not complete Claude review run.')
+
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/fail')
+          .set(authorization)
+          .send({
+            errorMessage: 'Review run failed.',
+            costUsd: 0,
+          })
+      ).statusCode,
+    ).toBe(404)
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/fail')
+          .set(authorization)
+          .send({
+            errorMessage: 'Review run failed.',
+            costUsd: 0,
+          })
+      ).statusCode,
+    ).toBe(400)
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/fail')
+          .set(authorization)
+          .send({
+            errorMessage: 'Review run failed.',
+            costUsd: 0,
+          })
+      ).body.message,
+    ).toBe('Could not fail Claude review run.')
 
     expect(publishCurrentOperationalSnapshot).not.toHaveBeenCalled()
   })

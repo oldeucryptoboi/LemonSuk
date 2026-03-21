@@ -696,6 +696,108 @@ export const internalPredictionLeadDetailSchema = z.object({
   recentReviewResults: z.array(predictionReviewResultSchema),
 })
 
+export const claudeReviewAgentRecommendationSchema = z.object({
+  verdict: predictionReviewVerdictSchema,
+  confidence: z.number().min(0).max(1),
+  summary: z.string().min(12).max(500),
+  evidence: z.array(predictionReviewEvidenceSchema).max(12),
+  needsHumanReview: z.boolean().default(false),
+  recommendedFamilySlug: predictionFamilySlugSchema.nullable().optional(),
+  recommendedEntitySlug: z.string().min(1).max(120).nullable().optional(),
+  duplicateLeadIds: z.array(z.string().min(1).max(120)).max(12).default([]),
+  duplicateMarketIds: z.array(z.string().min(1).max(120)).max(12).default([]),
+  normalizedHeadline: z.string().min(12).max(200).nullable().optional(),
+  normalizedSummary: z.string().min(12).max(500).nullable().optional(),
+  escalationReason: z.string().min(3).max(280).nullable().optional(),
+})
+
+export const claudeReviewAgentRunStatusSchema = z.enum([
+  'running',
+  'completed',
+  'failed',
+])
+
+export const claudeReviewAgentRunSchema = z.object({
+  id: z.string(),
+  agentKey: z.string().min(1).max(120),
+  leadId: z.string(),
+  sessionId: z.string().nullable(),
+  providerRunId: z.string().nullable(),
+  status: claudeReviewAgentRunStatusSchema,
+  trigger: z.string().min(1).max(80),
+  workspaceCwd: z.string().min(1).max(500),
+  promptSummary: z.string().min(3).max(280),
+  finalSummary: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  costUsd: z.number().nonnegative(),
+  tokenUsage: z.unknown().nullable(),
+  toolUsage: z.unknown().nullable(),
+  recommendation: claudeReviewAgentRecommendationSchema.nullable(),
+  startedAt: z.string(),
+  completedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export const claudeReviewAgentRunEventSchema = z.object({
+  id: z.string(),
+  runId: z.string(),
+  eventType: z.string().min(3).max(80),
+  payload: z.unknown(),
+  createdAt: z.string(),
+})
+
+export const claudeReviewAgentClaimNextInputSchema = z.object({
+  agentKey: z.string().min(1).max(120),
+  trigger: z.string().min(1).max(80).default('manual'),
+  promptSummary: z.string().min(3).max(280),
+  workspaceCwd: z.string().min(1).max(500),
+  leaseSeconds: z.number().int().min(30).max(3_600).default(900),
+})
+
+export const claudeReviewAgentClaimNextResponseSchema = z.object({
+  claimed: z.boolean(),
+  run: claudeReviewAgentRunSchema.nullable(),
+  lead: internalPredictionLeadDetailSchema.nullable(),
+  resumeSessionId: z.string().nullable(),
+})
+
+export const claudeReviewAgentRunEventInputSchema = z.object({
+  eventType: z.string().min(3).max(80),
+  payload: z.unknown(),
+})
+
+export const claudeReviewAgentCompleteRunInputSchema = z.object({
+  sessionId: z.string().min(1).max(120).optional(),
+  providerRunId: z.string().min(1).max(120).optional(),
+  finalSummary: z.string().min(3).max(2_000),
+  costUsd: z.number().nonnegative(),
+  tokenUsage: z.unknown().optional(),
+  toolUsage: z.unknown().optional(),
+  recommendation: claudeReviewAgentRecommendationSchema,
+  completedAt: z.string().optional(),
+})
+
+export const claudeReviewAgentCompleteRunResponseSchema = z.object({
+  run: claudeReviewAgentRunSchema,
+  reviewResult: predictionReviewResultSchema,
+})
+
+export const claudeReviewAgentFailRunInputSchema = z.object({
+  sessionId: z.string().min(1).max(120).optional(),
+  providerRunId: z.string().min(1).max(120).optional(),
+  finalSummary: z.string().min(3).max(2_000).optional(),
+  errorMessage: z.string().min(3).max(2_000),
+  costUsd: z.number().nonnegative().default(0),
+  tokenUsage: z.unknown().optional(),
+  toolUsage: z.unknown().optional(),
+  completedAt: z.string().optional(),
+})
+
+export const claudeReviewAgentFailRunResponseSchema = z.object({
+  run: claudeReviewAgentRunSchema,
+})
+
 export const predictionLeadQueueSchema = z.object({
   pendingCount: z.number().int().nonnegative(),
   items: z.array(predictionLeadSchema),
@@ -873,6 +975,15 @@ export type InternalPredictionLead = z.infer<
 export type InternalPredictionLeadDetail = z.infer<
   typeof internalPredictionLeadDetailSchema
 >
+export type ClaudeReviewAgentRecommendation = z.infer<
+  typeof claudeReviewAgentRecommendationSchema
+>
+export type ClaudeReviewAgentRun = z.infer<
+  typeof claudeReviewAgentRunSchema
+>
+export type ClaudeReviewAgentRunEvent = z.infer<
+  typeof claudeReviewAgentRunEventSchema
+>
 export type PredictionReviewVerdict = z.infer<
   typeof predictionReviewVerdictSchema
 >
@@ -887,6 +998,21 @@ export type InternalPredictionSubmissionStatusInput = z.infer<
 >
 export type InternalPredictionSubmissionReviewResultInput = z.infer<
   typeof internalPredictionSubmissionReviewResultInputSchema
+>
+export type ClaudeReviewAgentClaimNextInput = z.infer<
+  typeof claudeReviewAgentClaimNextInputSchema
+>
+export type ClaudeReviewAgentClaimNextResponse = z.infer<
+  typeof claudeReviewAgentClaimNextResponseSchema
+>
+export type ClaudeReviewAgentRunEventInput = z.infer<
+  typeof claudeReviewAgentRunEventInputSchema
+>
+export type ClaudeReviewAgentCompleteRunInput = z.infer<
+  typeof claudeReviewAgentCompleteRunInputSchema
+>
+export type ClaudeReviewAgentFailRunInput = z.infer<
+  typeof claudeReviewAgentFailRunInputSchema
 >
 export type AgentPredictionSubmissionResponse = z.infer<
   typeof agentPredictionSubmissionResponseSchema

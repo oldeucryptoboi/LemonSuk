@@ -92,6 +92,30 @@ services:
       - '8790:8790'
     restart: unless-stopped
 
+  claude-agent-runner:
+    image: lemonsuk-claude-agent-runner:latest
+    build:
+      context: .
+      dockerfile: apps/claude-agent-runner/Dockerfile
+    profiles:
+      - manual
+    depends_on:
+      - api
+    environment:
+      CLAUDE_REVIEW_AGENT_INTERNAL_API_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8787/api/v1}
+      CLAUDE_REVIEW_AGENT_INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-replace-internal-service-token}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_REVIEW_AGENT_MODEL: ${CLAUDE_REVIEW_AGENT_MODEL:-claude-sonnet-4-5}
+      CLAUDE_REVIEW_AGENT_KEY: ${CLAUDE_REVIEW_AGENT_KEY:-claude-review-default}
+      CLAUDE_REVIEW_AGENT_MAX_TURNS: ${CLAUDE_REVIEW_AGENT_MAX_TURNS:-8}
+      CLAUDE_REVIEW_AGENT_MAX_BUDGET_USD: ${CLAUDE_REVIEW_AGENT_MAX_BUDGET_USD:-1}
+      CLAUDE_REVIEW_AGENT_LEASE_SECONDS: ${CLAUDE_REVIEW_AGENT_LEASE_SECONDS:-900}
+      CLAUDE_REVIEW_AGENT_WORKSPACE_ROOT: ${CLAUDE_REVIEW_AGENT_WORKSPACE_ROOT:-/var/lib/lemonsuk-claude-agents}
+    volumes:
+      - lemonsuk-claude-agent-workspace:/var/lib/lemonsuk-claude-agents
+    restart: "no"
+
 volumes:
   lemonsuk-postgres:
   lemonsuk-redis:
+  lemonsuk-claude-agent-workspace:
