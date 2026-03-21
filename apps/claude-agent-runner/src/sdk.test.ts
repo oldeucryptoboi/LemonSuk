@@ -176,6 +176,52 @@ describe('Claude review model client', () => {
     )
   })
 
+  it('fails loudly when the SDK returns malformed structured output with alias keys', async () => {
+    const client = createClaudeReviewModelClient({
+      queryImpl: () =>
+        (async function* () {
+          yield {
+            type: 'system',
+            session_id: 'session_alias',
+          }
+          yield {
+            type: 'result',
+            subtype: 'success',
+            session_id: 'session_alias',
+            uuid: 'provider_alias',
+            result: 'A markdown summary with the wrong key names.',
+            total_cost_usd: 0.01,
+            usage: {},
+            modelUsage: {},
+            permission_denials: [],
+            structured_output: {
+              decision: 'reject',
+              confidence: 0.21,
+              summary: 'Wrong alias keys should not be tolerated.',
+              evidence: [],
+              needsHumanReview: false,
+              suggestedFamilyId: null,
+              suggestedEntityId: null,
+              duplicateLeadIds: [],
+              duplicateMarketIds: [],
+              normalizedHeadline: null,
+              normalizedSummary: null,
+              escalationReason: null,
+            },
+          }
+        })(),
+    })
+
+    await expect(
+      client.reviewLead({
+        config,
+        workspaceCwd: '/tmp/claude-review/review-default',
+        resumeSessionId: null,
+        lead: buildLeadDetail(),
+      }),
+    ).rejects.toThrowError(/verdict/i)
+  })
+
   it('surfaces SDK error results with captured execution context', async () => {
     const client = createClaudeReviewModelClient({
       queryImpl: () =>
@@ -253,6 +299,49 @@ describe('Claude review model client', () => {
 
     expect(sdkQuery).toHaveBeenCalledTimes(1)
     expect(result.finalSummary).toBe(buildRecommendation().summary)
+  })
+
+  it('forks persisted sessions when resuming a previous successful review session', async () => {
+    const sdkQuery = vi.fn(() =>
+      (async function* () {
+        yield {
+          type: 'system',
+          session_id: 'session_4_forked',
+        }
+        yield {
+          type: 'result',
+          subtype: 'success',
+          session_id: 'session_4_forked',
+          uuid: 'provider_4_forked',
+          total_cost_usd: 0.03,
+          usage: { input: 900, output: 180 },
+          modelUsage: { 'claude-sonnet-4-5': { inputTokens: 900 } },
+          permission_denials: [],
+          structured_output: buildRecommendation(),
+        }
+      })(),
+    )
+
+    const client = createClaudeReviewModelClient({
+      queryImpl: sdkQuery,
+    })
+
+    await client.reviewLead({
+      config,
+      workspaceCwd: '/tmp/claude-review/review-default',
+      resumeSessionId: 'session_previous',
+      lead: buildLeadDetail(),
+    })
+
+    expect(sdkQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          resume: 'session_previous',
+          forkSession: true,
+          persistSession: true,
+        }),
+      }),
+    )
   })
 
   it('fails loudly when the sdk yields no result message at all', async () => {

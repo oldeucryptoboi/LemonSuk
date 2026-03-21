@@ -151,6 +151,59 @@ describe('claude review agent service', () => {
 
     await context.pool.query(
       `
+        INSERT INTO claude_runner_runs (
+          id,
+          agent_key,
+          lead_id,
+          session_id,
+          provider_run_id,
+          status,
+          trigger,
+          workspace_cwd,
+          prompt_summary,
+          final_summary,
+          error_message,
+          cost_usd,
+          token_usage_json,
+          tool_usage_json,
+          recommendation_json,
+          started_at,
+          completed_at,
+          created_at,
+          updated_at
+        )
+        SELECT
+          'claude_run_previous',
+          'review-default',
+          id,
+          'session_previous',
+          NULL,
+          'completed',
+          'scheduled',
+          '/tmp/review-default',
+          'Previous successful run.',
+          'Completed successfully.',
+          NULL,
+          0.01,
+          NULL,
+          NULL,
+          NULL,
+          NOW() - INTERVAL '2 hours',
+          NOW() - INTERVAL '2 hours',
+          NOW() - INTERVAL '2 hours',
+          NOW() - INTERVAL '2 hours'
+        FROM prediction_leads
+        WHERE id = (
+          SELECT id
+          FROM prediction_leads
+          ORDER BY created_at ASC
+          LIMIT 1
+        )
+      `,
+    )
+
+    await context.pool.query(
+      `
         INSERT INTO claude_runner_sessions (
           agent_key,
           session_id,
@@ -183,6 +236,96 @@ describe('claude review agent service', () => {
 
     await context.pool.query(
       `
+        INSERT INTO prediction_leads (
+          id,
+          lead_type,
+          source_url,
+          normalized_source_url,
+          source_domain,
+          source_type,
+          source_label,
+          claimed_headline,
+          claimed_subject,
+          claimed_category,
+          promised_date,
+          summary,
+          tags,
+          status,
+          spam_score,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          'lead_session_reference',
+          'structured_agent_lead',
+          'https://example.com/session-reference',
+          'https://example.com/session-reference',
+          'example.com',
+          'blog',
+          'Example',
+          'Session reference headline',
+          'Session reference subject',
+          'software_release',
+          '2027-12-31T23:59:59.000Z',
+          'A stored lead row used only to anchor a completed runner session in tests.',
+          ARRAY[]::text[],
+          'accepted',
+          0,
+          NOW(),
+          NOW()
+        )
+      `,
+    )
+
+    await context.pool.query(
+      `
+        INSERT INTO claude_runner_runs (
+          id,
+          agent_key,
+          lead_id,
+          session_id,
+          provider_run_id,
+          status,
+          trigger,
+          workspace_cwd,
+          prompt_summary,
+          final_summary,
+          error_message,
+          cost_usd,
+          token_usage_json,
+          tool_usage_json,
+          recommendation_json,
+          started_at,
+          completed_at,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          'claude_run_previous',
+          'review-default',
+          'lead_session_reference',
+          'session_previous',
+          NULL,
+          'completed',
+          'scheduled',
+          '/tmp/review-default',
+          'Previous successful run.',
+          'Completed successfully.',
+          NULL,
+          0.01,
+          NULL,
+          NULL,
+          NULL,
+          NOW() - INTERVAL '2 hours',
+          NOW() - INTERVAL '2 hours',
+          NOW() - INTERVAL '2 hours',
+          NOW() - INTERVAL '2 hours'
+        )
+      `,
+    )
+
+    await context.pool.query(
+      `
         INSERT INTO claude_runner_sessions (
           agent_key,
           session_id,
@@ -209,6 +352,149 @@ describe('claude review agent service', () => {
       lead: null,
       resumeSessionId: 'session_previous',
     })
+
+    await context.pool.end()
+  })
+
+  it('does not reuse runner sessions whose last run failed', async () => {
+    const context = await setupApiContext()
+    const claudeReview = await import('./claude-review-agent')
+
+    await context.pool.query(
+      `
+        INSERT INTO prediction_leads (
+          id,
+          lead_type,
+          source_url,
+          normalized_source_url,
+          source_domain,
+          source_type,
+          source_label,
+          claimed_headline,
+          claimed_subject,
+          claimed_category,
+          promised_date,
+          summary,
+          tags,
+          status,
+          spam_score,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          'lead_failed_session_reference',
+          'structured_agent_lead',
+          'https://example.com/failed-session-reference',
+          'https://example.com/failed-session-reference',
+          'example.com',
+          'blog',
+          'Example',
+          'Failed session reference headline',
+          'Failed session reference subject',
+          'software_release',
+          '2027-12-31T23:59:59.000Z',
+          'A stored lead row used only to anchor a failed runner session in tests.',
+          ARRAY[]::text[],
+          'accepted',
+          0,
+          NOW(),
+          NOW()
+        )
+      `,
+    )
+
+    await context.pool.query(
+      `
+        INSERT INTO claude_runner_runs (
+          id,
+          agent_key,
+          lead_id,
+          session_id,
+          provider_run_id,
+          status,
+          trigger,
+          workspace_cwd,
+          prompt_summary,
+          final_summary,
+          error_message,
+          cost_usd,
+          token_usage_json,
+          tool_usage_json,
+          recommendation_json,
+          started_at,
+          completed_at,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          'claude_run_failed',
+          'review-default',
+          'lead_failed_session_reference',
+          'session_failed',
+          NULL,
+          'failed',
+          'scheduled',
+          '/tmp/review-default',
+          'Previous failed run.',
+          NULL,
+          'Structured output was missing.',
+          0.01,
+          NULL,
+          NULL,
+          NULL,
+          NOW() - INTERVAL '2 hours',
+          NOW() - INTERVAL '2 hours',
+          NOW() - INTERVAL '2 hours',
+          NOW() - INTERVAL '2 hours'
+        )
+      `,
+    )
+
+    await context.pool.query(
+      `
+        INSERT INTO claude_runner_sessions (
+          agent_key,
+          session_id,
+          workspace_cwd,
+          last_run_id,
+          created_at,
+          updated_at
+        )
+        VALUES ('review-default', 'session_failed', '/tmp/review-default', 'claude_run_failed', NOW(), NOW())
+      `,
+    )
+
+    const noWork = await claudeReview.claimNextPredictionLeadForClaudeReviewAgent({
+      agentKey: 'review-default',
+      trigger: 'scheduled',
+      promptSummary: 'Resume the latest review session if no lead is pending.',
+      workspaceCwd: '/tmp/review-default',
+      leaseSeconds: 900,
+    })
+
+    expect(noWork).toEqual({
+      claimed: false,
+      run: null,
+      lead: null,
+      resumeSessionId: null,
+    })
+
+    await enqueueLead(
+      context,
+      'claude_review_failed_resume_guard',
+      'https://example.com/failed-resume-guard-source',
+    )
+
+    const claimed = await claudeReview.claimNextPredictionLeadForClaudeReviewAgent({
+      agentKey: 'review-default',
+      trigger: 'manual',
+      promptSummary: 'Inspect next pending lead.',
+      workspaceCwd: '/tmp/review-default',
+      leaseSeconds: 900,
+    })
+
+    expect(claimed.resumeSessionId).toBeNull()
+    expect(claimed.run?.sessionId).toBeNull()
 
     await context.pool.end()
   })
@@ -707,6 +993,16 @@ describe('claude review agent service', () => {
     expect(failed.run.finalSummary).toBeNull()
     expect(failed.run.tokenUsage).toBeNull()
     expect(failed.run.toolUsage).toBeNull()
+
+    const sessions = await context.pool.query<{ count: number }>(
+      `
+        SELECT COUNT(*)::int AS count
+        FROM claude_runner_sessions
+        WHERE agent_key = 'review-default'
+      `,
+    )
+
+    expect(sessions.rows[0]?.count).toBe(0)
 
     await context.pool.end()
   })

@@ -89,6 +89,8 @@ function buildQueryOptions(input: {
   return {
     cwd: input.workspaceCwd,
     resume: input.resumeSessionId ?? undefined,
+    forkSession: input.resumeSessionId !== null,
+    persistSession: true,
     tools: ['WebFetch', 'WebSearch'],
     allowedTools: ['WebFetch', 'WebSearch'],
     permissionMode: 'dontAsk',

@@ -141,9 +141,13 @@ async function readLatestSessionForAgentKey(
 ): Promise<ClaudeRunnerSessionRow | null> {
   const result = await client.query<ClaudeRunnerSessionRow>(
     `
-      SELECT *
-      FROM claude_runner_sessions
-      WHERE agent_key = $1
+      SELECT session.*
+      FROM claude_runner_sessions AS session
+      INNER JOIN claude_runner_runs AS run
+        ON run.id = session.last_run_id
+      WHERE
+        session.agent_key = $1
+        AND run.status = 'completed'
       LIMIT 1
     `,
     [agentKey],
@@ -657,16 +661,6 @@ export async function failClaudeReviewAgentRun(
       },
       createdAt: completedAt,
     })
-
-    if (input.sessionId) {
-      await upsertRunnerSession(client, {
-        agentKey: run.agent_key,
-        sessionId: input.sessionId,
-        workspaceCwd: run.workspace_cwd,
-        lastRunId: runId,
-        now: completedAt,
-      })
-    }
 
     await clearLeadClaim(client, lead.id)
 
