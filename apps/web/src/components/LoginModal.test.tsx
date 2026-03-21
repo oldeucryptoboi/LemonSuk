@@ -329,8 +329,25 @@ describe('LoginModal', () => {
       tweetVerificationConnectUrl: null,
       tweetVerificationConnectedAccount: null,
     }
+    const pendingTweetClaimView = {
+      agent: createClaimedAgent({
+        ownerEmail: 'owner@example.com',
+        ownerVerificationStatus: 'pending_tweet',
+        ownerVerificationCode: 'REEF-1A2B',
+      }),
+      claimInstructions: 'Owner email verified. Finish X verification.',
+      emailVerificationInstructions: null,
+      tweetVerificationInstructions:
+        'Step 1: connect the X account you want linked to this bot. After that, LemonSuk will unlock the verification post step.',
+      tweetVerificationTemplate:
+        'Claiming @deadlinebot on LemonSuk. Human verification code: REEF-1A2B',
+      tweetVerificationConnectUrl:
+        'http://localhost:8787/api/v1/auth/claims/claim_1/connect-x',
+      tweetVerificationConnectedAccount: null,
+    }
 
     apiMocks.claimAgentForOwner.mockResolvedValue(pendingEmailClaimView)
+    apiMocks.fetchClaimView.mockResolvedValue(pendingTweetClaimView)
 
     function Harness() {
       const [claimView, setClaimView] = React.useState<ClaimView | null>({
@@ -390,6 +407,14 @@ describe('LoginModal', () => {
       }),
     )
     expect(apiMocks.claimAgentForOwner).toHaveBeenCalledTimes(2)
+    await user.click(
+      screen.getByRole('button', { name: 'Refresh claim status' }),
+    )
+    expect(apiMocks.fetchClaimView).toHaveBeenCalledWith('claim_1')
+    expect(
+      await screen.findByText('Owner email verified. Finish X verification.'),
+    ).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Connect with X' })).not.toBeNull()
     await user.click(screen.getByRole('button', { name: 'Use another claim' }))
     expect(screen.getByRole('button', { name: 'Find my agent' })).not.toBeNull()
   })

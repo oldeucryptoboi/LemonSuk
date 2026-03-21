@@ -556,11 +556,50 @@ export default function App({
                   </section>
                 ) : null}
 
+                {ownerSession ? (
+                  <>
+                    <section className="board-surface-panel owner-priority-panel">
+                      <div className="section-heading compact">
+                        <div>
+                          <div className="eyebrow">Owner workspace</div>
+                          <h2>Work the intake before the archive</h2>
+                        </div>
+                        <div className="owner-priority-actions">
+                          <a className="surface-link" href="/owner">
+                            Owner deck
+                          </a>
+                          <a className="surface-link" href="#review-desk">
+                            Review intake
+                          </a>
+                        </div>
+                      </div>
+                      <p className="surface-copy">
+                        You&apos;re signed in. Fresh source URLs and claim leads
+                        should go to Eddie first. The public archive stays below
+                        when you want board context.
+                      </p>
+                    </section>
+
+                    <AgentConsole
+                      query={agentQuery}
+                      report={report}
+                      running={runningAgent}
+                      ownerSessionToken={ownerSession.sessionToken}
+                      ownerEmail={ownerSession.ownerEmail}
+                      onQueryChange={setAgentQuery}
+                      onRun={handleRunDiscovery}
+                      onOpenOwnerModal={openOwnerLogin}
+                    />
+                  </>
+                ) : null}
+
                 <div className="feed-sticky-chrome">
                   <section className="section-heading">
                     <div>
-                      <div className="eyebrow">Archive layer</div>
-                      <h2>Full prediction feed</h2>
+                      <div className="eyebrow">
+                        {ownerSession ? 'Public archive' : 'Archive layer'}
+                      </div>
+                      <h2>{ownerSession ? 'Board archive' : 'Full prediction feed'}</h2>
                       <p className="feed-status">
                         Showing {renderedMarkets.length} of{' '}
                         {visibleMarkets.length} cards in the{' '}
@@ -624,24 +663,26 @@ export default function App({
                   </section>
                 </div>
 
-                <section className="season-surface-grid">
-                  {seasonalSurfaces.map((surface) => (
-                    <button
-                      key={surface.key}
-                      type="button"
-                      className="season-surface"
-                      onClick={() => {
-                        if (surface.leadMarketId) {
-                          setSelectedMarketId(surface.leadMarketId)
-                        }
-                      }}
-                    >
-                      <span className="eyebrow">{surface.title}</span>
-                      <strong>{surface.count}</strong>
-                      <p>{surface.description}</p>
-                    </button>
-                  ))}
-                </section>
+                {ownerSession ? null : (
+                  <section className="season-surface-grid">
+                    {seasonalSurfaces.map((surface) => (
+                      <button
+                        key={surface.key}
+                        type="button"
+                        className="season-surface"
+                        onClick={() => {
+                          if (surface.leadMarketId) {
+                            setSelectedMarketId(surface.leadMarketId)
+                          }
+                        }}
+                      >
+                        <span className="eyebrow">{surface.title}</span>
+                        <strong>{surface.count}</strong>
+                        <p>{surface.description}</p>
+                      </button>
+                    ))}
+                  </section>
+                )}
 
                 {renderedMarkets.length === 0 ? (
                   <p className="empty-copy feed-empty">
@@ -683,16 +724,18 @@ export default function App({
                   />
                 ) : null}
 
-                <AgentConsole
-                  query={agentQuery}
-                  report={report}
-                  running={runningAgent}
-                  ownerSessionToken={ownerSession?.sessionToken ?? null}
-                  ownerEmail={ownerSession?.ownerEmail ?? null}
-                  onQueryChange={setAgentQuery}
-                  onRun={handleRunDiscovery}
-                  onOpenOwnerModal={openOwnerLogin}
-                />
+                {ownerSession ? null : (
+                  <AgentConsole
+                    query={agentQuery}
+                    report={report}
+                    running={runningAgent}
+                    ownerSessionToken={null}
+                    ownerEmail={null}
+                    onQueryChange={setAgentQuery}
+                    onRun={handleRunDiscovery}
+                    onOpenOwnerModal={openOwnerLogin}
+                  />
+                )}
               </div>
             </section>
           )}

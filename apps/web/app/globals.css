@@ -452,6 +452,34 @@ input {
   margin-top: 14px;
 }
 
+.owner-preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.owner-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 200, 107, 0.18);
+  background: rgba(4, 18, 14, 0.82);
+  color: rgba(247, 236, 215, 0.88);
+  white-space: nowrap;
+}
+
+.owner-preview-chip strong {
+  color: var(--gold);
+}
+
+.owner-preview-chip-muted {
+  color: rgba(247, 236, 215, 0.68);
+}
+
 .highlight-label,
 .selected-label,
 .highlight-meta,
@@ -1078,6 +1106,23 @@ input {
   margin-bottom: 22px;
 }
 
+.owner-priority-panel {
+  gap: 12px;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(246, 200, 107, 0.18),
+      transparent 44%
+    ),
+    linear-gradient(180deg, rgba(10, 24, 18, 0.96), rgba(4, 14, 10, 0.94));
+}
+
+.owner-priority-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .board-spotlight-grid {
   display: grid;
   gap: 14px;
@@ -1223,7 +1268,8 @@ input {
 
 .surface-card p,
 .surface-meta,
-.surface-kicker {
+.surface-kicker,
+.surface-copy {
   margin: 0;
   color: rgba(247, 236, 215, 0.74);
   line-height: 1.5;
@@ -1241,7 +1287,7 @@ input {
   z-index: 5;
   display: grid;
   gap: 16px;
-  padding-bottom: 6px;
+  padding: 4px 0 6px;
   background: linear-gradient(
     180deg,
     rgba(5, 13, 10, 0.98) 0%,
@@ -1658,6 +1704,144 @@ input {
   white-space: nowrap;
 }
 
+.claim-status-shell {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.claim-status-card,
+.claim-detail-card,
+.claim-progress-step {
+  border-radius: 18px;
+  border: 1px solid rgba(246, 200, 107, 0.16);
+  background: rgba(4, 18, 14, 0.82);
+}
+
+.claim-status-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.claim-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.claim-status-label {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(247, 236, 215, 0.62);
+}
+
+.claim-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 200, 107, 0.22);
+  background: rgba(246, 200, 107, 0.08);
+  color: rgba(247, 236, 215, 0.9);
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.claim-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.claim-progress-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.claim-progress-step-current {
+  border-color: rgba(246, 200, 107, 0.32);
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(246, 200, 107, 0.12),
+      transparent 44%
+    ),
+    rgba(6, 20, 15, 0.92);
+}
+
+.claim-progress-step-complete {
+  border-color: rgba(63, 191, 127, 0.22);
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(63, 191, 127, 0.14),
+      transparent 46%
+    ),
+    rgba(5, 19, 14, 0.92);
+}
+
+.claim-progress-step-upcoming {
+  opacity: 0.72;
+}
+
+.claim-progress-index {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(246, 200, 107, 0.12);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.claim-progress-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.claim-progress-copy strong {
+  font-size: 0.96rem;
+}
+
+.claim-progress-copy span {
+  color: rgba(247, 236, 215, 0.64);
+  font-size: 0.84rem;
+}
+
+.claim-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.claim-detail-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.claim-detail-card span {
+  color: rgba(247, 236, 215, 0.62);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.claim-detail-card strong,
+.claim-detail-card code {
+  overflow-wrap: anywhere;
+}
+
 .login-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1908,7 +2092,8 @@ input {
 
   .season-surface-grid,
   .forum-insight-grid,
-  .surface-card-grid {
+  .surface-card-grid,
+  .claim-detail-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1965,6 +2150,10 @@ input {
     grid-template-columns: 1fr;
   }
 
+  .claim-progress-grid {
+    grid-template-columns: 1fr;
+  }
+
   .market-meta,
   .stat-row,
   .ticket-row {
@@ -1998,6 +2187,8 @@ input {
   .feed-controls,
   .hero-actions,
   .instruction-actions,
+  .owner-preview-list,
+  .owner-priority-actions,
   .hero-topbar,
   .agent-controls,
   .stake-row,

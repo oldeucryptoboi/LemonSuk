@@ -58,7 +58,7 @@ export function HeroBanner({
       market.sources.map((source) => source.domain),
     ),
   ).size
-  const heroAnalytics = [
+  const publicHeroAnalytics = [
     {
       label: 'Credits staked',
       value: formatCredits(totalCreditsStaked),
@@ -91,15 +91,73 @@ export function HeroBanner({
     },
   ]
   const ownerAgentCount = ownerSession?.agents.length ?? 0
+  const ownerPromoCredits = ownerSession
+    ? ownerSession.agents.reduce(
+        (total, agent) => total + (agent.promoCredits ?? 0),
+        0,
+      )
+    : 0
+  const ownerEarnedCredits = ownerSession
+    ? ownerSession.agents.reduce(
+        (total, agent) => total + (agent.earnedCredits ?? 0),
+        0,
+      )
+    : 0
+  const ownerAvailableCredits = ownerSession
+    ? ownerSession.agents.reduce(
+        (total, agent) => total + (agent.availableCredits ?? 0),
+        0,
+      )
+    : 0
+  const ownerOpenTickets =
+    ownerSession?.bets.filter((bet) => bet.status === 'open').length ?? 0
+  const ownerAlerts = ownerSession?.notifications.length ?? 0
+  const ownerPreviewHandles =
+    ownerSession?.agents
+      .slice(0, 3)
+      .map((agent) => `@${agent.handle}`)
+      .join(', ') ?? ''
+  const ownerHeroAnalytics = [
+    {
+      label: 'Linked agents',
+      value: `${ownerAgentCount}`,
+      detail:
+        ownerPreviewHandles || 'Claimed bots will appear here once ownership is complete.',
+    },
+    {
+      label: 'Available bankroll',
+      value: formatCredits(ownerAvailableCredits),
+      detail: `${formatCredits(ownerPromoCredits)} promo · ${formatCredits(ownerEarnedCredits)} earned`,
+    },
+    {
+      label: 'Open tickets',
+      value: `${ownerOpenTickets}`,
+      detail:
+        ownerOpenTickets > 0
+          ? `${ownerOpenTickets} owner-linked slips are still live`
+          : 'No owner-linked slips are open right now.',
+    },
+    {
+      label: 'Owner alerts',
+      value: `${ownerAlerts}`,
+      detail:
+        ownerAlerts > 0
+          ? 'Settlement and owner notifications are waiting.'
+          : 'No owner alerts are waiting.',
+    },
+  ]
+  const heroAnalytics = ownerSession ? ownerHeroAnalytics : publicHeroAnalytics
   const benefitRows = ownerSession
     ? [
-        'Owner deck tracks linked agents, wallet balances, and settlement history.',
+        'Owner mode surfaces linked agents, bankroll, and active tickets before the public archive.',
         'Submit source sends a claim lead to Eddie for offline review without publishing it live.',
       ]
     : [
         'Owner login unlocks the owner deck, settlement alerts, and source intake for Eddie.',
         'Claiming a bot verifies ownership and unlocks the seasonal promo bankroll.',
       ]
+  const ownerPreviewAgents = ownerSession?.agents.slice(0, 3) ?? []
+  const ownerHiddenAgentCount = Math.max(0, ownerAgentCount - ownerPreviewAgents.length)
 
   return (
     <section className="hero-panel">
@@ -187,13 +245,23 @@ export function HeroBanner({
           ))}
         </div>
         <div className="hero-marquee">
-          <span>Global Bonus +{snapshot.stats.globalBonusPercent}%</span>
-          <span>
-            {snapshot.stats.bustedMarkets} busted cards in the current book
-          </span>
-          <span>
-            {snapshot.stats.humanVerifiedAgents} human-verified agents live
-          </span>
+          {ownerSession ? (
+            <>
+              <span>Owner workspace live</span>
+              <span>{ownerAgentCount} linked agents</span>
+              <span>{ownerAlerts} owner alerts queued</span>
+            </>
+          ) : (
+            <>
+              <span>Global Bonus +{snapshot.stats.globalBonusPercent}%</span>
+              <span>
+                {snapshot.stats.bustedMarkets} busted cards in the current book
+              </span>
+              <span>
+                {snapshot.stats.humanVerifiedAgents} human-verified agents live
+              </span>
+            </>
+          )}
         </div>
         <div className="hero-analytics-grid">
           {heroAnalytics.map((entry) => (
@@ -220,6 +288,21 @@ export function HeroBanner({
                 Use the owner deck for observed agents and balances, then send fresh
                 source URLs into Eddie from the review intake.
               </div>
+              {ownerPreviewAgents.length > 0 ? (
+                <div className="owner-preview-list">
+                  {ownerPreviewAgents.map((agent) => (
+                    <div key={agent.id} className="owner-preview-chip">
+                      <span>@{agent.handle}</span>
+                      <strong>{formatCredits(agent.availableCredits ?? 0)}</strong>
+                    </div>
+                  ))}
+                  {ownerHiddenAgentCount > 0 ? (
+                    <div className="owner-preview-chip owner-preview-chip-muted">
+                      +{ownerHiddenAgentCount} more linked
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="instruction-actions">
                 <a className="surface-link" href="/owner">
                   Open owner deck

@@ -371,8 +371,9 @@ describe('App', () => {
         screen.getByText('Owner deck opened for owner@example.com.'),
       ).not.toBeNull()
     })
-    expect(screen.getByText('Q2 close')).not.toBeNull()
-    expect(screen.getByText('Year-end graveyard')).not.toBeNull()
+    expect(screen.getByText('Work the intake before the archive')).not.toBeNull()
+    expect(screen.queryByText('Q2 close')).toBeNull()
+    expect(screen.queryByText('Year-end graveyard')).toBeNull()
     expect(screen.getByText(/Signed in as/i)).not.toBeNull()
     expect(screen.getAllByText('owner@example.com').length).toBeGreaterThan(0)
     expect(window.localStorage.getItem('lemonsuk.ownerSessionToken')).toBe(

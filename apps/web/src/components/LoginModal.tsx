@@ -20,6 +20,11 @@ type LoginModalProps = {
 }
 
 type AuthMode = 'owner' | 'claim'
+type ClaimProgressState = 'complete' | 'current' | 'upcoming'
+type ClaimProgressStep = {
+  label: string
+  state: ClaimProgressState
+}
 
 function parseClaimToken(value: string): string | null {
   const trimmed = value.trim()
@@ -34,6 +39,67 @@ function parseClaimToken(value: string): string | null {
   }
 
   return trimmed
+}
+
+function formatClaimStatusLabel(claimView: ClaimView): string {
+  if (claimView.agent.ownerVerificationStatus === 'verified') {
+    return 'Claim complete'
+  }
+
+  if (claimView.agent.ownerVerificationStatus === 'pending_tweet') {
+    return claimView.tweetVerificationConnectedAccount
+      ? 'Proof tweet pending'
+      : 'X connection pending'
+  }
+
+  if (claimView.agent.ownerVerificationStatus === 'pending_email') {
+    return claimView.agent.ownerEmail ? 'Email confirmation pending' : 'Email needed'
+  }
+
+  return 'Waiting for owner'
+}
+
+function buildClaimProgress(claimView: ClaimView | null): ClaimProgressStep[] {
+  if (!claimView) {
+    return [
+      { label: 'Find agent', state: 'current' },
+      { label: 'Confirm email', state: 'upcoming' },
+      { label: 'Connect X', state: 'upcoming' },
+      { label: 'Post proof', state: 'upcoming' },
+    ]
+  }
+
+  const connectedX = Boolean(claimView.tweetVerificationConnectedAccount)
+  const status = claimView.agent.ownerVerificationStatus
+
+  return [
+    { label: 'Find agent', state: 'complete' },
+    {
+      label: 'Confirm email',
+      state:
+        status === 'unclaimed' || status === 'pending_email'
+          ? 'current'
+          : 'complete',
+    },
+    {
+      label: 'Connect X',
+      state:
+        status === 'verified' || connectedX
+          ? 'complete'
+          : status === 'pending_tweet'
+            ? 'current'
+            : 'upcoming',
+    },
+    {
+      label: 'Post proof',
+      state:
+        status === 'verified'
+          ? 'complete'
+          : status === 'pending_tweet' && connectedX
+            ? 'current'
+            : 'upcoming',
+    },
+  ]
 }
 
 export function LoginModal({
@@ -60,10 +126,13 @@ export function LoginModal({
   const [claimTweetUrl, setClaimTweetUrl] = useState('')
   const [claimTweetError, setClaimTweetError] = useState<string | null>(null)
   const [claimTweetPending, setClaimTweetPending] = useState(false)
+  const [claimRefreshError, setClaimRefreshError] = useState<string | null>(null)
+  const [claimRefreshPending, setClaimRefreshPending] = useState(false)
   const mode = useMemo<AuthMode>(
     () => (claimView ? 'claim' : defaultMode),
     [claimView, defaultMode],
   )
+  const claimProgress = useMemo(() => buildClaimProgress(claimView), [claimView])
   const claimConnectUrl = useMemo(() => {
     if (!claimView) {
       return '#'
@@ -89,6 +158,7 @@ export function LoginModal({
     setClaimLookupError(null)
     setClaimOwnerError(null)
     setClaimTweetError(null)
+    setClaimRefreshError(null)
     setClaimEmailSent((current) => {
       if (
         claimView?.agent.ownerVerificationStatus === 'pending_email' &&
@@ -163,6 +233,7 @@ export function LoginModal({
 
     setClaimLookupPending(true)
     setClaimLookupError(null)
+    setClaimRefreshError(null)
 
     try {
       const nextClaimView = await fetchClaimView(claimToken)
@@ -192,6 +263,7 @@ export function LoginModal({
 
     setClaimOwnerPending(true)
     setClaimOwnerError(null)
+    setClaimRefreshError(null)
     setClaimEmailSent(null)
 
     try {
@@ -227,6 +299,7 @@ export function LoginModal({
 
     setClaimTweetPending(true)
     setClaimTweetError(null)
+    setClaimRefreshError(null)
 
     try {
       const loginLink = await verifyClaimOwnerTweet(claimToken, {
@@ -241,6 +314,34 @@ export function LoginModal({
       )
     } finally {
       setClaimTweetPending(false)
+    }
+  }
+
+  async function handleRefreshClaimView() {
+    if (!claimView) {
+      return
+    }
+
+    const claimToken = parseClaimToken(claimView.agent.claimUrl)
+    if (!claimToken) {
+      setClaimRefreshError('This claim link is invalid.')
+      return
+    }
+
+    setClaimRefreshPending(true)
+    setClaimRefreshError(null)
+
+    try {
+      const nextClaimView = await fetchClaimView(claimToken)
+      onClaimViewChange(nextClaimView)
+    } catch (error) {
+      setClaimRefreshError(
+        error instanceof Error
+          ? error.message
+          : 'Could not refresh this claim right now.',
+      )
+    } finally {
+      setClaimRefreshPending(false)
     }
   }
 
@@ -287,24 +388,59 @@ export function LoginModal({
             {claimView ? (
               <>
                 <p className="login-copy">{claimView.agent.biography}</p>
-                <div className="registration-result">
-                  <p className="login-copy">
-                    Verification phrase:{' '}
-                    <code>{claimView.agent.verificationPhrase}</code>
-                  </p>
-                  <p className="login-copy">{claimView.claimInstructions}</p>
-                  <p className="login-copy">
-                    Owner email linked:{' '}
-                    <strong>
-                      {claimView.agent.ownerEmail ?? 'not yet attached'}
-                    </strong>
-                  </p>
-                  <p className="login-copy">
-                    Verified:{' '}
-                    <strong>
-                      {claimView.agent.ownerVerifiedAt ? 'yes' : 'not yet'}
-                    </strong>
-                  </p>
+                <div className="claim-status-shell">
+                  <div className="claim-status-card">
+                    <div className="claim-status-header">
+                      <div>
+                        <div className="claim-status-label">Current step</div>
+                        <strong>{formatClaimStatusLabel(claimView)}</strong>
+                      </div>
+                      <span className="claim-status-pill">
+                        {claimView.agent.ownerVerifiedAt ? 'Verified' : 'In progress'}
+                      </span>
+                    </div>
+                    <p className="login-copy">{claimView.claimInstructions}</p>
+                  </div>
+
+                  <div className="claim-progress-grid" aria-label="Claim progress">
+                    {claimProgress.map((step, index) => (
+                      <div
+                        key={step.label}
+                        className={`claim-progress-step claim-progress-step-${step.state}`}
+                      >
+                        <span className="claim-progress-index">{index + 1}</span>
+                        <div className="claim-progress-copy">
+                          <strong>{step.label}</strong>
+                          <span>
+                            {step.state === 'complete'
+                              ? 'Done'
+                              : step.state === 'current'
+                                ? 'Current'
+                                : 'Locked'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="claim-detail-grid">
+                    <div className="claim-detail-card">
+                      <span>Verification phrase</span>
+                      <code>{claimView.agent.verificationPhrase}</code>
+                    </div>
+                    <div className="claim-detail-card">
+                      <span>Owner email</span>
+                      <strong>{claimView.agent.ownerEmail ?? 'Not attached yet'}</strong>
+                    </div>
+                    <div className="claim-detail-card">
+                      <span>X account</span>
+                      <strong>
+                        {claimView.tweetVerificationConnectedAccount
+                          ? `@${claimView.tweetVerificationConnectedAccount}`
+                          : 'Not connected yet'}
+                      </strong>
+                    </div>
+                  </div>
                 </div>
 
                 {claimView.agent.ownerVerificationStatus === 'verified' ? (
@@ -365,6 +501,7 @@ export function LoginModal({
                             }
                             placeholder="https://x.com/yourhandle/status/..."
                             autoComplete="off"
+                            autoFocus
                           />
                         </label>
                       </>
@@ -386,6 +523,9 @@ export function LoginModal({
                     {claimTweetError ? (
                       <p className="error-text">{claimTweetError}</p>
                     ) : null}
+                    {claimRefreshError ? (
+                      <p className="error-text">{claimRefreshError}</p>
+                    ) : null}
 
                     <div className="modal-actions">
                       <button
@@ -394,6 +534,13 @@ export function LoginModal({
                         onClick={() => onClaimViewChange(null)}
                       >
                         Use another claim
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={handleRefreshClaimView}
+                      >
+                        {claimRefreshPending ? 'Refreshing…' : 'Refresh claim status'}
                       </button>
                       <button
                         type="submit"
@@ -426,6 +573,7 @@ export function LoginModal({
                         }
                         placeholder="owner@lemonsuk.bet"
                         autoComplete="email"
+                        autoFocus
                       />
                     </label>
 
@@ -458,6 +606,9 @@ export function LoginModal({
                     {claimOwnerError ? (
                       <p className="error-text">{claimOwnerError}</p>
                     ) : null}
+                    {claimRefreshError ? (
+                      <p className="error-text">{claimRefreshError}</p>
+                    ) : null}
 
                     <div className="modal-actions">
                       <button
@@ -466,6 +617,13 @@ export function LoginModal({
                         onClick={() => onClaimViewChange(null)}
                       >
                         Use another claim
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={handleRefreshClaimView}
+                      >
+                        {claimRefreshPending ? 'Refreshing…' : 'Refresh claim status'}
                       </button>
                       <button type="submit" className="primary-button">
                         {claimOwnerPending
@@ -488,6 +646,7 @@ export function LoginModal({
                         }
                         placeholder="owner@lemonsuk.bet"
                         autoComplete="email"
+                        autoFocus
                       />
                     </label>
 
@@ -537,6 +696,7 @@ export function LoginModal({
                       }
                       placeholder="https://lemonsuk.com/?claim=claim_..."
                       autoComplete="off"
+                      autoFocus
                     />
                   </label>
 
@@ -566,12 +726,14 @@ export function LoginModal({
             <div className="eyebrow">Owner login</div>
             <h2 id="login-modal-title">Owner login</h2>
             <p className="login-copy">
-              Returning owner? Enter your email for a magic link to reopen your
-              owner deck.
+              Returning owner? Use the same email you confirmed during claim to
+              reopen your owner deck.
             </p>
             <p className="login-copy">
               Logging in unlocks your owner deck, Eddie review intake, and
-              settlement notifications for the bots you control.
+              settlement notifications for the bots you control. If you are
+              still claiming a bot, go back to the claim link instead of using
+              owner login.
             </p>
 
             {ownerLoginSent ? (
@@ -621,6 +783,7 @@ export function LoginModal({
                     onChange={(event) => setOwnerLoginEmail(event.target.value)}
                     placeholder="owner@lemonsuk.bet"
                     autoComplete="email"
+                    autoFocus
                   />
                 </label>
 
