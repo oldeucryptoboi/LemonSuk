@@ -1,8 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { internalPredictionLeadDetailSchema } from '../../../packages/shared/src/types'
-
-import { createClaudeReviewModelClient } from './sdk'
 
 function buildLeadDetail() {
   return internalPredictionLeadDetailSchema.parse({
@@ -50,435 +48,523 @@ function buildLeadDetail() {
   })
 }
 
-describe('Claude review model client', () => {
-  const config = {
-    internalApiBaseUrl: 'http://localhost:8787/api/v1',
-    internalServiceToken: 'token',
-    anthropicApiKey: 'test-key',
-    model: 'claude-sonnet-4-5',
-    agentKey: 'review-default',
-    maxTurns: 8,
-    maxBudgetUsd: 1,
-    leaseSeconds: 900,
-    workspaceRoot: '/tmp/claude-review',
-  }
+const config = {
+  internalApiBaseUrl: 'http://localhost:8787/api/v1',
+  internalServiceToken: 'token',
+  anthropicApiKey: 'anthropic-key',
+  model: 'claude-sonnet-4-5',
+  agentKey: 'review-default',
+  maxTurns: 8,
+  maxBudgetUsd: 1,
+  leaseSeconds: 900,
+  workspaceRoot: '/tmp/claude-review',
+}
+
+describe('createClaudeReviewModelClient', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.restoreAllMocks()
+  })
 
   afterEach(() => {
-    vi.restoreAllMocks()
-    vi.resetModules()
-    vi.unmock('@anthropic-ai/claude-agent-sdk')
+    vi.doUnmock('@anthropic-ai/claude-agent-sdk')
   })
 
-  function buildRecommendation() {
-    return {
-      verdict: 'accept' as const,
-      confidence: 0.81,
-      summary:
-        'The source is concrete and maps cleanly to a settleable product launch claim.',
-      evidence: [
-        {
-          url: 'https://example.com/source',
-          excerpt: 'The feature ships before the stated deadline.',
-        },
-      ],
-      needsHumanReview: false,
-      duplicateLeadIds: [],
-      duplicateMarketIds: [],
-      recommendedFamilySlug: 'product_ship_date' as const,
-      recommendedEntitySlug: 'apple',
-      normalizedHeadline:
-        'Apple ships the referenced feature by the stated deadline.',
-      normalizedSummary:
-        'The source maps to a settleable product ship date market and is suitable for operator review.',
-      escalationReason: null,
-    }
-  }
-
-  it('returns structured recommendations from a successful result message', async () => {
-    const client = createClaudeReviewModelClient({
-      queryImpl: () =>
-        (async function* () {
-          yield {
-            type: 'system',
-            session_id: 'session_1',
-          }
-          yield {
-            type: 'result',
-            subtype: 'success',
-            session_id: 'session_1',
-            uuid: 'provider_1',
-            result: 'Accepted after source inspection.',
-            total_cost_usd: 0.01,
-            usage: { input: 1000, output: 200 },
-            modelUsage: { 'claude-sonnet-4-5': { inputTokens: 1000 } },
-            permission_denials: [],
-            structured_output: buildRecommendation(),
-          }
-        })(),
-    })
-
-    const result = await client.reviewLead({
-      config,
-      workspaceCwd: '/tmp/claude-review/review-default',
-      resumeSessionId: null,
-      lead: buildLeadDetail(),
-    })
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        sessionId: 'session_1',
-        providerRunId: 'provider_1',
-        costUsd: 0.01,
-        recommendation: expect.objectContaining({
-          verdict: 'accept',
-          recommendedFamilySlug: 'product_ship_date',
-        }),
-      }),
-    )
-  })
-
-  it('fails loudly when structured output is missing even if the SDK result succeeded', async () => {
-    const client = createClaudeReviewModelClient({
-      queryImpl: () =>
-        (async function* () {
-          yield {
-            type: 'system',
-            session_id: 'session_2',
-          }
-          yield {
-            type: 'result',
-            subtype: 'success',
-            session_id: 'session_2',
-            uuid: 'provider_2',
-            result: 'No structured output was returned.',
-            total_cost_usd: 0.01,
-            usage: {},
-            modelUsage: {},
-            permission_denials: [],
-          }
-        })(),
-    })
-
-    await expect(
-      client.reviewLead({
-        config,
-        workspaceCwd: '/tmp/claude-review/review-default',
-        resumeSessionId: null,
-        lead: buildLeadDetail(),
-      }),
-    ).rejects.toEqual(
-      expect.objectContaining({
-        name: 'ClaudeReviewAgentExecutionError',
-        message: 'Claude review agent returned no structured recommendation.',
-        sessionId: 'session_2',
-        providerRunId: 'provider_2',
-      }),
-    )
-  })
-
-  it('fails loudly when the SDK returns malformed structured output with alias keys', async () => {
-    const client = createClaudeReviewModelClient({
-      queryImpl: () =>
-        (async function* () {
-          yield {
-            type: 'system',
-            session_id: 'session_alias',
-          }
-          yield {
-            type: 'result',
-            subtype: 'success',
-            session_id: 'session_alias',
-            uuid: 'provider_alias',
-            result: 'A markdown summary with the wrong key names.',
-            total_cost_usd: 0.01,
-            usage: {},
-            modelUsage: {},
-            permission_denials: [],
-            structured_output: {
-              decision: 'reject',
-              confidence: 0.21,
-              summary: 'Wrong alias keys should not be tolerated.',
-              evidence: [],
-              needsHumanReview: false,
-              suggestedFamilyId: null,
-              suggestedEntityId: null,
-              duplicateLeadIds: [],
-              duplicateMarketIds: [],
-              normalizedHeadline: null,
-              normalizedSummary: null,
-              escalationReason: null,
-            },
-          }
-        })(),
-    })
-
-    await expect(
-      client.reviewLead({
-        config,
-        workspaceCwd: '/tmp/claude-review/review-default',
-        resumeSessionId: null,
-        lead: buildLeadDetail(),
-      }),
-    ).rejects.toThrowError(/verdict/i)
-  })
-
-  it('surfaces SDK error results with captured execution context', async () => {
-    const client = createClaudeReviewModelClient({
-      queryImpl: () =>
-        (async function* () {
-          yield {
-            type: 'system',
-            session_id: 'session_3',
-          }
-          yield {
-            type: 'result',
-            subtype: 'error_max_budget_usd',
-            session_id: 'session_3',
-            uuid: 'provider_3',
-            total_cost_usd: 1.2,
-            usage: { input: 8000, output: 4000 },
-            modelUsage: {},
-            permission_denials: [],
-            errors: ['Maximum budget exceeded.'],
-          }
-        })(),
-    })
-
-    await expect(
-      client.reviewLead({
-        config,
-        workspaceCwd: '/tmp/claude-review/review-default',
-        resumeSessionId: null,
-        lead: buildLeadDetail(),
-      }),
-    ).rejects.toEqual(
-      expect.objectContaining({
-        name: 'ClaudeReviewAgentExecutionError',
-        message: 'Maximum budget exceeded.',
-        sessionId: 'session_3',
-        providerRunId: 'provider_3',
-        costUsd: 1.2,
-      }),
-    )
-  })
-
-  it('uses the SDK module query implementation when no override is provided', async () => {
-    const sdkQuery = vi.fn(() =>
-      (async function* () {
-        yield {
-          type: 'system',
-          session_id: 'session_4',
-        }
+  it('uses the injected query impl and returns structured output without persisting sessions', async () => {
+    const queryImpl = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
         yield {
           type: 'result',
           subtype: 'success',
-          session_id: 'session_4',
-          uuid: 'provider_4',
-          total_cost_usd: 0.03,
-          usage: { input: 900, output: 180 },
-          modelUsage: { 'claude-sonnet-4-5': { inputTokens: 900 } },
+          session_id: 'session_1',
+          uuid: 'provider_1',
+          result: 'Completed review.',
+          total_cost_usd: 0.02,
+          usage: { input_tokens: 1000 },
+          modelUsage: { 'claude-sonnet-4-5': { inputTokens: 1000 } },
           permission_denials: [],
-          structured_output: buildRecommendation(),
+          structured_output: {
+            verdict: 'accept',
+            confidence: 0.81,
+            summary:
+              'The source is specific, public, and maps to a settleable market.',
+            evidence: [
+              {
+                url: 'https://example.com/source',
+                excerpt: 'The source is public and settleable.',
+              },
+            ],
+            needsHumanReview: false,
+            recommendedFamilySlug: 'product_ship_date',
+            recommendedEntitySlug: 'apple',
+            duplicateLeadIds: [],
+            duplicateMarketIds: [],
+            normalizedHeadline:
+              'Apple ships the referenced feature by the stated deadline.',
+            normalizedSummary:
+              'The source maps cleanly to a settleable product ship-date market.',
+            escalationReason: null,
+          },
         }
-      })(),
-    )
-
-    vi.doMock('@anthropic-ai/claude-agent-sdk', () => ({
-      query: sdkQuery,
+      },
+      close: vi.fn(),
     }))
 
-    const { createClaudeReviewModelClient: createClient } = await import('./sdk')
-    const client = createClient()
+    const { createClaudeReviewModelClient } = await import('./sdk')
+    const client = createClaudeReviewModelClient({ queryImpl })
+    const lead = buildLeadDetail()
 
-    const result = await client.reviewLead({
-      config,
-      workspaceCwd: '/tmp/claude-review/review-default',
-      resumeSessionId: null,
-      lead: buildLeadDetail(),
+    await expect(
+      client.reviewLead({
+        config,
+        workspaceCwd: '/tmp/claude-review/review-default',
+        lead,
+      }),
+    ).resolves.toEqual({
+      sessionId: 'session_1',
+      providerRunId: 'provider_1',
+      finalSummary: 'Completed review.',
+      costUsd: 0.02,
+      tokenUsage: {
+        usage: { input_tokens: 1000 },
+        modelUsage: { 'claude-sonnet-4-5': { inputTokens: 1000 } },
+      },
+      toolUsage: {
+        permissionDenials: [],
+      },
+      recommendation: {
+        verdict: 'accept',
+        confidence: 0.81,
+        summary:
+          'The source is specific, public, and maps to a settleable market.',
+        evidence: [
+          {
+            url: 'https://example.com/source',
+            excerpt: 'The source is public and settleable.',
+          },
+        ],
+        needsHumanReview: false,
+        recommendedFamilySlug: 'product_ship_date',
+        recommendedEntitySlug: 'apple',
+        duplicateLeadIds: [],
+        duplicateMarketIds: [],
+        normalizedHeadline:
+          'Apple ships the referenced feature by the stated deadline.',
+        normalizedSummary:
+          'The source maps cleanly to a settleable product ship-date market.',
+        escalationReason: null,
+      },
     })
 
-    expect(sdkQuery).toHaveBeenCalledTimes(1)
-    expect(result.finalSummary).toBe(buildRecommendation().summary)
+    expect(queryImpl).toHaveBeenCalledTimes(1)
+    const firstArgument = (queryImpl.mock.calls as unknown as Array<
+      Array<{ prompt: string; options: Record<string, unknown> }>
+    >)[0]?.[0]
+    expect(firstArgument).toBeDefined()
+    const { prompt, options } = firstArgument as {
+      prompt: string
+      options: Record<string, unknown>
+    }
+    expect(typeof prompt).toBe('string')
+    expect(prompt).toContain('Review this LemonSuk pending lead.')
+    expect(options).toMatchObject({
+      cwd: '/tmp/claude-review/review-default',
+      persistSession: false,
+      permissionMode: 'dontAsk',
+      maxTurns: 8,
+      maxBudgetUsd: 1,
+      model: 'claude-sonnet-4-5',
+      tools: ['WebFetch', 'WebSearch'],
+      allowedTools: ['WebFetch', 'WebSearch'],
+      outputFormat: {
+        type: 'json_schema',
+      },
+    })
+    expect(options.env).toMatchObject({
+      ANTHROPIC_API_KEY: 'anthropic-key',
+      CLAUDE_AGENT_SDK_CLIENT_APP: 'lemonsuk-claude-review-agent/0.1.0',
+    })
   })
 
-  it('forks persisted sessions when resuming a previous successful review session', async () => {
-    const sdkQuery = vi.fn(() =>
-      (async function* () {
-        yield {
-          type: 'system',
-          session_id: 'session_4_forked',
-        }
+  it('defaults missing telemetry fields to empty/null telemetry without hiding the structured recommendation', async () => {
+    const queryImpl = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
         yield {
           type: 'result',
           subtype: 'success',
-          session_id: 'session_4_forked',
-          uuid: 'provider_4_forked',
-          total_cost_usd: 0.03,
-          usage: { input: 900, output: 180 },
-          modelUsage: { 'claude-sonnet-4-5': { inputTokens: 900 } },
-          permission_denials: [],
-          structured_output: buildRecommendation(),
+          session_id: 'session_1b',
+          result: 'Completed review.',
+          structured_output: {
+            verdict: 'reject',
+            confidence: 0.33,
+            summary:
+              'The source is too weak to support a settleable claim and should be rejected.',
+            evidence: [],
+            needsHumanReview: false,
+            recommendedFamilySlug: null,
+            recommendedEntitySlug: null,
+            duplicateLeadIds: [],
+            duplicateMarketIds: [],
+            normalizedHeadline: null,
+            normalizedSummary: null,
+            escalationReason: null,
+          },
         }
-      })(),
-    )
+      },
+      close: vi.fn(),
+    }))
 
-    const client = createClaudeReviewModelClient({
-      queryImpl: sdkQuery,
-    })
-
-    await client.reviewLead({
-      config,
-      workspaceCwd: '/tmp/claude-review/review-default',
-      resumeSessionId: 'session_previous',
-      lead: buildLeadDetail(),
-    })
-
-    expect(sdkQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        options: expect.objectContaining({
-          resume: 'session_previous',
-          forkSession: true,
-          persistSession: true,
-        }),
-      }),
-    )
-  })
-
-  it('fails loudly when the sdk yields no result message at all', async () => {
-    const client = createClaudeReviewModelClient({
-      queryImpl: () =>
-        (async function* () {
-          yield {
-            type: 'system',
-            session_id: 'session_5',
-          }
-        })(),
-    })
+    const { createClaudeReviewModelClient } = await import('./sdk')
+    const client = createClaudeReviewModelClient({ queryImpl })
 
     await expect(
       client.reviewLead({
         config,
         workspaceCwd: '/tmp/claude-review/review-default',
-        resumeSessionId: null,
         lead: buildLeadDetail(),
       }),
-    ).rejects.toEqual(
-      expect.objectContaining({
-        name: 'ClaudeReviewAgentExecutionError',
-        message: 'Claude review agent produced no final result.',
-        sessionId: 'session_5',
-      }),
-    )
+    ).resolves.toEqual({
+      sessionId: 'session_1b',
+      providerRunId: null,
+      finalSummary: 'Completed review.',
+      costUsd: 0,
+      tokenUsage: {
+        usage: null,
+        modelUsage: null,
+      },
+      toolUsage: {
+        permissionDenials: [],
+      },
+      recommendation: {
+        verdict: 'reject',
+        confidence: 0.33,
+        summary:
+          'The source is too weak to support a settleable claim and should be rejected.',
+        evidence: [],
+        needsHumanReview: false,
+        recommendedFamilySlug: null,
+        recommendedEntitySlug: null,
+        duplicateLeadIds: [],
+        duplicateMarketIds: [],
+        normalizedHeadline: null,
+        normalizedSummary: null,
+        escalationReason: null,
+      },
+    })
   })
 
-  it('fails loudly when the final result omits a session id', async () => {
-    const client = createClaudeReviewModelClient({
-      queryImpl: () =>
-        (async function* () {
-          yield {
-            type: 'result',
-            subtype: 'success',
-            uuid: 'provider_5',
-            total_cost_usd: 0.01,
-            usage: {},
-            modelUsage: {},
-            permission_denials: [],
-            structured_output: buildRecommendation(),
-          }
-        })(),
-    })
+  it('fails loudly when the provider returns success without structured output', async () => {
+    const queryImpl = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          session_id: 'session_2',
+          uuid: 'provider_2',
+          result: 'Plain text only.',
+          total_cost_usd: 0.03,
+          usage: { input_tokens: 1200 },
+          modelUsage: {},
+          permission_denials: [],
+        }
+      },
+      close: vi.fn(),
+    }))
+
+    const {
+      ClaudeReviewAgentExecutionError,
+      createClaudeReviewModelClient,
+    } = await import('./sdk')
+    const client = createClaudeReviewModelClient({ queryImpl })
 
     await expect(
       client.reviewLead({
         config,
         workspaceCwd: '/tmp/claude-review/review-default',
-        resumeSessionId: null,
         lead: buildLeadDetail(),
       }),
-    ).rejects.toEqual(
-      expect.objectContaining({
-        name: 'ClaudeReviewAgentExecutionError',
-        message: 'Claude review agent did not expose a session id.',
-        providerRunId: 'provider_5',
-      }),
-    )
+    ).rejects.toMatchObject({
+      name: 'ClaudeReviewAgentExecutionError',
+      message: 'Claude review agent returned no structured recommendation.',
+      sessionId: 'session_2',
+      providerRunId: 'provider_2',
+      costUsd: 0.03,
+      finalSummary: 'Plain text only.',
+    } satisfies Partial<InstanceType<typeof ClaudeReviewAgentExecutionError>>)
   })
 
-  it('uses a generic subtype error when the sdk does not return explicit errors', async () => {
-    const client = createClaudeReviewModelClient({
-      queryImpl: () =>
-        (async function* () {
-          yield {
-            type: 'system',
-            session_id: 'session_6',
-          }
-          yield {
-            type: 'result',
-            subtype: 'error_permission',
-            session_id: 'session_6',
-            uuid: 'provider_6',
-            total_cost_usd: 0.02,
-            usage: {},
-            modelUsage: {},
-            permission_denials: ['WebFetch'],
-          }
-        })(),
-    })
+  it('fails loudly when the provider returns success without a final summary', async () => {
+    const queryImpl = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          session_id: 'session_2b',
+          uuid: 'provider_2b',
+          result: '',
+          total_cost_usd: 0.03,
+          usage: { input_tokens: 1100 },
+          modelUsage: {},
+          permission_denials: [],
+          structured_output: {
+            verdict: 'reject',
+            confidence: 0.4,
+            summary:
+              'The source is too vague to support a settleable claim and should be rejected.',
+            evidence: [],
+            needsHumanReview: false,
+            recommendedFamilySlug: null,
+            recommendedEntitySlug: null,
+            duplicateLeadIds: [],
+            duplicateMarketIds: [],
+            normalizedHeadline: null,
+            normalizedSummary: null,
+            escalationReason: null,
+          },
+        }
+      },
+      close: vi.fn(),
+    }))
+
+    const { createClaudeReviewModelClient } = await import('./sdk')
+    const client = createClaudeReviewModelClient({ queryImpl })
 
     await expect(
       client.reviewLead({
         config,
         workspaceCwd: '/tmp/claude-review/review-default',
-        resumeSessionId: null,
         lead: buildLeadDetail(),
       }),
-    ).rejects.toEqual(
-      expect.objectContaining({
-        name: 'ClaudeReviewAgentExecutionError',
-        message: 'Claude review agent failed with subtype error_permission.',
-        sessionId: 'session_6',
-        providerRunId: 'provider_6',
-      }),
-    )
+    ).rejects.toMatchObject({
+      message: 'Claude review agent returned no final summary.',
+      sessionId: 'session_2b',
+      providerRunId: 'provider_2b',
+      costUsd: 0.03,
+    })
   })
 
-  it('normalizes missing provider usage fields and unknown failure subtypes', async () => {
-    const client = createClaudeReviewModelClient({
-      queryImpl: () =>
-        (async function* () {
-          yield {
-            type: 'system',
-            session_id: 'session_7',
-          }
-          yield {
-            type: 'result',
-            session_id: 'session_7',
-          }
-        })(),
-    })
+  it('fails loudly when structured output uses alias keys instead of the contract', async () => {
+    const queryImpl = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          session_id: 'session_3',
+          uuid: 'provider_3',
+          result: 'Completed review.',
+          total_cost_usd: 0.02,
+          usage: {},
+          modelUsage: {},
+          permission_denials: [],
+          structured_output: {
+            decision: 'accept',
+            confidence: 0.81,
+            summary: 'This object intentionally uses the wrong keys.',
+            evidence: [],
+            needsHumanReview: false,
+            suggestedFamilyId: 'product_ship_date',
+            suggestedEntityId: 'apple',
+            duplicateLeadIds: [],
+            duplicateMarketIds: [],
+            normalizedHeadline: null,
+            normalizedSummary: null,
+            escalationReason: null,
+          },
+        }
+      },
+      close: vi.fn(),
+    }))
+
+    const { createClaudeReviewModelClient } = await import('./sdk')
+    const client = createClaudeReviewModelClient({ queryImpl })
 
     await expect(
       client.reviewLead({
         config,
         workspaceCwd: '/tmp/claude-review/review-default',
-        resumeSessionId: null,
         lead: buildLeadDetail(),
       }),
-    ).rejects.toEqual(
-      expect.objectContaining({
-        name: 'ClaudeReviewAgentExecutionError',
-        message: 'Claude review agent failed with subtype unknown.',
-        sessionId: 'session_7',
-        providerRunId: null,
-        costUsd: 0,
-        tokenUsage: {
-          usage: null,
-          modelUsage: null,
-        },
-        toolUsage: {
-          permissionDenials: [],
-        },
+    ).rejects.toThrow(/verdict/i)
+  })
+
+  it('surfaces provider error subtypes with joined error messages', async () => {
+    const queryImpl = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: 'result',
+          subtype: 'error_max_structured_output_retries',
+          session_id: 'session_4',
+          uuid: 'provider_4',
+          total_cost_usd: 0.04,
+          usage: { input_tokens: 1500 },
+          modelUsage: {},
+          permission_denials: [{ tool_name: 'WebFetch', reason: 'denied' }],
+          errors: ['First failure.', 'Second failure.'],
+        }
+      },
+      close: vi.fn(),
+    }))
+
+    const { createClaudeReviewModelClient } = await import('./sdk')
+    const client = createClaudeReviewModelClient({ queryImpl })
+
+    await expect(
+      client.reviewLead({
+        config,
+        workspaceCwd: '/tmp/claude-review/review-default',
+        lead: buildLeadDetail(),
       }),
-    )
+    ).rejects.toMatchObject({
+      message: 'First failure. | Second failure.',
+      sessionId: 'session_4',
+      providerRunId: 'provider_4',
+      costUsd: 0.04,
+    })
+  })
+
+  it('surfaces provider error subtypes with the generic subtype message when no errors array exists', async () => {
+    const queryImpl = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: 'result',
+          subtype: 'error_max_budget_usd',
+          session_id: 'session_4b',
+          uuid: 'provider_4b',
+          total_cost_usd: 0.05,
+          usage: { input_tokens: 1600 },
+          modelUsage: {},
+          permission_denials: [],
+        }
+      },
+      close: vi.fn(),
+    }))
+
+    const { createClaudeReviewModelClient } = await import('./sdk')
+    const client = createClaudeReviewModelClient({ queryImpl })
+
+    await expect(
+      client.reviewLead({
+        config,
+        workspaceCwd: '/tmp/claude-review/review-default',
+        lead: buildLeadDetail(),
+      }),
+    ).rejects.toMatchObject({
+      message: 'Claude review agent failed with subtype error_max_budget_usd.',
+      sessionId: 'session_4b',
+      providerRunId: 'provider_4b',
+      costUsd: 0.05,
+    })
+  })
+
+  it('surfaces the generic unknown subtype message when the provider omits subtype details', async () => {
+    const queryImpl = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: 'result',
+          session_id: 'session_4c',
+          uuid: 'provider_4c',
+          total_cost_usd: 0.01,
+          usage: {},
+          modelUsage: {},
+          permission_denials: [],
+        }
+      },
+      close: vi.fn(),
+    }))
+
+    const { createClaudeReviewModelClient } = await import('./sdk')
+    const client = createClaudeReviewModelClient({ queryImpl })
+
+    await expect(
+      client.reviewLead({
+        config,
+        workspaceCwd: '/tmp/claude-review/review-default',
+        lead: buildLeadDetail(),
+      }),
+    ).rejects.toMatchObject({
+      message: 'Claude review agent failed with subtype unknown.',
+      sessionId: 'session_4c',
+      providerRunId: 'provider_4c',
+      costUsd: 0.01,
+    })
+  })
+
+  it('fails loudly when the provider stream ends without any final result', async () => {
+    const queryImpl = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: 'assistant',
+          subtype: 'message',
+        }
+      },
+      close: vi.fn(),
+    }))
+
+    const { createClaudeReviewModelClient } = await import('./sdk')
+    const client = createClaudeReviewModelClient({ queryImpl })
+
+    await expect(
+      client.reviewLead({
+        config,
+        workspaceCwd: '/tmp/claude-review/review-default',
+        lead: buildLeadDetail(),
+      }),
+    ).rejects.toThrow('Claude review agent produced no final result.')
+  })
+
+  it('uses query when no query override is supplied', async () => {
+    const query = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          session_id: 'session_5',
+          uuid: 'provider_5',
+          result: 'Completed review.',
+          total_cost_usd: 0.01,
+          usage: {},
+          modelUsage: {},
+          permission_denials: [],
+          structured_output: {
+            verdict: 'reject',
+            confidence: 0.12,
+            summary:
+              'The source is too weak to support a settleable claim and should be rejected.',
+            evidence: [],
+            needsHumanReview: false,
+            recommendedFamilySlug: null,
+            recommendedEntitySlug: null,
+            duplicateLeadIds: [],
+            duplicateMarketIds: [],
+            normalizedHeadline: null,
+            normalizedSummary: null,
+            escalationReason: null,
+          },
+        }
+      },
+      close: vi.fn(),
+    }))
+
+    vi.doMock('@anthropic-ai/claude-agent-sdk', () => ({
+      query,
+    }))
+
+    const { createClaudeReviewModelClient } = await import('./sdk')
+    const client = createClaudeReviewModelClient()
+
+    await expect(
+      client.reviewLead({
+        config,
+        workspaceCwd: '/tmp/claude-review/review-default',
+        lead: buildLeadDetail(),
+      }),
+    ).resolves.toMatchObject({
+      providerRunId: 'provider_5',
+      recommendation: {
+        verdict: 'reject',
+      },
+    })
+
+    expect(query).toHaveBeenCalledTimes(1)
   })
 })

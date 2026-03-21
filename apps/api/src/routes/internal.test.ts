@@ -166,7 +166,6 @@ describe('createInternalRouter', () => {
         recentReviewedLeads: [],
         recentReviewResults: [],
       },
-      resumeSessionId: 'session_0',
     }))
     const appendClaudeReviewAgentRunEvent = vi.fn(async () => ({
       id: 'claude_event_1',

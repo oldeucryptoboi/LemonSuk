@@ -40,7 +40,6 @@ describe('runClaudeReviewAgent', () => {
       claimed: false,
       run: null,
       lead: null,
-      resumeSessionId: null,
     })
 
     await expect(
@@ -52,20 +51,18 @@ describe('runClaudeReviewAgent', () => {
       }),
     ).resolves.toEqual({
       claimed: false,
-      resumeSessionId: null,
     })
 
     expect(appendClaudeReviewRunEvent).not.toHaveBeenCalled()
     expect(completeClaudeReviewRun).not.toHaveBeenCalled()
   })
 
-  it('treats malformed claim payloads as no-work instead of proceeding blindly', async () => {
+  it('fails loudly when a claimed payload is missing run state or lead detail', async () => {
     const { runClaudeReviewAgent } = await import('./review-agent')
     claimNextClaudeReviewLead.mockResolvedValue({
       claimed: true,
       run: null,
       lead: null,
-      resumeSessionId: 'session_stale',
     })
 
     await expect(
@@ -75,10 +72,9 @@ describe('runClaudeReviewAgent', () => {
           reviewLead: vi.fn(),
         },
       }),
-    ).resolves.toEqual({
-      claimed: false,
-      resumeSessionId: 'session_stale',
-    })
+    ).rejects.toThrow(
+      'Claude review agent claim response was malformed: claimed work is missing run or lead detail.',
+    )
   })
 
   it('records events and completes the run on a successful model recommendation', async () => {
@@ -115,7 +111,6 @@ describe('runClaudeReviewAgent', () => {
         recentReviewedLeads: [],
         recentReviewResults: [],
       },
-      resumeSessionId: 'session_0',
     })
     appendClaudeReviewRunEvent.mockResolvedValue({
       id: 'event_1',
@@ -185,6 +180,18 @@ describe('runClaudeReviewAgent', () => {
       },
     })
     expect(appendClaudeReviewRunEvent).toHaveBeenCalledTimes(2)
+    expect(appendClaudeReviewRunEvent).toHaveBeenNthCalledWith(
+      1,
+      config,
+      'claude_run_1',
+      {
+        eventType: 'claude_review_started',
+        payload: {
+          leadId: 'lead_1',
+        },
+      },
+      undefined,
+    )
     expect(completeClaudeReviewRun).toHaveBeenCalledTimes(1)
     expect(failClaudeReviewRun).not.toHaveBeenCalled()
   })
@@ -224,7 +231,6 @@ describe('runClaudeReviewAgent', () => {
         recentReviewedLeads: [],
         recentReviewResults: [],
       },
-      resumeSessionId: null,
     })
     appendClaudeReviewRunEvent.mockResolvedValue({
       id: 'event_2',
@@ -304,7 +310,6 @@ describe('runClaudeReviewAgent', () => {
         recentReviewedLeads: [],
         recentReviewResults: [],
       },
-      resumeSessionId: null,
     })
     appendClaudeReviewRunEvent.mockResolvedValue({
       id: 'event_3',
@@ -375,7 +380,6 @@ describe('runClaudeReviewAgent', () => {
         recentReviewedLeads: [],
         recentReviewResults: [],
       },
-      resumeSessionId: null,
     })
     appendClaudeReviewRunEvent.mockResolvedValue({
       id: 'event_4',
@@ -407,7 +411,7 @@ describe('runClaudeReviewAgent', () => {
     )
   })
 
-  it('omits a provider run id when the model result does not include one', async () => {
+  it('omits provider and session identifiers when the model result does not include them', async () => {
     const { runClaudeReviewAgent } = await import('./review-agent')
 
     claimNextClaudeReviewLead.mockResolvedValue({
@@ -441,7 +445,6 @@ describe('runClaudeReviewAgent', () => {
         recentReviewedLeads: [],
         recentReviewResults: [],
       },
-      resumeSessionId: null,
     })
     appendClaudeReviewRunEvent.mockResolvedValue({
       id: 'event_5',
@@ -466,7 +469,7 @@ describe('runClaudeReviewAgent', () => {
       config,
       modelClient: {
         reviewLead: vi.fn().mockResolvedValue({
-          sessionId: 'session_5',
+          sessionId: null,
           providerRunId: null,
           finalSummary: 'Rejected after review.',
           costUsd: 0.01,
@@ -495,6 +498,7 @@ describe('runClaudeReviewAgent', () => {
       config,
       'claude_run_5',
       expect.objectContaining({
+        sessionId: undefined,
         providerRunId: undefined,
       }),
       undefined,

@@ -1,3 +1,4 @@
+import type { Options } from '@anthropic-ai/claude-agent-sdk'
 import type {
   ClaudeReviewAgentRecommendation,
   InternalPredictionLeadDetail,
@@ -25,11 +26,13 @@ type QueryMessage = {
   errors?: string[]
 }
 
-type QueryLike = AsyncGenerator<QueryMessage, void>
+type QueryLike = AsyncIterable<QueryMessage> & {
+  close?: () => void
+}
 
 type QueryImpl = (params: {
   prompt: string
-  options?: Record<string, unknown>
+  options?: Options
 }) => QueryLike
 
 export class ClaudeReviewAgentExecutionError extends Error {
@@ -63,7 +66,7 @@ export class ClaudeReviewAgentExecutionError extends Error {
 }
 
 export type ClaudeReviewModelResult = {
-  sessionId: string
+  sessionId: string | null
   providerRunId: string | null
   finalSummary: string
   costUsd: number
@@ -76,7 +79,6 @@ export type ClaudeReviewModelClient = {
   reviewLead(input: {
     config: ClaudeReviewAgentRunnerConfig
     workspaceCwd: string
-    resumeSessionId: string | null
     lead: InternalPredictionLeadDetail
   }): Promise<ClaudeReviewModelResult>
 }
@@ -84,13 +86,10 @@ export type ClaudeReviewModelClient = {
 function buildQueryOptions(input: {
   config: ClaudeReviewAgentRunnerConfig
   workspaceCwd: string
-  resumeSessionId: string | null
-}): Record<string, unknown> {
+}): Options {
   return {
     cwd: input.workspaceCwd,
-    resume: input.resumeSessionId ?? undefined,
-    forkSession: input.resumeSessionId !== null,
-    persistSession: true,
+    persistSession: false,
     tools: ['WebFetch', 'WebSearch'],
     allowedTools: ['WebFetch', 'WebSearch'],
     permissionMode: 'dontAsk',
@@ -123,119 +122,116 @@ export function createClaudeReviewModelClient(options: {
         options.queryImpl ??
         ((await import('@anthropic-ai/claude-agent-sdk')).query as QueryImpl)
 
-      const prompt = buildReviewAgentPrompt(input.lead)
       const query = queryImpl({
-        prompt,
+        prompt: buildReviewAgentPrompt(input.lead),
         options: buildQueryOptions({
           config: input.config,
           workspaceCwd: input.workspaceCwd,
-          resumeSessionId: input.resumeSessionId,
         }),
       })
 
-      let sessionId = input.resumeSessionId
+      let sawResult = false
+      let sessionId: string | null = null
       let providerRunId: string | null = null
-      let finalSummary: string | null = null
       let costUsd = 0
       let tokenUsage: unknown = null
       let toolUsage: unknown = null
-      let structuredOutput: unknown = null
-      let sawResult = false
+      let finalSummary: string | null = null
 
-      for await (const message of query) {
-        if (!sessionId && typeof message.session_id === 'string') {
-          sessionId = message.session_id
-        }
+      try {
+        for await (const message of query) {
+          if (typeof message.session_id === 'string') {
+            sessionId = message.session_id
+          }
 
-        if (message.type !== 'result') {
-          continue
-        }
+          if (message.type !== 'result') {
+            continue
+          }
 
-        sawResult = true
-        providerRunId = typeof message.uuid === 'string' ? message.uuid : null
-        costUsd =
-          typeof message.total_cost_usd === 'number' ? message.total_cost_usd : 0
-        tokenUsage = {
-          usage: message.usage ?? null,
-          modelUsage: message.modelUsage ?? null,
-        }
-        toolUsage = {
-          permissionDenials: message.permission_denials ?? [],
-        }
+          sawResult = true
+          providerRunId = typeof message.uuid === 'string' ? message.uuid : null
+          costUsd =
+            typeof message.total_cost_usd === 'number' ? message.total_cost_usd : 0
+          tokenUsage = {
+            usage: message.usage ?? null,
+            modelUsage: message.modelUsage ?? null,
+          }
+          toolUsage = {
+            permissionDenials: message.permission_denials ?? [],
+          }
 
-        if (message.subtype !== 'success') {
-          const errorMessage =
-            Array.isArray(message.errors) && message.errors.length > 0
-              ? message.errors.join(' | ')
-              : `Claude review agent failed with subtype ${String(
-                  message.subtype ?? 'unknown',
-                )}.`
-          throw new ClaudeReviewAgentExecutionError(errorMessage, {
+          if (message.subtype !== 'success') {
+            const errorMessage =
+              Array.isArray(message.errors) && message.errors.length > 0
+                ? message.errors.join(' | ')
+                : `Claude review agent failed with subtype ${String(
+                    message.subtype ?? 'unknown',
+                  )}.`
+            throw new ClaudeReviewAgentExecutionError(errorMessage, {
+              sessionId,
+              providerRunId,
+              costUsd,
+              tokenUsage,
+              toolUsage,
+            })
+          }
+
+          if (typeof message.result !== 'string' || message.result.trim().length === 0) {
+            throw new ClaudeReviewAgentExecutionError(
+              'Claude review agent returned no final summary.',
+              {
+                sessionId,
+                providerRunId,
+                costUsd,
+                tokenUsage,
+                toolUsage,
+              },
+            )
+          }
+
+          finalSummary = message.result
+          if (!message.structured_output) {
+            throw new ClaudeReviewAgentExecutionError(
+              'Claude review agent returned no structured recommendation.',
+              {
+                sessionId,
+                providerRunId,
+                costUsd,
+                tokenUsage,
+                toolUsage,
+                finalSummary,
+              },
+            )
+          }
+
+          const recommendation =
+            claudeReviewAgentRecommendationSchema.parse(message.structured_output)
+
+          return {
             sessionId,
             providerRunId,
+            finalSummary,
             costUsd,
             tokenUsage,
             toolUsage,
-          })
+            recommendation,
+          }
         }
-
-        finalSummary = typeof message.result === 'string' ? message.result : null
-        structuredOutput = message.structured_output
+      } finally {
+        query.close?.()
       }
 
-      if (!sawResult) {
-        throw new ClaudeReviewAgentExecutionError(
-          'Claude review agent produced no final result.',
-          {
-            sessionId,
-            providerRunId,
-            costUsd,
-            tokenUsage,
-            toolUsage,
-            finalSummary,
-          },
-        )
-      }
-
-      if (!sessionId) {
-        throw new ClaudeReviewAgentExecutionError(
-          'Claude review agent did not expose a session id.',
-          {
-            providerRunId,
-            costUsd,
-            tokenUsage,
-            toolUsage,
-            finalSummary,
-          },
-        )
-      }
-
-      if (!structuredOutput) {
-        throw new ClaudeReviewAgentExecutionError(
-          'Claude review agent returned no structured recommendation.',
-          {
-            sessionId,
-            providerRunId,
-            costUsd,
-            tokenUsage,
-            toolUsage,
-            finalSummary,
-          },
-        )
-      }
-
-      const recommendation =
-        claudeReviewAgentRecommendationSchema.parse(structuredOutput)
-
-      return {
-        sessionId,
-        providerRunId,
-        finalSummary: finalSummary ?? recommendation.summary,
-        costUsd,
-        tokenUsage,
-        toolUsage,
-        recommendation,
-      }
+      throw new ClaudeReviewAgentExecutionError(
+        'Claude review agent produced no final result.',
+        {
+          sessionId,
+          providerRunId,
+          costUsd,
+          tokenUsage,
+          toolUsage,
+          finalSummary,
+        },
+      )
     },
   }
 }

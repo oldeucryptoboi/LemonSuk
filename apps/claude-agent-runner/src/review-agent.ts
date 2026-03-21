@@ -19,7 +19,6 @@ import {
 export type ReviewAgentRunOutcome =
   | {
       claimed: false
-      resumeSessionId: string | null
     }
   | {
       claimed: true
@@ -40,8 +39,7 @@ function toErrorMessage(error: unknown): string {
 export async function runClaudeReviewAgent(
   dependencies: ReviewAgentDependencies,
 ): Promise<ReviewAgentRunOutcome> {
-  const modelClient =
-    dependencies.modelClient ?? createClaudeReviewModelClient()
+  const modelClient = dependencies.modelClient ?? createClaudeReviewModelClient()
   const workspaceCwd = path.join(
     dependencies.config.workspaceRoot,
     dependencies.config.agentKey,
@@ -60,11 +58,16 @@ export async function runClaudeReviewAgent(
     dependencies.fetchImpl,
   )
 
-  if (!claim.claimed || !claim.run || !claim.lead) {
+  if (!claim.claimed) {
     return {
       claimed: false,
-      resumeSessionId: claim.resumeSessionId,
     }
+  }
+
+  if (!claim.run || !claim.lead) {
+    throw new Error(
+      'Claude review agent claim response was malformed: claimed work is missing run or lead detail.',
+    )
   }
 
   try {
@@ -75,7 +78,6 @@ export async function runClaudeReviewAgent(
         eventType: 'claude_review_started',
         payload: {
           leadId: claim.lead.lead.id,
-          resumeSessionId: claim.resumeSessionId,
         },
       },
       dependencies.fetchImpl,
@@ -84,7 +86,6 @@ export async function runClaudeReviewAgent(
     const result = await modelClient.reviewLead({
       config: dependencies.config,
       workspaceCwd,
-      resumeSessionId: claim.resumeSessionId,
       lead: claim.lead,
     })
 
@@ -107,7 +108,7 @@ export async function runClaudeReviewAgent(
       dependencies.config,
       claim.run.id,
       {
-        sessionId: result.sessionId,
+        sessionId: result.sessionId ?? undefined,
         providerRunId: result.providerRunId ?? undefined,
         finalSummary: result.finalSummary,
         costUsd: result.costUsd,

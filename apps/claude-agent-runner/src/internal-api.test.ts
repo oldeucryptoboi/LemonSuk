@@ -174,7 +174,6 @@ describe('claude review internal api client', () => {
             claimed: true,
             run: buildRun(),
             lead: buildLeadDetail(),
-            resumeSessionId: 'session_0',
           }),
           { status: 200 },
         )
@@ -230,7 +229,6 @@ describe('claude review internal api client', () => {
     ).resolves.toEqual(
       expect.objectContaining({
         claimed: true,
-        resumeSessionId: 'session_0',
       }),
     )
 
@@ -341,7 +339,6 @@ describe('claude review internal api client', () => {
             claimed: false,
             run: null,
             lead: null,
-            resumeSessionId: null,
           }),
           { status: 200 },
         ),
@@ -359,7 +356,6 @@ describe('claude review internal api client', () => {
       claimed: false,
       run: null,
       lead: null,
-      resumeSessionId: null,
     })
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)

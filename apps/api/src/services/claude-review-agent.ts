@@ -30,15 +30,6 @@ type ClaimedLeadRow = {
   claude_review_claimed_by_agent_key: string | null
 }
 
-type ClaudeRunnerSessionRow = {
-  agent_key: string
-  session_id: string
-  workspace_cwd: string
-  last_run_id: string | null
-  created_at: Date
-  updated_at: Date
-}
-
 type ClaudeRunnerRunRow = {
   id: string
   agent_key: string
@@ -135,27 +126,6 @@ function mapPredictionReviewResult(row: ReviewResultRow): PredictionReviewResult
   })
 }
 
-async function readLatestSessionForAgentKey(
-  client: PoolClient,
-  agentKey: string,
-): Promise<ClaudeRunnerSessionRow | null> {
-  const result = await client.query<ClaudeRunnerSessionRow>(
-    `
-      SELECT session.*
-      FROM claude_runner_sessions AS session
-      INNER JOIN claude_runner_runs AS run
-        ON run.id = session.last_run_id
-      WHERE
-        session.agent_key = $1
-        AND run.status = 'completed'
-      LIMIT 1
-    `,
-    [agentKey],
-  )
-
-  return result.rows[0] ?? null
-}
-
 async function readRunById(
   client: PoolClient,
   runId: string,
@@ -232,44 +202,6 @@ async function appendPredictionReviewAuditLog(
   )
 }
 
-async function upsertRunnerSession(
-  client: PoolClient,
-  input: {
-    agentKey: string
-    sessionId: string
-    workspaceCwd: string
-    lastRunId: string
-    now: Date
-  },
-): Promise<void> {
-  await client.query(
-    `
-      INSERT INTO claude_runner_sessions (
-        agent_key,
-        session_id,
-        workspace_cwd,
-        last_run_id,
-        created_at,
-        updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $5)
-      ON CONFLICT (agent_key)
-      DO UPDATE SET
-        session_id = EXCLUDED.session_id,
-        workspace_cwd = EXCLUDED.workspace_cwd,
-        last_run_id = EXCLUDED.last_run_id,
-        updated_at = EXCLUDED.updated_at
-    `,
-    [
-      input.agentKey,
-      input.sessionId,
-      input.workspaceCwd,
-      input.lastRunId,
-      input.now.toISOString(),
-    ],
-  )
-}
-
 async function clearLeadClaim(
   client: PoolClient,
   leadId: string,
@@ -295,7 +227,6 @@ export async function claimNextPredictionLeadForClaudeReviewAgent(
     const now = new Date()
     const nowIso = now.toISOString()
     const leaseExpiresAt = new Date(now.getTime() + input.leaseSeconds * 1_000)
-    const previousSession = await readLatestSessionForAgentKey(client, input.agentKey)
     const candidate = await client.query<{ id: string }>(
       `
         SELECT id
@@ -318,7 +249,6 @@ export async function claimNextPredictionLeadForClaudeReviewAgent(
         claimed: false,
         run: null,
         lead: null,
-        resumeSessionId: previousSession?.session_id ?? null,
       })
     }
 
@@ -376,7 +306,7 @@ export async function claimNextPredictionLeadForClaudeReviewAgent(
         runId,
         input.agentKey,
         leadId,
-        previousSession?.session_id ?? null,
+        null,
         input.trigger,
         input.workspaceCwd,
         input.promptSummary,
@@ -406,7 +336,6 @@ export async function claimNextPredictionLeadForClaudeReviewAgent(
       claimed: true,
       run: mapClaudeRunnerRun(runInsert.rows[0]),
       lead: detail,
-      resumeSessionId: previousSession?.session_id ?? null,
     })
   })
 }
@@ -578,16 +507,6 @@ export async function completeClaudeReviewAgentRun(
         completedAt.toISOString(),
       ],
     )
-
-    if (input.sessionId) {
-      await upsertRunnerSession(client, {
-        agentKey: run.agent_key,
-        sessionId: input.sessionId,
-        workspaceCwd: run.workspace_cwd,
-        lastRunId: runId,
-        now: completedAt,
-      })
-    }
 
     await clearLeadClaim(client, lead.id)
 

@@ -759,7 +759,6 @@ export const claudeReviewAgentClaimNextResponseSchema = z.object({
   claimed: z.boolean(),
   run: claudeReviewAgentRunSchema.nullable(),
   lead: internalPredictionLeadDetailSchema.nullable(),
-  resumeSessionId: z.string().nullable(),
 })
 
 export const claudeReviewAgentRunEventInputSchema = z.object({

@@ -29,7 +29,6 @@ describe('claude review agent cli', () => {
     }))
     const runClaudeReviewAgent = vi.fn().mockResolvedValue({
       claimed: false,
-      resumeSessionId: null,
     })
 
     vi.doMock('./config', () => ({
