@@ -714,9 +714,19 @@ describe('app routes', () => {
       ),
     ).toBe(true)
 
-    await context.pool.query(
-      `UPDATE markets SET bet_mode = 'binary' WHERE id = 'openai-device-2026'`,
-    )
+    await context.store.withStoreTransaction(async (store, persist) => {
+      await persist({
+        ...store,
+        markets: store.markets.map((market) =>
+          market.id === 'openai-device-2026'
+            ? {
+                ...market,
+                betMode: 'binary',
+              }
+            : market,
+        ),
+      })
+    })
 
     const forBetResponse = await request(app)
       .post('/api/v1/auth/agents/bets')

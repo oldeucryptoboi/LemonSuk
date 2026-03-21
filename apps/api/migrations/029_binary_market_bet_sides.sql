@@ -16,5 +16,8 @@ ALTER TABLE bets
   DROP CONSTRAINT IF EXISTS bets_side_check;
 
 ALTER TABLE bets
+  DROP CONSTRAINT IF EXISTS bets_constraint_1;
+
+ALTER TABLE bets
   ADD CONSTRAINT bets_side_check
   CHECK (side IN ('for', 'against'));
