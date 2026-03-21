@@ -67,17 +67,17 @@ describe('review agent prompt contract', () => {
     expect(systemPrompt).toContain('Do not return markdown')
   })
 
-  it('includes a canonical example with every schema field and null defaults', () => {
+  it('includes a canonical example with every schema field and empty-string defaults', () => {
     const prompt = buildReviewAgentPrompt(buildLeadDetail())
 
     expect(prompt).toContain('"verdict": "reject"')
-    expect(prompt).toContain('"recommendedFamilySlug": null')
-    expect(prompt).toContain('"recommendedEntitySlug": null')
+    expect(prompt).toContain('"recommendedFamilySlug": ""')
+    expect(prompt).toContain('"recommendedEntitySlug": ""')
     expect(prompt).toContain('"duplicateLeadIds": []')
     expect(prompt).toContain('"duplicateMarketIds": []')
-    expect(prompt).toContain('"normalizedHeadline": null')
-    expect(prompt).toContain('"normalizedSummary": null')
-    expect(prompt).toContain('"escalationReason": null')
+    expect(prompt).toContain('"normalizedHeadline": ""')
+    expect(prompt).toContain('"normalizedSummary": ""')
+    expect(prompt).toContain('"escalationReason": ""')
     expect(prompt).toContain('Do not rename keys.')
     expect(prompt).toContain('Lead detail JSON:')
   })

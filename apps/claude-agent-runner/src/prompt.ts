@@ -14,7 +14,8 @@ export function buildReviewAgentSystemPrompt(): string {
     'Use these exact field names: verdict, confidence, summary, evidence, needsHumanReview, recommendedFamilySlug, recommendedEntitySlug, duplicateLeadIds, duplicateMarketIds, normalizedHeadline, normalizedSummary, escalationReason.',
     'Never use aliases such as decision, suggestedFamilyId, suggestedEntityId, recommendedFamilyId, or recommendedEntityId.',
     'Evidence URLs must be real http or https URLs. If no reliable evidence URL exists, return an empty evidence array.',
-    'If a field does not apply, return null for nullable string fields and [] for duplicate arrays.',
+    'If a string field does not apply, return an empty string, not null.',
+    'Use [] for duplicate arrays when no duplicates apply.',
   ].join(' ')
 }
 
@@ -29,11 +30,11 @@ export function buildReviewAgentPrompt(
     '2. Assess confidence from 0 to 1 using the exact field name confidence.',
     '3. Provide a concise summary using the exact field name summary.',
     '4. Provide evidence entries with real URL and excerpt using the exact field name evidence.',
-    '5. Suggest recommendedFamilySlug and recommendedEntitySlug only when clear; otherwise set them to null.',
+    '5. Suggest recommendedFamilySlug and recommendedEntitySlug only when clear; otherwise set them to an empty string.',
     '6. Identify duplicateLeadIds or duplicateMarketIds only from the provided LemonSuk context; otherwise return [].',
-    '7. Provide normalizedHeadline and normalizedSummary only if they improve the lead; otherwise set them to null.',
+    '7. Provide normalizedHeadline and normalizedSummary only if they improve the lead; otherwise set them to an empty string.',
     '8. Set needsHumanReview to true when material uncertainty remains.',
-    '9. Set escalationReason to a short reason when verdict is escalate or when needsHumanReview is true; otherwise set escalationReason to null.',
+    '9. Set escalationReason to a short reason when verdict is escalate or when needsHumanReview is true; otherwise set escalationReason to an empty string.',
     '',
     'Required output contract:',
     '- Return every schema field exactly once.',
@@ -49,13 +50,13 @@ export function buildReviewAgentPrompt(
           'The source is too vague to support a settleable market without more specific evidence.',
         evidence: [],
         needsHumanReview: false,
-        recommendedFamilySlug: null,
-        recommendedEntitySlug: null,
+        recommendedFamilySlug: '',
+        recommendedEntitySlug: '',
         duplicateLeadIds: [],
         duplicateMarketIds: [],
-        normalizedHeadline: null,
-        normalizedSummary: null,
-        escalationReason: null,
+        normalizedHeadline: '',
+        normalizedSummary: '',
+        escalationReason: '',
       },
       null,
       2,
@@ -108,7 +109,6 @@ export const reviewRecommendationOutputJsonSchema = {
         properties: {
           url: {
             type: 'string',
-            format: 'uri',
           },
           excerpt: {
             type: 'string',
@@ -122,22 +122,19 @@ export const reviewRecommendationOutputJsonSchema = {
       type: 'boolean',
     },
     recommendedFamilySlug: {
-      anyOf: [
-        {
-          type: 'string',
-          enum: [
-            'ai_launch',
-            'product_ship_date',
-            'earnings_guidance',
-            'policy_promise',
-            'ceo_claim',
-          ],
-        },
-        { type: 'null' },
+      type: 'string',
+      enum: [
+        '',
+        'ai_launch',
+        'product_ship_date',
+        'earnings_guidance',
+        'policy_promise',
+        'ceo_claim',
       ],
     },
     recommendedEntitySlug: {
-      anyOf: [{ type: 'string', minLength: 1, maxLength: 120 }, { type: 'null' }],
+      type: 'string',
+      maxLength: 120,
     },
     duplicateLeadIds: {
       type: 'array',
@@ -150,13 +147,16 @@ export const reviewRecommendationOutputJsonSchema = {
       items: { type: 'string', minLength: 1, maxLength: 120 },
     },
     normalizedHeadline: {
-      anyOf: [{ type: 'string', minLength: 12, maxLength: 200 }, { type: 'null' }],
+      type: 'string',
+      maxLength: 200,
     },
     normalizedSummary: {
-      anyOf: [{ type: 'string', minLength: 12, maxLength: 500 }, { type: 'null' }],
+      type: 'string',
+      maxLength: 500,
     },
     escalationReason: {
-      anyOf: [{ type: 'string', minLength: 3, maxLength: 280 }, { type: 'null' }],
+      type: 'string',
+      maxLength: 280,
     },
   },
 } as const

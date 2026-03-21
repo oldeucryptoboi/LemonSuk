@@ -1,4 +1,5 @@
 import type { Options } from '@anthropic-ai/claude-agent-sdk'
+import { z } from 'zod'
 import type {
   ClaudeReviewAgentRecommendation,
   InternalPredictionLeadDetail,
@@ -34,6 +35,56 @@ type QueryImpl = (params: {
   prompt: string
   options?: Options
 }) => QueryLike
+
+const reviewRecommendationTransportSchema = z.object({
+  verdict: z.enum(['accept', 'reject', 'escalate']),
+  confidence: z.number().min(0).max(1),
+  summary: z.string().min(12).max(500),
+  evidence: z
+    .array(
+      z.object({
+        url: z.string(),
+        excerpt: z.string().min(1).max(500),
+      }),
+    )
+    .max(12),
+  needsHumanReview: z.boolean(),
+  recommendedFamilySlug: z.string(),
+  recommendedEntitySlug: z.string(),
+  duplicateLeadIds: z.array(z.string().min(1).max(120)).max(12),
+  duplicateMarketIds: z.array(z.string().min(1).max(120)).max(12),
+  normalizedHeadline: z.string(),
+  normalizedSummary: z.string(),
+  escalationReason: z.string(),
+})
+
+function normalizeOptionalString(value: string): string | null {
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function normalizeStructuredRecommendation(
+  value: unknown,
+): ClaudeReviewAgentRecommendation {
+  const parsed = reviewRecommendationTransportSchema.parse(value)
+  return claudeReviewAgentRecommendationSchema.parse({
+    verdict: parsed.verdict,
+    confidence: parsed.confidence,
+    summary: parsed.summary,
+    evidence: parsed.evidence.map((entry) => ({
+      url: entry.url.trim(),
+      excerpt: entry.excerpt.trim(),
+    })),
+    needsHumanReview: parsed.needsHumanReview,
+    recommendedFamilySlug: normalizeOptionalString(parsed.recommendedFamilySlug),
+    recommendedEntitySlug: normalizeOptionalString(parsed.recommendedEntitySlug),
+    duplicateLeadIds: parsed.duplicateLeadIds,
+    duplicateMarketIds: parsed.duplicateMarketIds,
+    normalizedHeadline: normalizeOptionalString(parsed.normalizedHeadline),
+    normalizedSummary: normalizeOptionalString(parsed.normalizedSummary),
+    escalationReason: normalizeOptionalString(parsed.escalationReason),
+  })
+}
 
 export class ClaudeReviewAgentExecutionError extends Error {
   sessionId: string | null
@@ -204,8 +255,9 @@ export function createClaudeReviewModelClient(options: {
             )
           }
 
-          const recommendation =
-            claudeReviewAgentRecommendationSchema.parse(message.structured_output)
+          const recommendation = normalizeStructuredRecommendation(
+            message.structured_output,
+          )
 
           return {
             sessionId,
