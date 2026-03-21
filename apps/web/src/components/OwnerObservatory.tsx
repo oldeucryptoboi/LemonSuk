@@ -61,6 +61,7 @@ export function OwnerObservatory({ session }: OwnerObservatoryProps) {
           session.bets.slice(0, 6).map((bet) => (
             <div key={bet.id} className="ticket-row">
               <span>{handleByAgentId.get(bet.userId) ?? bet.userId}</span>
+              <span>{bet.side}</span>
               <span>{formatCredits(bet.stakeCredits)}</span>
               <span>{bet.status}</span>
             </div>

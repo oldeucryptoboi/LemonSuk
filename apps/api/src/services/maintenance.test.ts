@@ -89,6 +89,59 @@ describe('runMaintenance', () => {
     expect(result.store.notifications[0]?.type).toBe('bet_lost')
   })
 
+  it('settles for-side tickets as wins on delivered resolutions and losses on missed resolutions', () => {
+    const forStore: StoreData = {
+      ...baseStore,
+      markets: [
+        {
+          ...baseStore.markets[0]!,
+          betMode: 'binary',
+        },
+      ],
+      bets: [
+        {
+          ...baseStore.bets[0]!,
+          side: 'for',
+          projectedPayoutCredits: 19,
+        },
+      ],
+    }
+
+    const delivered = resolveMarket(
+      forStore,
+      'market-1',
+      'delivered',
+      'The feature shipped on time.',
+      new Date('2024-01-31T00:00:00.000Z'),
+    )
+    const deliveredResult = runMaintenance(
+      delivered.store,
+      new Date('2024-01-31T00:00:00.000Z'),
+    )
+    expect(deliveredResult.store.bets[0]?.status).toBe('won')
+    expect(deliveredResult.store.bets[0]?.settledPayoutCredits).toBe(19)
+    expect(deliveredResult.store.notifications[0]?.body).toContain(
+      'resolved as delivered',
+    )
+
+    const missed = resolveMarket(
+      forStore,
+      'market-1',
+      'missed',
+      'The launch slipped.',
+      new Date('2024-01-15T00:00:00.000Z'),
+    )
+    const missedResult = runMaintenance(
+      missed.store,
+      new Date('2024-01-15T00:00:00.000Z'),
+    )
+    expect(missedResult.store.bets[0]?.status).toBe('lost')
+    expect(missedResult.store.bets[0]?.settledPayoutCredits).toBe(0)
+    expect(missedResult.store.notifications[0]?.body).toContain(
+      'card is now busted',
+    )
+  })
+
   it('resolves missed markets before the deadline and keeps the payout as a win', () => {
     const resolved = resolveMarket(
       baseStore,

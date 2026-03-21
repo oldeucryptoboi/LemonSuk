@@ -1,12 +1,19 @@
 import { randomUUID } from 'node:crypto'
 
-import { betSlipSchema, type BetSlip, type StoreData } from '../shared'
+import {
+  betSlipSchema,
+  type BetSide,
+  type BetSlip,
+  type StoreData,
+} from '../shared'
 import { calculateGlobalBonus, calculateProjectedPayout } from './bonus'
 import { runMaintenance } from './maintenance'
 import {
   applyPricingEngine,
   calculateMarketExposure,
+  calculateDisplayedPayoutMultiplierForSide,
   resolveMarketRiskPolicy,
+  resolveMarketBetMode,
 } from './pricing'
 
 const repeatBetCooldownMs = 60_000
@@ -20,6 +27,7 @@ function enforceBettingRiskRules(
   userId: string,
   market: StoreData['markets'][number],
   stakeCredits: number,
+  side: BetSide,
   globalBonusPercent: number,
   now: Date,
 ): void {
@@ -29,6 +37,11 @@ function enforceBettingRiskRules(
     market.maxLiabilityCredits ?? policy.maxLiabilityCredits
   const perAgentExposureCap =
     market.perAgentExposureCapCredits ?? policy.perAgentExposureCapCredits
+  const betMode = resolveMarketBetMode(market)
+
+  if (betMode !== 'binary' && side === 'for') {
+    throw new Error('This market only supports against tickets.')
+  }
 
   if (market.bettingSuspended) {
     throw new Error(
@@ -68,23 +81,33 @@ function enforceBettingRiskRules(
   }
 
   const exposure = calculateMarketExposure(store, market.id)
+  const payoutMultiplier = calculateDisplayedPayoutMultiplierForSide(market, side)
   const projectedPayoutCredits = calculateProjectedPayout(
     stakeCredits,
-    market.payoutMultiplier,
+    payoutMultiplier,
     globalBonusPercent,
   )
-  if (exposure.liabilityCredits + projectedPayoutCredits > marketMaxLiability) {
+  const nextLiabilityCredits = Math.max(
+    side === 'against'
+      ? exposure.liabilityCreditsBySide.against + projectedPayoutCredits
+      : exposure.liabilityCreditsBySide.against,
+    side === 'for'
+      ? exposure.liabilityCreditsBySide.for + projectedPayoutCredits
+      : exposure.liabilityCreditsBySide.for,
+  )
+  if (nextLiabilityCredits > marketMaxLiability) {
     throw new Error(
       `This market is at its liability cap of ${formatCredits(marketMaxLiability)} credits.`,
     )
   }
 }
 
-export function placeAgainstBetForUser(
+export function placeBetForUser(
   store: StoreData,
   userId: string,
   marketId: string,
   stakeCredits: number,
+  side: BetSide,
   now: Date,
 ): { store: StoreData; bet: BetSlip } {
   const maintainedStore = runMaintenance(store, now).store
@@ -104,21 +127,26 @@ export function placeAgainstBetForUser(
     userId,
     market,
     stakeCredits,
+    side,
     globalBonusPercent,
     now,
+  )
+  const payoutMultiplierAtPlacement = calculateDisplayedPayoutMultiplierForSide(
+    market,
+    side,
   )
   const bet = betSlipSchema.parse({
     id: `bet-${randomUUID()}`,
     userId,
     marketId,
     stakeCredits,
-    side: 'against',
+    side,
     status: 'open',
-    payoutMultiplierAtPlacement: market.payoutMultiplier,
+    payoutMultiplierAtPlacement,
     globalBonusPercentAtPlacement: globalBonusPercent,
     projectedPayoutCredits: calculateProjectedPayout(
       stakeCredits,
-      market.payoutMultiplier,
+      payoutMultiplierAtPlacement,
       globalBonusPercent,
     ),
     settledPayoutCredits: null,
@@ -139,4 +167,14 @@ export function placeAgainstBetForUser(
       triggerBetId: bet.id,
     }).store,
   }
+}
+
+export function placeAgainstBetForUser(
+  store: StoreData,
+  userId: string,
+  marketId: string,
+  stakeCredits: number,
+  now: Date,
+): { store: StoreData; bet: BetSlip } {
+  return placeBetForUser(store, userId, marketId, stakeCredits, 'against', now)
 }

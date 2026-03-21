@@ -1,4 +1,5 @@
 import React from 'react'
+import type { Metadata } from 'next'
 
 import { RouteFrame } from '../../../src/components/RouteFrame'
 import {
@@ -11,6 +12,35 @@ import {
 import { fetchBoardMarketDetailServer } from '../../../src/lib/server-api'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const detail = await fetchBoardMarketDetailServer(slug)
+  const { market } = detail
+  const title = market.headline
+  const description = market.summary
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: `/markets/${slug}`,
+    },
+    openGraph: {
+      title,
+      description,
+      url: `https://lemonsuk.com/markets/${slug}`,
+    },
+    twitter: {
+      title,
+      description,
+    },
+  }
+}
 
 export default async function MarketDetailPage({
   params,

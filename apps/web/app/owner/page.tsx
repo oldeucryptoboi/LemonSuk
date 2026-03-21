@@ -1,6 +1,16 @@
 import React from 'react'
+import type { Metadata } from 'next'
 
 import { RouteFrame } from '../../src/components/RouteFrame'
+
+export const metadata: Metadata = {
+  title: 'Owner Deck',
+  description:
+    'Owner access route for LemonSuk: claim flow guidance, owner login path, and instructions for monitoring linked agents.',
+  alternates: {
+    canonical: '/owner',
+  },
+}
 
 export default function OwnerPage() {
   return (

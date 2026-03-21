@@ -377,11 +377,16 @@ describe('web components', () => {
   })
 
   it('renders the agent-only bet slip for live and empty selections', () => {
-    const selectedMarket = seedStore.markets[0] ?? null
+    const selectedMarket = seedStore.markets[0]
+      ? {
+          ...seedStore.markets[0],
+          betMode: 'binary' as const,
+        }
+      : null
 
     const { rerender } = render(
       <BetSlipPanel
-        activeBets={[activeBet]}
+        activeBets={[{ ...activeBet, side: 'for' }]}
         bonusPercent={18}
         selectedMarket={selectedMarket}
       />,
@@ -391,7 +396,43 @@ describe('web components', () => {
       screen.getByText(/Only authenticated agents can write tickets/),
     ).not.toBeNull()
     expect(screen.getByText('Live multiplier')).not.toBeNull()
+    expect(screen.getByText('for / against')).not.toBeNull()
+    expect(screen.getByText('for')).not.toBeNull()
     expect(screen.getByText('25 cr')).not.toBeNull()
+
+    rerender(
+      <BetSlipPanel
+        activeBets={[]}
+        bonusPercent={18}
+        selectedMarket={
+          selectedMarket
+            ? {
+                ...selectedMarket,
+                betMode: 'against_only',
+              }
+            : null
+        }
+      />,
+    )
+
+    expect(screen.getByText('against only')).not.toBeNull()
+
+    rerender(
+      <BetSlipPanel
+        activeBets={[]}
+        bonusPercent={18}
+        selectedMarket={
+          selectedMarket
+            ? (() => {
+                const { betMode: _betMode, ...marketWithoutBetMode } = selectedMarket
+                return marketWithoutBetMode
+              })()
+            : null
+        }
+      />,
+    )
+
+    expect(screen.getByText('against only')).not.toBeNull()
 
     rerender(
       <BetSlipPanel

@@ -714,6 +714,32 @@ describe('app routes', () => {
       ),
     ).toBe(true)
 
+    await context.pool.query(
+      `UPDATE markets SET bet_mode = 'binary' WHERE id = 'openai-device-2026'`,
+    )
+
+    const forBetResponse = await request(app)
+      .post('/api/v1/auth/agents/bets')
+      .send({
+        apiKey: registration.apiKey,
+        marketId: 'openai-device-2026',
+        stakeCredits: 15,
+        side: 'for',
+      })
+    expect(forBetResponse.statusCode).toBe(200)
+    expect(forBetResponse.body.bet.side).toBe('for')
+    expect(forBetResponse.body.bet.projectedPayoutCredits).toBeGreaterThan(15)
+    const forWinPayout = forBetResponse.body.bet.projectedPayoutCredits
+
+    const forResolutionResponse = await request(app)
+      .post('/api/v1/markets/openai-device-2026/resolve')
+      .send({
+        resolution: 'delivered',
+        resolutionNotes: 'The device launched inside the window.',
+      })
+    expect(forResolutionResponse.statusCode).toBe(200)
+    expect(forResolutionResponse.body.stats.wonBets).toBe(2)
+
     const losingBetResponse = await request(app)
       .post('/api/v1/auth/agents/bets')
       .send({
@@ -730,7 +756,7 @@ describe('app routes', () => {
         resolutionNotes: 'The mission shipped on schedule.',
       })
     expect(lostResolutionResponse.statusCode).toBe(200)
-    expect(lostResolutionResponse.body.stats.wonBets).toBe(1)
+    expect(lostResolutionResponse.body.stats.wonBets).toBe(2)
     expect(lostResolutionResponse.body.stats.lostBets).toBe(1)
 
     const ownerAfterLossResponse = await request(app).get(
@@ -739,15 +765,22 @@ describe('app routes', () => {
     expect(ownerAfterLossResponse.statusCode).toBe(200)
     expect(ownerAfterLossResponse.body.agents[0]).toMatchObject({
       handle: 'hedgebot',
-      promoCredits: 75,
-      earnedCredits: winningPayout,
-      availableCredits: Number((75 + winningPayout).toFixed(2)),
+      promoCredits: 60,
+      earnedCredits: Number((winningPayout + forWinPayout).toFixed(2)),
+      availableCredits: Number((60 + winningPayout + forWinPayout).toFixed(2)),
     })
     expect(
       ownerAfterLossResponse.body.notifications.some(
         (notification: { type: string; marketId: string | null }) =>
           notification.type === 'bet_lost' &&
           notification.marketId === 'starship-mars-2026',
+      ),
+    ).toBe(true)
+    expect(
+      ownerAfterLossResponse.body.notifications.some(
+        (notification: { type: string; marketId: string | null }) =>
+          notification.type === 'bet_won' &&
+          notification.marketId === 'openai-device-2026',
       ),
     ).toBe(true)
 

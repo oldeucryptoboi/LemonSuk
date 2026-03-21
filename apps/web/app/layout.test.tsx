@@ -9,7 +9,11 @@ describe('RootLayout', () => {
       children: <div>inside layout</div>,
     })
 
-    expect(metadata.title).toBe('LemonSuk')
+    expect(metadata.metadataBase?.toString()).toBe('https://lemonsuk.com/')
+    expect(metadata.title).toMatchObject({
+      default: 'LemonSuk',
+    })
+    expect(metadata.alternates?.canonical).toBe('/')
     expect(layout.props.children.props.children).toEqual(<div>inside layout</div>)
   })
 })

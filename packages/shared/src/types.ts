@@ -9,6 +9,7 @@ export const sourceTypeSchema = z.enum([
 ])
 export const marketStatusSchema = z.enum(['open', 'busted', 'resolved'])
 export const marketResolutionSchema = z.enum(['pending', 'missed', 'delivered'])
+export const marketBetModeSchema = z.enum(['against_only', 'binary'])
 export const categorySchema = z.enum([
   'autonomy',
   'robotaxi',
@@ -81,6 +82,7 @@ export const checkpointStateSchema = z.enum([
   'missed',
   'delivered',
 ])
+export const betSideSchema = z.enum(['for', 'against'])
 export const entityTypeSchema = z.enum([
   'company',
   'person',
@@ -225,6 +227,7 @@ export const marketSchema = z.object({
   sources: z.array(sourceSchema),
   author: marketAuthorSchema.nullable().default(null),
   linkedMarketIds: z.array(z.string()),
+  betMode: marketBetModeSchema.optional(),
   betWindowOpen: z.boolean(),
   bustedAt: z.string().nullable(),
   createdAt: z.string(),
@@ -257,7 +260,7 @@ export const betSlipSchema = z.object({
   userId: z.string(),
   marketId: z.string(),
   stakeCredits: z.number().positive(),
-  side: z.literal('against'),
+  side: betSideSchema,
   status: betStatusSchema,
   payoutMultiplierAtPlacement: z.number().positive(),
   globalBonusPercentAtPlacement: z.number().nonnegative(),
@@ -919,11 +922,13 @@ export type ForumLeader = z.infer<typeof forumLeaderSchema>
 export type MarketLineHistoryEntry = z.infer<typeof marketLineHistoryEntrySchema>
 export type MarketStatus = z.infer<typeof marketStatusSchema>
 export type MarketResolution = z.infer<typeof marketResolutionSchema>
+export type MarketBetMode = z.infer<typeof marketBetModeSchema>
 export type MarketLineMoveReason = z.infer<typeof marketLineMoveReasonSchema>
 export type MarketSettlementState = z.infer<typeof marketSettlementStateSchema>
 export type Category = z.infer<typeof categorySchema>
 export type Company = z.infer<typeof companySchema>
 export type Market = z.infer<typeof marketSchema>
+export type BetSide = z.infer<typeof betSideSchema>
 export type BetSlip = z.infer<typeof betSlipSchema>
 export type Notification = z.infer<typeof notificationSchema>
 export type AgentProfile = z.infer<typeof agentProfileSchema>

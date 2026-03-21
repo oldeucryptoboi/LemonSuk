@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { MarketDetail } from '../../../src/shared'
-import MarketDetailPage from './page'
+import MarketDetailPage, { generateMetadata } from './page'
 
 const mocks = vi.hoisted(() => ({
   fetchBoardMarketDetailServer: vi.fn(async () => ({
@@ -86,6 +86,25 @@ vi.mock('../../../src/lib/server-api', () => ({
 }))
 
 describe('MarketDetailPage', () => {
+  it('builds metadata from market detail data', async () => {
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: 'openai-gpt5-summer-2026' }),
+    })
+
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        title: 'OpenAI launches GPT-5 by August 31, 2026',
+        description: 'OpenAI ships GPT-5 within the summer 2026 window.',
+        alternates: expect.objectContaining({
+          canonical: '/markets/openai-gpt5-summer-2026',
+        }),
+        openGraph: expect.objectContaining({
+          url: 'https://lemonsuk.com/markets/openai-gpt5-summer-2026',
+        }),
+      }),
+    )
+  })
+
   it('renders market detail with related groups and markets', async () => {
     render(
       await MarketDetailPage({

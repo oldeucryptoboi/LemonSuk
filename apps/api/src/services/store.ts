@@ -35,6 +35,7 @@ type MarketRow = {
   status: Market['status']
   resolution: Market['resolution']
   resolution_notes: string | null
+  bet_mode: NonNullable<Market['betMode']>
   base_payout_multiplier: number
   payout_multiplier: number
   confidence: number
@@ -138,6 +139,7 @@ function mapMarket(
     status: row.status,
     resolution: row.resolution,
     resolutionNotes: row.resolution_notes,
+    betMode: row.bet_mode,
     basePayoutMultiplier: Number(row.base_payout_multiplier),
     payoutMultiplier: Number(row.payout_multiplier),
     confidence: row.confidence,
@@ -368,6 +370,7 @@ async function replaceStoreFromClient(
           status,
           resolution,
           resolution_notes,
+          bet_mode,
           base_payout_multiplier,
           payout_multiplier,
           confidence,
@@ -398,7 +401,7 @@ async function replaceStoreFromClient(
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
           $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
           $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35,
-          $36, $37
+          $36, $37, $38
         )
       `,
       [
@@ -414,6 +417,7 @@ async function replaceStoreFromClient(
         market.status,
         market.resolution,
         market.resolutionNotes,
+        market.betMode ?? 'against_only',
         market.basePayoutMultiplier,
         market.payoutMultiplier,
         market.confidence,
@@ -561,6 +565,7 @@ async function insertMarketFromClient(
         status,
         resolution,
         resolution_notes,
+        bet_mode,
         base_payout_multiplier,
         payout_multiplier,
         confidence,
@@ -591,7 +596,7 @@ async function insertMarketFromClient(
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
         $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
         $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35,
-        $36, $37
+        $36, $37, $38
       )
     `,
     [
@@ -607,6 +612,7 @@ async function insertMarketFromClient(
       market.status,
       market.resolution,
       market.resolutionNotes,
+      market.betMode ?? 'against_only',
       market.basePayoutMultiplier,
       market.payoutMultiplier,
       market.confidence,

@@ -15,20 +15,23 @@ const bustedNote =
 type MarketSettlement = 'won' | 'lost'
 type ManualResolution = 'missed' | 'delivered'
 
-function settlementOutcomeForMarket(market: Market): MarketSettlement | null {
+function settlementOutcomeForMarket(
+  market: Market,
+  side: BetSlip['side'],
+): MarketSettlement | null {
   if (market.resolution === 'missed' || market.status === 'busted') {
-    return 'won'
+    return side === 'against' ? 'won' : 'lost'
   }
 
   if (market.resolution === 'delivered' || market.status === 'resolved') {
-    return 'lost'
+    return side === 'for' ? 'won' : 'lost'
   }
 
   return null
 }
 
 function settleBet(bet: BetSlip, market: Market, nowIso: string): BetSlip {
-  const outcome = settlementOutcomeForMarket(market)!
+  const outcome = settlementOutcomeForMarket(market, bet.side)!
 
   return {
     ...bet,
@@ -44,7 +47,8 @@ function createNotification(
   market: Market,
   nowIso: string,
 ): Notification {
-  const outcome = settlementOutcomeForMarket(market)
+  const outcome = settlementOutcomeForMarket(market, bet.side)
+  const sideLabel = bet.side === 'for' ? 'support ticket' : 'counter-bet'
 
   if (outcome === 'won') {
     return {
@@ -54,7 +58,10 @@ function createNotification(
       betId: bet.id,
       type: 'bet_won',
       title: 'Ticket cashed',
-      body: `Your counter-bet on “${market.headline}” won because the card is now busted.`,
+      body:
+        bet.side === 'for'
+          ? `Your ${sideLabel} on “${market.headline}” won because the promise resolved as delivered.`
+          : `Your ${sideLabel} on “${market.headline}” won because the card is now busted.`,
       createdAt: nowIso,
       readAt: null,
     }
@@ -67,7 +74,10 @@ function createNotification(
     betId: bet.id,
     type: 'bet_lost',
     title: 'Ticket busted',
-    body: `Your counter-bet on “${market.headline}” lost because the promise resolved as delivered.`,
+    body:
+      bet.side === 'for'
+        ? `Your ${sideLabel} on “${market.headline}” lost because the card is now busted.`
+        : `Your ${sideLabel} on “${market.headline}” lost because the promise resolved as delivered.`,
     createdAt: nowIso,
     readAt: null,
   }
@@ -204,7 +214,7 @@ export function runMaintenance(
     }
 
     const market = marketsById.get(bet.marketId)
-    if (!market || !settlementOutcomeForMarket(market)) {
+    if (!market || !settlementOutcomeForMarket(market, bet.side)) {
       return bet
     }
 

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { createSeedStore } from '../data/seed'
 import { calculateGlobalBonus, calculateProjectedPayout } from './bonus'
-import { placeAgainstBetForUser } from './betting'
+import { placeAgainstBetForUser, placeBetForUser } from './betting'
 import { runMaintenance } from './maintenance'
-import { applyPricingEngine } from './pricing'
+import { applyPricingEngine, calculateDisplayedPayoutMultiplierForSide } from './pricing'
 
 describe('placeAgainstBetForUser', () => {
   it('writes a bet in credits for an open market and snapshots the live pricing inputs', () => {
@@ -323,5 +323,141 @@ describe('placeAgainstBetForUser', () => {
         new Date('2027-01-01T01:00:00.000Z'),
       ),
     ).toThrow('Settlement grace window is active while the book waits for delivery evidence.')
+  })
+})
+
+describe('placeBetForUser', () => {
+  it('rejects for-side tickets on against-only markets', () => {
+    expect(() =>
+      placeBetForUser(
+        createSeedStore(),
+        'agent-1',
+        'optimus-customizable-2026',
+        20,
+        'for',
+        new Date('2026-03-16T00:00:00.000Z'),
+      ),
+    ).toThrow('This market only supports against tickets.')
+  })
+
+  it('writes for-side tickets on binary markets using the displayed for multiplier', () => {
+    const now = new Date('2026-03-16T00:00:00.000Z')
+    const store = createSeedStore()
+    const binaryStore = {
+      ...store,
+      markets: store.markets.map((market) =>
+        market.id === 'openai-device-2026'
+          ? {
+              ...market,
+              betMode: 'binary' as const,
+            }
+          : market,
+      ),
+    }
+    const maintainedStore = runMaintenance(binaryStore, now).store
+    const market = maintainedStore.markets.find(
+      (entry) => entry.id === 'openai-device-2026',
+    )!
+    const expectedMultiplier = calculateDisplayedPayoutMultiplierForSide(
+      market,
+      'for',
+    )
+    const globalBonus = calculateGlobalBonus(maintainedStore.markets)
+
+    const result = placeBetForUser(
+      binaryStore,
+      'agent-1',
+      'openai-device-2026',
+      20,
+      'for',
+      now,
+    )
+
+    expect(result.bet.side).toBe('for')
+    expect(result.bet.payoutMultiplierAtPlacement).toBe(expectedMultiplier)
+    expect(result.bet.projectedPayoutCredits).toBe(
+      calculateProjectedPayout(20, expectedMultiplier, globalBonus),
+    )
+  })
+
+  it('widens the against line when for-side tickets dominate a binary market', () => {
+    const now = new Date('2026-03-16T00:00:00.000Z')
+    const store = createSeedStore()
+    const binaryStore = {
+      ...store,
+      markets: store.markets.map((market) =>
+        market.id === 'openai-device-2026'
+          ? {
+              ...market,
+              betMode: 'binary' as const,
+            }
+          : market,
+      ),
+    }
+    const preBetLine = runMaintenance(binaryStore, now).store.markets.find(
+      (market) => market.id === 'openai-device-2026',
+    )!.payoutMultiplier
+
+    const result = placeBetForUser(
+      binaryStore,
+      'agent-1',
+      'openai-device-2026',
+      20,
+      'for',
+      now,
+    )
+    const postBetLine = result.store.markets.find(
+      (market) => market.id === 'openai-device-2026',
+    )!.payoutMultiplier
+
+    expect(postBetLine).toBeGreaterThan(preBetLine)
+  })
+
+  it('uses worst-case side liability instead of summing both sides at the cap', () => {
+    const now = new Date('2026-03-16T00:00:00.000Z')
+    const store = createSeedStore()
+    const binaryStore = {
+      ...store,
+      markets: store.markets.map((market) =>
+        market.id === 'openai-device-2026'
+          ? {
+              ...market,
+              betMode: 'binary' as const,
+            }
+          : market,
+      ),
+      bets: [
+        {
+          id: 'bet-existing-liability',
+          userId: 'agent-2',
+          marketId: 'openai-device-2026',
+          stakeCredits: 55,
+          side: 'against' as const,
+          status: 'open' as const,
+          payoutMultiplierAtPlacement: 1.63,
+          globalBonusPercentAtPlacement: 24,
+          projectedPayoutCredits: 222.55,
+          settledPayoutCredits: null,
+          placedAt: '2026-03-15T22:00:00.000Z',
+          settledAt: null,
+        },
+        ...store.bets,
+      ],
+    }
+
+    const result = placeBetForUser(
+      binaryStore,
+      'agent-1',
+      'openai-device-2026',
+      15,
+      'for',
+      now,
+    )
+
+    expect(result.bet.side).toBe('for')
+    expect(
+      result.store.markets.find((market) => market.id === 'openai-device-2026')
+        ?.currentLiabilityCredits,
+    ).toBeGreaterThanOrEqual(222.55)
   })
 })

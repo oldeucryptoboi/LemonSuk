@@ -1,9 +1,40 @@
 import React from 'react'
+import type { Metadata } from 'next'
 
 import { RouteFrame } from '../../../src/components/RouteFrame'
 import { fetchBoardGroupDetailServer } from '../../../src/lib/server-api'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const detail = await fetchBoardGroupDetailServer(slug)
+  const title = detail.summary.group.title
+  const description =
+    detail.summary.group.description ??
+    `Reviewed ${detail.summary.family?.displayName?.toLowerCase() ?? 'prediction'} board on LemonSuk.`
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: `/groups/${slug}`,
+    },
+    openGraph: {
+      title,
+      description,
+      url: `https://lemonsuk.com/groups/${slug}`,
+    },
+    twitter: {
+      title,
+      description,
+    },
+  }
+}
 
 export default async function GroupDetailPage({
   params,

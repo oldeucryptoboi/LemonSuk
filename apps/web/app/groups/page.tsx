@@ -1,4 +1,5 @@
 import React from 'react'
+import type { Metadata } from 'next'
 
 import { RouteFrame } from '../../src/components/RouteFrame'
 import {
@@ -7,6 +8,15 @@ import {
 } from '../../src/lib/server-api'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Reviewed Groups',
+  description:
+    'Browse LemonSuk prediction families and reviewed boards across AI launches, product ship dates, CEO claims, policy promises, and more.',
+  alternates: {
+    canonical: '/groups',
+  },
+}
 
 type GroupsPageProps = {
   searchParams?: {

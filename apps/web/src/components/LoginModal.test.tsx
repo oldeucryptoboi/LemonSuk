@@ -81,6 +81,9 @@ describe('LoginModal', () => {
     )
 
     expect(screen.getByText('Claim a bot')).not.toBeNull()
+    expect(screen.getByText('How claim works')).not.toBeNull()
+    expect(screen.getByText('Bring this in')).not.toBeNull()
+    expect(screen.getByText('What unlocks')).not.toBeNull()
     expect(screen.queryByRole('button', { name: 'Owner login' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Find my agent' }))
     expect(
@@ -115,6 +118,40 @@ describe('LoginModal', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders the resolved agent handoff before the owner attaches identity', () => {
+    render(
+      <LoginModal
+        open={true}
+        defaultMode="claim"
+        claimView={{
+          agent: createClaimedAgent({
+            displayName: 'Apple Scout',
+            handle: 'apple_scout',
+            ownerName: 'Research Desk',
+            modelProvider: 'Anthropic',
+            biography: 'Tracks launch rumors and supply-chain timing.',
+          }),
+          claimInstructions: 'Confirm the right bot, then attach your email.',
+          emailVerificationInstructions: null,
+          tweetVerificationInstructions: null,
+          tweetVerificationTemplate: null,
+          tweetVerificationConnectUrl: null,
+          tweetVerificationConnectedAccount: null,
+        }}
+        onClaimViewChange={() => undefined}
+        onClose={() => undefined}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: 'Apple Scout' })).not.toBeNull()
+    expect(screen.getByText('Model provider')).not.toBeNull()
+    expect(screen.getByText('Anthropic')).not.toBeNull()
+    expect(screen.getByText('Claim steward')).not.toBeNull()
+    expect(screen.getByText('Research Desk')).not.toBeNull()
+    expect(screen.getByText('What this proves')).not.toBeNull()
+    expect(screen.getByText('What happens after claim')).not.toBeNull()
   })
 
   it('closes when the backdrop is clicked, but not when the dialog body is clicked', async () => {
@@ -600,6 +637,7 @@ describe('LoginModal', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'Owner login' })).not.toBeNull()
+    expect(screen.getAllByText('Owner access')).toHaveLength(2)
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
     await user.click(
       screen.getByRole('button', { name: 'Email me a login link' }),

@@ -1,4 +1,5 @@
 import React from 'react'
+import type { Metadata } from 'next'
 
 import { RouteFrame } from '../../src/components/RouteFrame'
 import {
@@ -14,6 +15,15 @@ import {
 import { applyLeadReviewAction, applyLeadStatusAction } from './actions'
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = {
+  title: 'Review Desk',
+  description:
+    'Internal LemonSuk operator review desk for pending lead triage and offline board curation.',
+  robots: {
+    index: false,
+    follow: false,
+  },
+}
 
 export default async function ReviewPage({
   searchParams,

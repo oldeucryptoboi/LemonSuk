@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto'
 
 import type {
+  BetSide,
   Market,
   MarketLineHistoryEntry,
   MarketLineMoveReason,
+  MarketBetMode,
   MarketSettlementState,
   PredictionFamily,
   StoreData,
@@ -30,12 +32,15 @@ type MarketRiskPolicy = {
   linkedMissWeight: number
   uncertaintyWeight: number
   liabilityWeight: number
+  imbalanceWeight: number
 }
 
 type MarketExposure = {
   openTicketCount: number
   openInterestCredits: number
   liabilityCredits: number
+  openInterestCreditsBySide: Record<BetSide, number>
+  liabilityCreditsBySide: Record<BetSide, number>
 }
 
 export type PricingSignals = {
@@ -45,6 +50,7 @@ export type PricingSignals = {
   linkedMissPressure: number
   uncertaintyLift: number
   liabilityPressure: number
+  sideImbalance: number
 }
 
 export type PricingEngineEvent = {
@@ -68,6 +74,7 @@ const familyPolicies: Record<PredictionFamily['slug'], MarketRiskPolicy> = {
     linkedMissWeight: 0.08,
     uncertaintyWeight: 0.2,
     liabilityWeight: 0.26,
+    imbalanceWeight: 0.9,
   },
   product_ship_date: {
     family: 'product_ship_date',
@@ -83,6 +90,7 @@ const familyPolicies: Record<PredictionFamily['slug'], MarketRiskPolicy> = {
     linkedMissWeight: 0.12,
     uncertaintyWeight: 0.14,
     liabilityWeight: 0.2,
+    imbalanceWeight: 0.9,
   },
   earnings_guidance: {
     family: 'earnings_guidance',
@@ -98,6 +106,7 @@ const familyPolicies: Record<PredictionFamily['slug'], MarketRiskPolicy> = {
     linkedMissWeight: 0.06,
     uncertaintyWeight: 0.1,
     liabilityWeight: 0.3,
+    imbalanceWeight: 1,
   },
   policy_promise: {
     family: 'policy_promise',
@@ -113,6 +122,7 @@ const familyPolicies: Record<PredictionFamily['slug'], MarketRiskPolicy> = {
     linkedMissWeight: 0.12,
     uncertaintyWeight: 0.18,
     liabilityWeight: 0.24,
+    imbalanceWeight: 0.9,
   },
   ceo_claim: {
     family: 'ceo_claim',
@@ -128,11 +138,35 @@ const familyPolicies: Record<PredictionFamily['slug'], MarketRiskPolicy> = {
     linkedMissWeight: 0.08,
     uncertaintyWeight: 0.16,
     liabilityWeight: 0.24,
+    imbalanceWeight: 0.9,
   },
 }
 
 function normalizeCredits(value: number): number {
   return Number(value.toFixed(2))
+}
+
+export function resolveMarketBetMode(market: Market): MarketBetMode {
+  return market.betMode ?? 'against_only'
+}
+
+export function calculateDisplayedPayoutMultiplierForSide(
+  market: Pick<Market, 'payoutMultiplier' | 'betMode'>,
+  side: BetSide,
+): number {
+  if (side === 'against' || resolveMarketBetMode(market as Market) !== 'binary') {
+    return market.payoutMultiplier
+  }
+
+  const impliedAgainstProbability = clamp(1 / market.payoutMultiplier, 0.05, 0.95)
+  const impliedForProbability = clamp(1 - impliedAgainstProbability, 0.05, 0.95)
+  const rawForMultiplier = 1 / impliedForProbability
+
+  return Number(
+    clamp(Number(rawForMultiplier.toFixed(2)), defaultLineFloor, defaultLineCeiling).toFixed(
+      2,
+    ),
+  )
 }
 
 function marketHaystack(market: Market): string {
@@ -201,17 +235,41 @@ export function calculateMarketExposure(
     (bet) => bet.marketId === marketId && bet.status === 'open',
   )
 
+  const openInterestCreditsBySide: Record<BetSide, number> = {
+    for: normalizeCredits(
+      openBets
+        .filter((bet) => bet.side === 'for')
+        .reduce((total, bet) => total + bet.stakeCredits, 0),
+    ),
+    against: normalizeCredits(
+      openBets
+        .filter((bet) => bet.side === 'against')
+        .reduce((total, bet) => total + bet.stakeCredits, 0),
+    ),
+  }
+  const liabilityCreditsBySide: Record<BetSide, number> = {
+    for: normalizeCredits(
+      openBets
+        .filter((bet) => bet.side === 'for')
+        .reduce((total, bet) => total + bet.projectedPayoutCredits, 0),
+    ),
+    against: normalizeCredits(
+      openBets
+        .filter((bet) => bet.side === 'against')
+        .reduce((total, bet) => total + bet.projectedPayoutCredits, 0),
+    ),
+  }
+
   return {
     openTicketCount: openBets.length,
     openInterestCredits: normalizeCredits(
       openBets.reduce((total, bet) => total + bet.stakeCredits, 0),
     ),
     liabilityCredits: normalizeCredits(
-      openBets.reduce(
-        (total, bet) => total + bet.projectedPayoutCredits,
-        0,
-      ),
+      Math.max(liabilityCreditsBySide.for, liabilityCreditsBySide.against),
     ),
+    openInterestCreditsBySide,
+    liabilityCreditsBySide,
   }
 }
 
@@ -283,6 +341,23 @@ function calculateLiabilityPressure(
   return clamp(exposure.liabilityCredits / policy.maxLiabilityCredits, 0, 1.25)
 }
 
+function calculateSideImbalance(
+  market: Market,
+  exposure: MarketExposure,
+  policy: MarketRiskPolicy,
+): number {
+  if (resolveMarketBetMode(market) !== 'binary') {
+    return 0
+  }
+
+  return clamp(
+    (exposure.liabilityCreditsBySide.against - exposure.liabilityCreditsBySide.for) /
+      policy.maxLiabilityCredits,
+    -1,
+    1,
+  )
+}
+
 export function calculateAutoResolveAt(
   market: Market,
   policy: MarketRiskPolicy = resolveMarketRiskPolicy(market),
@@ -331,6 +406,7 @@ export function calculatePricingSignals(
     linkedMissPressure: calculateLinkedMissPressure(store, market),
     uncertaintyLift: clamp((100 - market.confidence) / 100, 0, 1),
     liabilityPressure: calculateLiabilityPressure(exposure, policy),
+    sideImbalance: calculateSideImbalance(market, exposure, policy),
   }
 }
 
@@ -344,6 +420,7 @@ export function buildPricingCommentary(
   const settlementState = calculateSettlementState(market, now, policy)
   const signals = calculatePricingSignals(market, store, now)
   const commentary: string[] = []
+  const betMode = resolveMarketBetMode(market)
 
   if (settlementState === 'grace') {
     commentary.push(
@@ -368,6 +445,16 @@ export function buildPricingCommentary(
   if (signals.demandPressure >= 0.28) {
     commentary.push(
       `Open tickets are stacking up with ${normalizeCredits(exposure.openInterestCredits)} CR staked, trimming the premium left in the book.`,
+    )
+  }
+  if (betMode === 'binary' && signals.sideImbalance >= 0.12) {
+    commentary.push(
+      'Against-side tickets are dominating this binary market, so the against line is tightening while the for side gets less favorable.',
+    )
+  }
+  if (betMode === 'binary' && signals.sideImbalance <= -0.12) {
+    commentary.push(
+      'For-side tickets are dominating this binary market, so the against line is widening to attract balancing action.',
     )
   }
   if (signals.linkedMissPressure > 0) {
@@ -407,16 +494,29 @@ export function calculateLivePayoutMultiplier(
     linkedMissPressure,
     uncertaintyLift,
     liabilityPressure,
+    sideImbalance,
   } = calculatePricingSignals(market, store, now)
+  const betMode = resolveMarketBetMode(market)
+
+  const binaryImbalanceFactor =
+    betMode === 'binary'
+      ? (1 - clamp(sideImbalance, 0, 1) * policy.imbalanceWeight) *
+        (1 + clamp(-sideImbalance, 0, 1) * policy.imbalanceWeight)
+      : 1
+  const demandFactor =
+    betMode === 'binary'
+      ? 1 - demandPressure * policy.demandWeight * 0.35
+      : 1 - demandPressure * policy.demandWeight
 
   const repriced =
     market.basePayoutMultiplier *
     (1 - historicalMissRate * policy.historicalMissWeight) *
     (1 - timePressure * policy.timePressureWeight) *
-    (1 - demandPressure * policy.demandWeight) *
+    demandFactor *
     (1 - linkedMissPressure * policy.linkedMissWeight) *
     (1 + uncertaintyLift * policy.uncertaintyWeight) *
-    (1 - clamp(liabilityPressure, 0, 1) * policy.liabilityWeight)
+    (1 - clamp(liabilityPressure, 0, 1) * policy.liabilityWeight) *
+    binaryImbalanceFactor
 
   return Number(
     clamp(Number(repriced.toFixed(2)), defaultLineFloor, defaultLineCeiling).toFixed(

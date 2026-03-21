@@ -1710,12 +1710,88 @@ input {
   margin-top: 16px;
 }
 
+.claim-entry-shell,
+.claim-identity-shell {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.claim-entry-grid,
+.claim-identity-grid,
+.claim-note-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.claim-entry-grid,
+.claim-note-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.claim-identity-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.claim-entry-card,
+.claim-identity-card,
 .claim-status-card,
 .claim-detail-card,
 .claim-progress-step {
   border-radius: 18px;
   border: 1px solid rgba(246, 200, 107, 0.16);
   background: rgba(4, 18, 14, 0.82);
+}
+
+.claim-entry-card,
+.claim-identity-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.claim-entry-card-primary {
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(246, 200, 107, 0.14),
+      transparent 48%
+    ),
+    rgba(5, 18, 14, 0.9);
+  border-color: rgba(246, 200, 107, 0.24);
+}
+
+.claim-entry-card span,
+.claim-identity-card span,
+.claim-note-card span {
+  color: rgba(247, 236, 215, 0.62);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.claim-entry-card strong,
+.claim-identity-card strong,
+.claim-note-card strong {
+  line-height: 1.35;
+}
+
+.claim-entry-card p {
+  margin: 0;
+  color: rgba(247, 236, 215, 0.78);
+  line-height: 1.55;
+}
+
+.claim-entry-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(247, 236, 215, 0.82);
+}
+
+.claim-entry-list li {
+  line-height: 1.45;
 }
 
 .claim-status-card {
@@ -1756,6 +1832,15 @@ input {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.claim-note-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(246, 200, 107, 0.14);
+  background: rgba(8, 19, 15, 0.72);
 }
 
 .claim-progress-step {
@@ -2093,7 +2178,10 @@ input {
   .season-surface-grid,
   .forum-insight-grid,
   .surface-card-grid,
-  .claim-detail-grid {
+  .claim-detail-grid,
+  .claim-entry-grid,
+  .claim-identity-grid,
+  .claim-note-grid {
     grid-template-columns: 1fr;
   }
 

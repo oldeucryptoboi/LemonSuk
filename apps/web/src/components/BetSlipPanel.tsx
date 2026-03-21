@@ -39,6 +39,14 @@ export function BetSlipPanel({
               <span>{selectedMarket.payoutMultiplier.toFixed(2)}x</span>
             </div>
             <div className="ticket-row">
+              <span>Bet mode</span>
+              <span>
+                {(selectedMarket.betMode ?? 'against_only') === 'binary'
+                  ? 'for / against'
+                  : 'against only'}
+              </span>
+            </div>
+            <div className="ticket-row">
               <span>Stake difficulty</span>
               <span>{selectedMarket.stakeDifficulty}/5</span>
             </div>
@@ -62,6 +70,7 @@ export function BetSlipPanel({
         ) : (
           activeBets.map((bet) => (
             <div key={bet.id} className="ticket-row">
+              <span>{bet.side}</span>
               <span>{formatCredits(bet.stakeCredits)}</span>
               <span>{bet.payoutMultiplierAtPlacement.toFixed(2)}x</span>
               <span>{formatCredits(bet.projectedPayoutCredits)}</span>

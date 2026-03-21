@@ -225,4 +225,53 @@ describe('pricing engine', () => {
     expect(repriced.changed).toBe(true)
     expect(unchanged.changed).toBe(false)
   })
+
+  it('tracks worst-case liability and widens the against line when for-side exposure dominates a binary market', () => {
+    const store = createSeedStore()
+    const binaryStore: StoreData = {
+      ...store,
+      markets: store.markets.map((market) =>
+        market.id === 'openai-device-2026'
+          ? {
+              ...market,
+              betMode: 'binary',
+            }
+          : market,
+      ),
+      bets: [
+        ...store.bets,
+        {
+          id: 'bet-for-pressure',
+          userId: 'agent-1',
+          marketId: 'openai-device-2026',
+          stakeCredits: 20,
+          side: 'for',
+          status: 'open',
+          payoutMultiplierAtPlacement: 2.55,
+          globalBonusPercentAtPlacement: 24,
+          projectedPayoutCredits: 63.24,
+          settledPayoutCredits: null,
+          placedAt: '2026-03-16T00:00:00.000Z',
+          settledAt: null,
+        },
+      ],
+    }
+    const market = binaryStore.markets.find((entry) => entry.id === 'openai-device-2026')!
+    const exposure = calculateMarketExposure(binaryStore, market.id)
+    const repriced = applyPricingEngine(
+      binaryStore,
+      new Date('2026-03-16T00:00:00.000Z'),
+      {
+        reason: 'bet',
+        triggerMarketId: market.id,
+        triggerBetId: 'bet-for-pressure',
+      },
+    ).store
+    const repricedMarket = repriced.markets.find((entry) => entry.id === market.id)!
+
+    expect(exposure.liabilityCredits).toBe(63.24)
+    expect(exposure.liabilityCreditsBySide.for).toBe(63.24)
+    expect(exposure.liabilityCreditsBySide.against).toBe(0)
+    expect(repricedMarket.payoutMultiplier).toBeGreaterThan(market.payoutMultiplier)
+  })
 })

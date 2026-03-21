@@ -1,4 +1,5 @@
 import React from 'react'
+import type { Metadata } from 'next'
 
 import {
   fetchBoardFamiliesServer,
@@ -6,6 +7,15 @@ import {
   fetchDashboardServer,
 } from '../src/lib/server-api'
 import App from '../src/App'
+
+export const metadata: Metadata = {
+  title: 'LemonSuk',
+  description:
+    'Credit markets for public predictions, launch windows, and overconfident timelines. Follow flagship Musk cards plus Apple, OpenAI, Anthropic, Meta, and policy boards.',
+  alternates: {
+    canonical: '/',
+  },
+}
 
 export default async function Page() {
   let initialSnapshot:

@@ -109,6 +109,6 @@ describe('store service branch coverage', () => {
     const insertCall = query.mock.calls.find((call: unknown[]) =>
       normalizeSql(call[0]).includes('INSERT INTO markets'),
     )
-    expect(insertCall?.[1]?.[23]).toBe('agent-1')
+    expect(insertCall?.[1]?.[24]).toBe('agent-1')
   })
 })

@@ -37,6 +37,7 @@ function market(
   return {
     ...input,
     basePayoutMultiplier: input.payoutMultiplier,
+    betMode: input.betMode ?? 'against_only',
     author: null,
     createdAt: seededAt,
     updatedAt: seededAt,

@@ -91,7 +91,7 @@ describe('createAuthRouter fallback errors', () => {
       ),
     }))
     vi.doMock('../services/betting', () => ({
-      placeAgainstBetForUser: vi.fn(() => {
+      placeBetForUser: vi.fn(() => {
         throw 'closed'
       }),
     }))
@@ -380,7 +380,7 @@ describe('createAuthRouter fallback errors', () => {
       ),
     }))
     vi.doMock('../services/betting', () => ({
-      placeAgainstBetForUser: vi.fn(() => {
+      placeBetForUser: vi.fn(() => {
         throw new Error('Boom.')
       }),
     }))
@@ -447,7 +447,7 @@ describe('createAuthRouter fallback errors', () => {
       })),
     }))
     vi.doMock('../services/betting', () => ({
-      placeAgainstBetForUser: vi.fn((store) => ({
+      placeBetForUser: vi.fn((store) => ({
         bet: {
           id: 'bet-1',
           userId: 'agent-1',
@@ -545,7 +545,7 @@ describe('createAuthRouter fallback errors', () => {
       ],
     }
     const persist = vi.fn(async (nextStore: unknown) => nextStore)
-    const placeAgainstBetForUser = vi.fn(() => ({
+    const placeBetForUser = vi.fn(() => ({
       bet: repricedStore.bets[0],
       store: repricedStore,
     }))
@@ -595,7 +595,7 @@ describe('createAuthRouter fallback errors', () => {
       })),
     }))
     vi.doMock('../services/betting', () => ({
-      placeAgainstBetForUser,
+      placeBetForUser,
     }))
     vi.doMock('../services/wallet', () => ({
       debitAgentCredits: vi.fn(async () => ({
@@ -635,11 +635,12 @@ describe('createAuthRouter fallback errors', () => {
 
     expect(response.statusCode).toBe(200)
     expect(persist).toHaveBeenNthCalledWith(1, maintenanceStore)
-    expect(placeAgainstBetForUser).toHaveBeenCalledWith(
+    expect(placeBetForUser).toHaveBeenCalledWith(
       maintenanceStore,
       'agent-1',
       'market-1',
       10,
+      'against',
       expect.any(Date),
     )
     expect(persist).toHaveBeenNthCalledWith(2, repricedStore)

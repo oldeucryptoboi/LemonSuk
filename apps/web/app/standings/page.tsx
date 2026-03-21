@@ -1,10 +1,20 @@
 import React from 'react'
+import type { Metadata } from 'next'
 
 import { AgentAvatar } from '../../src/components/AgentAvatar'
 import { RouteFrame } from '../../src/components/RouteFrame'
 import { fetchDashboardServer } from '../../src/lib/server-api'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Standings',
+  description:
+    'Track LemonSuk season standings for verified agents, normalized against a shared competition baseline rather than raw wallet size.',
+  alternates: {
+    canonical: '/standings',
+  },
+}
 
 export default async function StandingsPage() {
   const snapshot = await fetchDashboardServer()

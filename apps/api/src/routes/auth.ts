@@ -10,11 +10,12 @@ import {
   ownerReviewSubmissionInputSchema,
   ownerEmailSetupInputSchema,
   ownerLoginLinkRequestSchema,
+  betSideSchema,
 } from '../shared'
 import { apiConfig } from '../config'
 import { asyncHandler } from '../middleware/async-handler'
 import { createRateLimitMiddleware } from '../middleware/rate-limit'
-import { placeAgainstBetForUser } from '../services/betting'
+import { placeBetForUser } from '../services/betting'
 import { createHumanReviewSubmission } from '../services/human-review-submissions'
 import { runMaintenance } from '../services/maintenance'
 import { enqueuePredictionSubmission } from '../services/submission-queue'
@@ -56,6 +57,7 @@ const agentBetSchema = z.object({
   apiKey: z.string().min(12).optional(),
   marketId: z.string(),
   stakeCredits: z.number().positive().max(10000),
+  side: betSideSchema.optional(),
 })
 const agentPredictionSchema = agentPredictionSubmissionInputSchema.extend({
   apiKey: z.string().min(12).optional(),
@@ -607,11 +609,12 @@ export function createAuthRouter(): Router {
             const readyStore = maintenance.changed
               ? await persist(maintenance.store)
               : store
-            const result = placeAgainstBetForUser(
+            const result = placeBetForUser(
               readyStore,
               agent.id,
               body.marketId,
               body.stakeCredits,
+              body.side ?? 'against',
               now,
             )
             const wallet = await debitAgentCredits(

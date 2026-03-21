@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { EventGroupDetail } from '../../../src/shared'
-import GroupDetailPage from './page'
+import GroupDetailPage, { generateMetadata } from './page'
 
 const mocks = vi.hoisted(() => ({
   fetchBoardGroupDetailServer: vi.fn(
@@ -52,6 +52,25 @@ vi.mock('../../../src/lib/server-api', () => ({
 }))
 
 describe('GroupDetailPage', () => {
+  it('builds metadata from group detail data', async () => {
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: 'openai-release-radar' }),
+    })
+
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        title: 'OpenAI release radar',
+        description: 'OpenAI launches.',
+        alternates: expect.objectContaining({
+          canonical: '/groups/openai-release-radar',
+        }),
+        openGraph: expect.objectContaining({
+          url: 'https://lemonsuk.com/groups/openai-release-radar',
+        }),
+      }),
+    )
+  })
+
   it('renders a read-only event group view', async () => {
     render(await GroupDetailPage({ params: Promise.resolve({ slug: 'openai-release-radar' }) }))
 
@@ -100,5 +119,71 @@ describe('GroupDetailPage', () => {
     expect(screen.getByText('Cross-entity board')).not.toBeNull()
     expect(screen.getByText('No hero market selected')).not.toBeNull()
     expect(screen.getByText('The board has no featured market yet.')).not.toBeNull()
+  })
+
+  it('falls back to family-based metadata when the group description is missing', async () => {
+    mocks.fetchBoardGroupDetailServer.mockResolvedValueOnce(
+      {
+        summary: {
+          group: {
+            id: 'group_cross_entity_watch',
+            slug: 'cross-entity-watch',
+            title: 'Cross-entity watch',
+            description: null,
+          },
+          family: {
+            id: 'family_product_ship_date',
+            slug: 'product_ship_date',
+            displayName: 'Product ship dates',
+          },
+          primaryEntity: null,
+          heroMarket: null,
+          openMarkets: 0,
+          totalMarkets: 1,
+        },
+        markets: [],
+      } as unknown as EventGroupDetail,
+    )
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: 'cross-entity-watch' }),
+    })
+
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        description: 'Reviewed product ship dates board on LemonSuk.',
+      }),
+    )
+  })
+
+  it('falls back to generic prediction metadata when both description and family are missing', async () => {
+    mocks.fetchBoardGroupDetailServer.mockResolvedValueOnce(
+      {
+        summary: {
+          group: {
+            id: 'group_cross_entity_watch',
+            slug: 'cross-entity-watch',
+            title: 'Cross-entity watch',
+            description: null,
+          },
+          family: null,
+          primaryEntity: null,
+          heroMarket: null,
+          openMarkets: 0,
+          totalMarkets: 0,
+        },
+        markets: [],
+      } as unknown as EventGroupDetail,
+    )
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: 'cross-entity-watch' }),
+    })
+
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        description: 'Reviewed prediction board on LemonSuk.',
+      }),
+    )
   })
 })
