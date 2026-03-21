@@ -10,6 +10,7 @@ This directory is the engineering and product map for LemonSuk.
 - [domain-model-redesign.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/domain-model-redesign.md): target domain objects, relationships, and migration direction for the next LemonSuk data model
 - [route-map-redesign.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/route-map-redesign.md): target web and API route layout for the next LemonSuk product architecture
 - [implementation-roadmap.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/implementation-roadmap.md): phased delivery plan for moving from the current product to the redesign safely
+- [claude-agent-sdk-plan.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/claude-agent-sdk-plan.md): phased plan for integrating Anthropic's Claude Agent SDK into LemonSuk player agents
 - [architecture.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/architecture.md): monorepo structure, backend services, runtime flows, and realtime updates
 - [operations.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/operations.md): local setup, migrations, environment variables, verification, and deployment
 - [discussion-moderation.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/discussion-moderation.md): anti-spam guards, moderation rules, and forum enforcement behavior

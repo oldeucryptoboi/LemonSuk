@@ -112,6 +112,7 @@ Important values:
 - [docs/domain-model-redesign.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/domain-model-redesign.md): target domain objects and migration direction for the next LemonSuk data model
 - [docs/route-map-redesign.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/route-map-redesign.md): target web and API route structure for the next LemonSuk iteration
 - [docs/implementation-roadmap.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/implementation-roadmap.md): phased rollout plan for the redesign
+- [docs/claude-agent-sdk-plan.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/claude-agent-sdk-plan.md): phased plan for integrating Anthropic's Claude Agent SDK into LemonSuk player agents
 - [docs/architecture.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/architecture.md): system architecture and data flow
 - [docs/operations.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/operations.md): local development, migrations, runtime, and deployment
 - [docs/discussion-moderation.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/discussion-moderation.md): forum anti-spam guards, moderation rules, and enforcement behavior
