@@ -227,20 +227,11 @@ export function createClaudeReviewModelClient(options: {
             })
           }
 
-          if (typeof message.result !== 'string' || message.result.trim().length === 0) {
-            throw new ClaudeReviewAgentExecutionError(
-              'Claude review agent returned no final summary.',
-              {
-                sessionId,
-                providerRunId,
-                costUsd,
-                tokenUsage,
-                toolUsage,
-              },
-            )
-          }
+          finalSummary =
+            typeof message.result === 'string' && message.result.trim().length > 0
+              ? message.result
+              : null
 
-          finalSummary = message.result
           if (!message.structured_output) {
             throw new ClaudeReviewAgentExecutionError(
               'Claude review agent returned no structured recommendation.',
@@ -258,6 +249,7 @@ export function createClaudeReviewModelClient(options: {
           const recommendation = normalizeStructuredRecommendation(
             message.structured_output,
           )
+          finalSummary ??= recommendation.summary
 
           return {
             sessionId,

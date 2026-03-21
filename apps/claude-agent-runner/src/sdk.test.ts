@@ -293,7 +293,7 @@ describe('createClaudeReviewModelClient', () => {
     } satisfies Partial<InstanceType<typeof ClaudeReviewAgentExecutionError>>)
   })
 
-  it('fails loudly when the provider returns success without a final summary', async () => {
+  it('uses the structured recommendation summary when the provider omits prose output', async () => {
     const queryImpl = vi.fn(() => ({
       async *[Symbol.asyncIterator]() {
         yield {
@@ -335,11 +335,15 @@ describe('createClaudeReviewModelClient', () => {
         workspaceCwd: '/tmp/claude-review/review-default',
         lead: buildLeadDetail(),
       }),
-    ).rejects.toMatchObject({
-      message: 'Claude review agent returned no final summary.',
+    ).resolves.toMatchObject({
       sessionId: 'session_2b',
       providerRunId: 'provider_2b',
       costUsd: 0.03,
+      finalSummary:
+        'The source is too vague to support a settleable claim and should be rejected.',
+      recommendation: {
+        verdict: 'reject',
+      },
     })
   })
 
