@@ -276,8 +276,8 @@ describe('web components', () => {
     ).toBeNull()
     expect(screen.queryByRole('link', { name: 'Owner deck' })).toBeNull()
     expect(screen.getByText('Owner access')).not.toBeNull()
-    expect(screen.getByText('Bankroll')).not.toBeNull()
-    expect(screen.getByText('Alerts')).not.toBeNull()
+    expect(screen.getByText('Available bankroll')).not.toBeNull()
+    expect(screen.getByText('Owner alerts')).not.toBeNull()
     expect(screen.queryByText('Owner workspace live')).toBeNull()
     expect(screen.queryByRole('link', { name: 'Open owner deck' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Submit source' })).toBeNull()
@@ -338,9 +338,9 @@ describe('web components', () => {
         onOwnerLogout={onOpenOwnerModal}
       />,
     )
-    expect(screen.getByText('Tickets')).not.toBeNull()
-    expect(screen.getByText('Alerts')).not.toBeNull()
-    expect(screen.getByText('+1 more linked')).not.toBeNull()
+    expect(screen.getByText('Open tickets')).not.toBeNull()
+    expect(screen.getByText('Owner alerts')).not.toBeNull()
+    expect(screen.getByText('@deadlinebot, @scoutbot, @orbitbot +1 more')).not.toBeNull()
 
     rerender(
       <HeroBanner
@@ -376,8 +376,8 @@ describe('web components', () => {
         onOwnerLogout={onOpenOwnerModal}
       />,
     )
-    expect(screen.getByText('Tickets')).not.toBeNull()
-    expect(screen.getByText('Alerts')).not.toBeNull()
+    expect(screen.getByText('Open tickets')).not.toBeNull()
+    expect(screen.getByText('Owner alerts')).not.toBeNull()
 
     rerender(
       <HeroBanner

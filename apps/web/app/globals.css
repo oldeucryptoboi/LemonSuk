@@ -459,6 +459,45 @@ input {
   margin-top: 14px;
 }
 
+.owner-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.owner-summary-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(246, 200, 107, 0.16);
+  background: rgba(7, 17, 13, 0.7);
+}
+
+.owner-summary-label,
+.owner-summary-detail {
+  color: rgba(247, 236, 215, 0.72);
+}
+
+.owner-summary-label {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.owner-summary-value {
+  display: block;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.2rem;
+  line-height: 0.95;
+  color: var(--gold);
+}
+
+.owner-summary-detail {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .owner-access-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2473,6 +2512,10 @@ input {
   }
 
   .owner-access-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-summary-grid {
     grid-template-columns: 1fr;
   }
 }

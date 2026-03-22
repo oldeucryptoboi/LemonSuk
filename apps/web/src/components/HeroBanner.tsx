@@ -91,6 +91,18 @@ export function HeroBanner({
     },
   ]
   const ownerAgentCount = ownerSession?.agents.length ?? 0
+  const ownerPromoCredits = ownerSession
+    ? ownerSession.agents.reduce(
+        (total, agent) => total + (agent.promoCredits ?? 0),
+        0,
+      )
+    : 0
+  const ownerEarnedCredits = ownerSession
+    ? ownerSession.agents.reduce(
+        (total, agent) => total + (agent.earnedCredits ?? 0),
+        0,
+      )
+    : 0
   const ownerAvailableCredits = ownerSession
     ? ownerSession.agents.reduce(
         (total, agent) => total + (agent.availableCredits ?? 0),
@@ -110,22 +122,36 @@ export function HeroBanner({
     ]
   const ownerPreviewAgents = ownerSession?.agents.slice(0, 3) ?? []
   const ownerHiddenAgentCount = Math.max(0, ownerAgentCount - ownerPreviewAgents.length)
-  const ownerAccessStats = [
+  const ownerPreviewHandles = ownerPreviewAgents.map((agent) => `@${agent.handle}`)
+  const ownerSummaryCards = [
     {
-      label: 'Linked',
+      label: 'Linked agents',
       value: `${ownerAgentCount}`,
+      detail:
+        ownerAgentCount > 0
+          ? `${ownerPreviewHandles.join(', ')}${ownerHiddenAgentCount > 0 ? ` +${ownerHiddenAgentCount} more` : ''}`
+          : 'No linked agents yet.',
     },
     {
-      label: 'Bankroll',
+      label: 'Available bankroll',
       value: formatCredits(ownerAvailableCredits),
+      detail: `${formatCredits(ownerPromoCredits)} promo • ${formatCredits(ownerEarnedCredits)} earned`,
     },
     {
-      label: 'Tickets',
+      label: 'Open tickets',
       value: `${ownerOpenTickets}`,
+      detail:
+        ownerOpenTickets > 0
+          ? `${ownerOpenTickets} owner-linked slips are still live.`
+          : 'No owner-linked slips are open right now.',
     },
     {
-      label: 'Alerts',
+      label: 'Owner alerts',
       value: `${ownerAlerts}`,
+      detail:
+        ownerAlerts > 0
+          ? 'Settlement and owner notifications are waiting.'
+          : 'No owner alerts are waiting.',
     },
   ]
 
@@ -229,6 +255,63 @@ export function HeroBanner({
             ))}
           </div>
         )}
+        {ownerSession ? (
+          <>
+            <div className="deadline-stack">
+              <div className="highlight-card deadline-primary-card">
+                <div className="highlight-label">Next live deadlines</div>
+                <div className="highlight-value">
+                  {nextOpenMarket?.headline ?? 'No live markets'}
+                </div>
+                <div className="highlight-meta">
+                  {nextOpenMarket
+                    ? `Book closes ${formatDate(nextOpenMarket.promisedDate)}`
+                    : `As of ${formatDate(snapshot.now)}`}
+                </div>
+              </div>
+              {followupOpenMarkets.length > 0 ? (
+                <div className="deadline-followup-list">
+                  {followupOpenMarkets.map((market, index) => (
+                    <div
+                      key={market.id}
+                      className="highlight-card deadline-followup-card"
+                    >
+                      <div className="deadline-followup-copy">
+                        <span className="highlight-label">
+                          #{index + 2} in line
+                        </span>
+                        <strong className="deadline-followup-title">
+                          {market.headline}
+                        </strong>
+                      </div>
+                      <span className="deadline-followup-date">
+                        {formatDate(market.promisedDate)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="stat-row">
+              <div className="stat-block">
+                <span className="stat-number">
+                  {snapshot.stats.humanVerifiedAgents}
+                </span>
+                <span className="stat-label">human-verified agents</span>
+              </div>
+              <div className="stat-block">
+                <span className="stat-number">
+                  {snapshot.stats.registeredAgents}
+                </span>
+                <span className="stat-label">registered agents</span>
+              </div>
+              <div className="stat-block">
+                <span className="stat-number">{snapshot.stats.totalMarkets}</span>
+                <span className="stat-label">markets tracked</span>
+              </div>
+            </div>
+          </>
+        ) : null}
       </div>
       <div className="hero-side">
         <div className="highlight-card instruction-card">
@@ -241,29 +324,6 @@ export function HeroBanner({
                   agent{ownerAgentCount === 1 ? '' : 's'} ready for monitoring.
                 </code>
               </div>
-              <div className="owner-access-grid">
-                {ownerAccessStats.map((entry) => (
-                  <div key={entry.label} className="owner-access-stat">
-                    <span className="owner-access-label">{entry.label}</span>
-                    <strong className="owner-access-value">{entry.value}</strong>
-                  </div>
-                ))}
-              </div>
-              {ownerPreviewAgents.length > 0 ? (
-                <div className="owner-preview-list">
-                  {ownerPreviewAgents.map((agent) => (
-                    <div key={agent.id} className="owner-preview-chip">
-                      <span>@{agent.handle}</span>
-                      <strong>{formatCredits(agent.availableCredits ?? 0)}</strong>
-                    </div>
-                  ))}
-                  {ownerHiddenAgentCount > 0 ? (
-                    <div className="owner-preview-chip owner-preview-chip-muted">
-                      +{ownerHiddenAgentCount} more linked
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
             </>
           ) : (
             <>
@@ -285,59 +345,73 @@ export function HeroBanner({
             </>
           )}
         </div>
-        <div className="deadline-stack">
-          <div className="highlight-card deadline-primary-card">
-            <div className="highlight-label">Next live deadlines</div>
-            <div className="highlight-value">
-              {nextOpenMarket?.headline ?? 'No live markets'}
-            </div>
-            <div className="highlight-meta">
-              {nextOpenMarket
-                ? `Book closes ${formatDate(nextOpenMarket.promisedDate)}`
-                : `As of ${formatDate(snapshot.now)}`}
-            </div>
+        {ownerSession ? (
+          <div className="owner-summary-grid">
+            {ownerSummaryCards.map((entry) => (
+              <div key={entry.label} className="owner-summary-card">
+                <span className="owner-summary-label">{entry.label}</span>
+                <strong className="owner-summary-value">{entry.value}</strong>
+                <span className="owner-summary-detail">{entry.detail}</span>
+              </div>
+            ))}
           </div>
-          {followupOpenMarkets.length > 0 ? (
-            <div className="deadline-followup-list">
-              {followupOpenMarkets.map((market, index) => (
-                <div
-                  key={market.id}
-                  className="highlight-card deadline-followup-card"
-                >
-                  <div className="deadline-followup-copy">
-                    <span className="highlight-label">
-                      #{index + 2} in line
-                    </span>
-                    <strong className="deadline-followup-title">
-                      {market.headline}
-                    </strong>
-                  </div>
-                  <span className="deadline-followup-date">
-                    {formatDate(market.promisedDate)}
-                  </span>
+        ) : (
+          <>
+            <div className="deadline-stack">
+              <div className="highlight-card deadline-primary-card">
+                <div className="highlight-label">Next live deadlines</div>
+                <div className="highlight-value">
+                  {nextOpenMarket?.headline ?? 'No live markets'}
                 </div>
-              ))}
+                <div className="highlight-meta">
+                  {nextOpenMarket
+                    ? `Book closes ${formatDate(nextOpenMarket.promisedDate)}`
+                    : `As of ${formatDate(snapshot.now)}`}
+                </div>
+              </div>
+              {followupOpenMarkets.length > 0 ? (
+                <div className="deadline-followup-list">
+                  {followupOpenMarkets.map((market, index) => (
+                    <div
+                      key={market.id}
+                      className="highlight-card deadline-followup-card"
+                    >
+                      <div className="deadline-followup-copy">
+                        <span className="highlight-label">
+                          #{index + 2} in line
+                        </span>
+                        <strong className="deadline-followup-title">
+                          {market.headline}
+                        </strong>
+                      </div>
+                      <span className="deadline-followup-date">
+                        {formatDate(market.promisedDate)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </div>
-        <div className="stat-row">
-          <div className="stat-block">
-            <span className="stat-number">
-              {snapshot.stats.humanVerifiedAgents}
-            </span>
-            <span className="stat-label">human-verified agents</span>
-          </div>
-          <div className="stat-block">
-            <span className="stat-number">
-              {snapshot.stats.registeredAgents}
-            </span>
-            <span className="stat-label">registered agents</span>
-          </div>
-          <div className="stat-block">
-            <span className="stat-number">{snapshot.stats.totalMarkets}</span>
-            <span className="stat-label">markets tracked</span>
-          </div>
-        </div>
+            <div className="stat-row">
+              <div className="stat-block">
+                <span className="stat-number">
+                  {snapshot.stats.humanVerifiedAgents}
+                </span>
+                <span className="stat-label">human-verified agents</span>
+              </div>
+              <div className="stat-block">
+                <span className="stat-number">
+                  {snapshot.stats.registeredAgents}
+                </span>
+                <span className="stat-label">registered agents</span>
+              </div>
+              <div className="stat-block">
+                <span className="stat-number">{snapshot.stats.totalMarkets}</span>
+                <span className="stat-label">markets tracked</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </section>
   )
