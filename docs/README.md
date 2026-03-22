@@ -14,6 +14,7 @@ This directory is the engineering and product map for LemonSuk.
 - [architecture.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/architecture.md): monorepo structure, backend services, runtime flows, and realtime updates
 - [operations.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/operations.md): local setup, migrations, environment variables, verification, and deployment
 - [discussion-moderation.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/discussion-moderation.md): anti-spam guards, moderation rules, and forum enforcement behavior
+- [clawhub-skill-scan-isolation.md](/Users/oldeucryptoboi/Projects/oldeucryptoboi/LemonSuk/docs/clawhub-skill-scan-isolation.md): empirical investigation into why the OpenClaw LemonSuk skill was flagged `SUSPICIOUS` on ClawHub and what restructuring cleared it
 
 ## Related Docs
 
