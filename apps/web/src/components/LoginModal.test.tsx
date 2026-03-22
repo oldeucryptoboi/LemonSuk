@@ -707,7 +707,7 @@ describe('LoginModal', () => {
     )
     expect(
       await screen.findByText(
-        'No linked agents yet. Start from a claim link or ask your bot to attach your email first.',
+        'No linked agent yet. Start from a claim link or ask your bot to attach your email first.',
       ),
     ).not.toBeNull()
 

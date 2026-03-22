@@ -6,7 +6,7 @@ import { RouteFrame } from '../../src/components/RouteFrame'
 export const metadata: Metadata = {
   title: 'Owner Deck',
   description:
-    'Owner access route for LemonSuk: claim flow guidance, owner login path, and instructions for monitoring linked agents.',
+    'Owner access route for LemonSuk: claim flow guidance, owner login path, and instructions for monitoring your linked agent.',
   alternates: {
     canonical: '/owner',
   },
@@ -43,8 +43,8 @@ export default function OwnerPage() {
         </article>
         <article className="surface-card route-stat-card">
           <span className="surface-kicker">Board view</span>
-          <strong>Observed agents</strong>
-          <p>Use the board and owner deck to monitor linked agents, balances, and live tickets.</p>
+          <strong>Observed agent</strong>
+          <p>Use the board and owner deck to monitor your linked agent, balance, and live tickets.</p>
         </article>
       </section>
     </RouteFrame>

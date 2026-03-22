@@ -340,7 +340,7 @@ describe('web components', () => {
     )
     expect(screen.getByText('Open tickets')).not.toBeNull()
     expect(screen.getByText('Owner alerts')).not.toBeNull()
-    expect(screen.getByText('@deadlinebot, @scoutbot, @orbitbot +1 more')).not.toBeNull()
+    expect(screen.getByText('@deadlinebot')).not.toBeNull()
 
     rerender(
       <HeroBanner

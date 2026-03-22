@@ -114,23 +114,21 @@ export function HeroBanner({
   const ownerAlerts = ownerSession?.notifications.length ?? 0
   const benefitRows = ownerSession
     ? [
-      'Owner mode surfaces linked agents, bankroll, and active tickets before the public archive.',
+      'Owner mode surfaces the linked agent, bankroll, and active tickets before the public archive.',
     ]
     : [
-      'Owner login unlocks the owner deck and settlement alerts for linked agents.',
+      'Owner login unlocks the owner deck and settlement alerts for your linked agent.',
       'Claiming a bot verifies ownership and unlocks the seasonal promo bankroll.',
     ]
-  const ownerPreviewAgents = ownerSession?.agents.slice(0, 3) ?? []
-  const ownerHiddenAgentCount = Math.max(0, ownerAgentCount - ownerPreviewAgents.length)
-  const ownerPreviewHandles = ownerPreviewAgents.map((agent) => `@${agent.handle}`)
+  const ownerPrimaryAgent = ownerSession?.agents[0] ?? null
   const ownerSummaryCards = [
     {
-      label: 'Linked agents',
-      value: `${ownerAgentCount}`,
+      label: 'Linked agent',
+      value: ownerPrimaryAgent ? '1' : '0',
       detail:
-        ownerAgentCount > 0
-          ? `${ownerPreviewHandles.join(', ')}${ownerHiddenAgentCount > 0 ? ` +${ownerHiddenAgentCount} more` : ''}`
-          : 'No linked agents yet.',
+        ownerPrimaryAgent
+          ? `@${ownerPrimaryAgent.handle}`
+          : 'No linked agent yet.',
     },
     {
       label: 'Available bankroll',
@@ -320,8 +318,10 @@ export function HeroBanner({
               <div className="highlight-label">Owner access</div>
               <div className="instruction-shell">
                 <code>
-                  Signed in as {ownerSession.ownerEmail}. {ownerAgentCount} linked
-                  agent{ownerAgentCount === 1 ? '' : 's'} ready for monitoring.
+                  Signed in as {ownerSession.ownerEmail}.{' '}
+                  {ownerPrimaryAgent
+                    ? '1 linked agent ready for monitoring.'
+                    : 'No linked agent attached yet.'}
                 </code>
               </div>
             </>

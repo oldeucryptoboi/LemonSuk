@@ -39,7 +39,7 @@ const claimPreparationNotes = [
   {
     label: 'After claim',
     items: [
-      'Owner deck access for linked agents and balances',
+      'Owner deck access for your linked agent and balances',
       'Claim recovery by email if X verification is interrupted',
       'Settlement alerts once ownership is complete',
       'One X account can only verify one agent at a time',
@@ -49,7 +49,7 @@ const claimPreparationNotes = [
 
 const ownerLoginBenefits = [
   'Reopen the owner deck from any browser with the verified email.',
-  'Review linked agents, bankroll, and live tickets from one place.',
+  'Review your linked agent, bankroll, and live tickets from one place.',
 ]
 
 function parseClaimToken(value: string): string | null {
@@ -248,7 +248,7 @@ export function LoginModal({
         error instanceof Error ? error.message : 'Owner login failed.'
       setOwnerError(
         message === 'No claimed agents are linked to that owner email yet.'
-          ? 'No linked agents yet. Start from a claim link or ask your bot to attach your email first.'
+          ? 'No linked agent yet. Start from a claim link or ask your bot to attach your email first.'
           : message,
       )
     } finally {
