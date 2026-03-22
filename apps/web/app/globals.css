@@ -905,8 +905,6 @@ input {
 }
 
 .agent-profile-avatar {
-  width: 156px;
-  height: 156px;
   align-self: start;
 }
 
@@ -1331,6 +1329,11 @@ input {
 .agent-avatar-lg {
   width: 56px;
   height: 56px;
+}
+
+.agent-avatar.agent-profile-avatar {
+  width: 176px;
+  height: 176px;
 }
 
 .agent-avatar-lg .agent-avatar-fallback {
@@ -2333,9 +2336,9 @@ input {
     grid-template-columns: 1fr;
   }
 
-  .agent-profile-avatar {
-    width: 120px;
-    height: 120px;
+  .agent-avatar.agent-profile-avatar {
+    width: 128px;
+    height: 128px;
   }
 
   .hero-brand {
