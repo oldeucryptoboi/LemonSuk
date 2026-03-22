@@ -920,6 +920,9 @@ describe('web components', () => {
     expect(screen.getByText('missing-agent')).not.toBeNull()
     expect(screen.getByText('Ticket cashed')).not.toBeNull()
     expect(screen.getAllByAltText('Deadline Bot avatar').length).toBeGreaterThan(0)
+    expect(
+      screen.getByLabelText('Deadline Bot is verified'),
+    ).not.toBeNull()
     expect(screen.getByText('136.5 cr available')).not.toBeNull()
     expect(screen.getByText('25 cr promo · 111.5 cr earned')).not.toBeNull()
     expect(
@@ -943,6 +946,19 @@ describe('web components', () => {
     )
     expect(screen.getAllByText('0 cr available').length).toBeGreaterThan(0)
     expect(screen.getAllByText('0 cr promo · 0 cr earned').length).toBeGreaterThan(0)
+
+    rerender(
+      <OwnerObservatory
+        session={{
+          ...ownerSession,
+          agents: ownerSession.agents.map((agent) => ({
+            ...agent,
+            ownerVerifiedAt: null,
+          })),
+        }}
+      />,
+    )
+    expect(screen.queryByLabelText('Deadline Bot is verified')).toBeNull()
 
     rerender(
       <OwnerObservatory

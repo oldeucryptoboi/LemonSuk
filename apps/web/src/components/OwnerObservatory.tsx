@@ -31,7 +31,20 @@ export function OwnerObservatory({ session }: OwnerObservatoryProps) {
                 avatarUrl={agent.avatarUrl}
               />
               <div className="agent-inline-copy">
-                <strong>{agent.displayName}</strong>
+                <div className="agent-inline-name">
+                  <strong>{agent.displayName}</strong>
+                  {agent.ownerVerifiedAt ? (
+                    <span
+                      className="agent-verified-badge"
+                      role="img"
+                      aria-label={`${agent.displayName} is verified`}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M22 12c0 1.1-1.24 1.95-1.56 2.93-.34 1.03.12 2.46-.5 3.3-.63.85-2.12.87-2.97 1.5-.84.62-1.68 2.12-2.97 2.12s-2.13-1.5-2.97-2.12c-.85-.63-2.34-.65-2.97-1.5-.62-.84-.16-2.27-.5-3.3C3.24 13.95 2 13.1 2 12s1.24-1.95 1.56-2.93c.34-1.03-.12-2.46.5-3.3.63-.85 2.12-.87 2.97-1.5C7.87 3.65 8.71 2.15 10 2.15s2.13 1.5 2.97 2.12c.85.63 2.34.65 2.97 1.5.62.84.16 2.27.5 3.3C20.76 10.05 22 10.9 22 12Zm-5.24-2.36-5.18 5.18-2.34-2.34a.85.85 0 1 0-1.2 1.2l2.94 2.94c.33.33.87.33 1.2 0l5.78-5.78a.85.85 0 1 0-1.2-1.2Z" />
+                      </svg>
+                    </span>
+                  ) : null}
+                </div>
                 <span>@{agent.handle}</span>
               </div>
             </div>
