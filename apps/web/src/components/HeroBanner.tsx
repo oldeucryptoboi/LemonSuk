@@ -91,18 +91,6 @@ export function HeroBanner({
     },
   ]
   const ownerAgentCount = ownerSession?.agents.length ?? 0
-  const ownerPromoCredits = ownerSession
-    ? ownerSession.agents.reduce(
-        (total, agent) => total + (agent.promoCredits ?? 0),
-        0,
-      )
-    : 0
-  const ownerEarnedCredits = ownerSession
-    ? ownerSession.agents.reduce(
-        (total, agent) => total + (agent.earnedCredits ?? 0),
-        0,
-      )
-    : 0
   const ownerAvailableCredits = ownerSession
     ? ownerSession.agents.reduce(
         (total, agent) => total + (agent.availableCredits ?? 0),
@@ -112,41 +100,6 @@ export function HeroBanner({
   const ownerOpenTickets =
     ownerSession?.bets.filter((bet) => bet.status === 'open').length ?? 0
   const ownerAlerts = ownerSession?.notifications.length ?? 0
-  const ownerPreviewHandles =
-    ownerSession?.agents
-      .slice(0, 3)
-      .map((agent) => `@${agent.handle}`)
-      .join(', ') ?? ''
-  const ownerHeroAnalytics = [
-    {
-      label: 'Linked agents',
-      value: `${ownerAgentCount}`,
-      detail:
-        ownerPreviewHandles || 'Claimed bots will appear here once ownership is complete.',
-    },
-    {
-      label: 'Available bankroll',
-      value: formatCredits(ownerAvailableCredits),
-      detail: `${formatCredits(ownerPromoCredits)} promo · ${formatCredits(ownerEarnedCredits)} earned`,
-    },
-    {
-      label: 'Open tickets',
-      value: `${ownerOpenTickets}`,
-      detail:
-        ownerOpenTickets > 0
-          ? `${ownerOpenTickets} owner-linked slips are still live`
-          : 'No owner-linked slips are open right now.',
-    },
-    {
-      label: 'Owner alerts',
-      value: `${ownerAlerts}`,
-      detail:
-        ownerAlerts > 0
-          ? 'Settlement and owner notifications are waiting.'
-          : 'No owner alerts are waiting.',
-    },
-  ]
-  const heroAnalytics = ownerSession ? ownerHeroAnalytics : publicHeroAnalytics
   const benefitRows = ownerSession
     ? [
       'Owner mode surfaces linked agents, bankroll, and active tickets before the public archive.',
@@ -265,21 +218,23 @@ export function HeroBanner({
             </>
           </div>
         )}
-        <div className="hero-analytics-grid">
-          {heroAnalytics.map((entry) => (
-            <div key={entry.label} className="hero-analytics-card">
-              <span className="hero-analytics-label">{entry.label}</span>
-              <strong className="hero-analytics-value">{entry.value}</strong>
-              <span className="hero-analytics-detail">{entry.detail}</span>
-            </div>
-          ))}
-        </div>
+        {ownerSession ? null : (
+          <div className="hero-analytics-grid">
+            {publicHeroAnalytics.map((entry) => (
+              <div key={entry.label} className="hero-analytics-card">
+                <span className="hero-analytics-label">{entry.label}</span>
+                <strong className="hero-analytics-value">{entry.value}</strong>
+                <span className="hero-analytics-detail">{entry.detail}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <div className="hero-side">
         <div className="highlight-card instruction-card">
           {ownerSession ? (
             <>
-              <div className="highlight-label">Owner access v2</div>
+              <div className="highlight-label">Owner access</div>
               <div className="instruction-shell">
                 <code>
                   Signed in as {ownerSession.ownerEmail}. {ownerAgentCount} linked

@@ -275,9 +275,9 @@ describe('web components', () => {
       screen.queryByRole('link', { name: 'Agent instructions' }),
     ).toBeNull()
     expect(screen.queryByRole('link', { name: 'Owner deck' })).toBeNull()
-    expect(screen.getByText('Owner access v2')).not.toBeNull()
-    expect(screen.getByText('Available bankroll')).not.toBeNull()
-    expect(screen.getByText('Owner alerts')).not.toBeNull()
+    expect(screen.getByText('Owner access')).not.toBeNull()
+    expect(screen.getByText('Bankroll')).not.toBeNull()
+    expect(screen.getByText('Alerts')).not.toBeNull()
     expect(screen.queryByText('Owner workspace live')).toBeNull()
     expect(screen.queryByRole('link', { name: 'Open owner deck' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Submit source' })).toBeNull()
@@ -338,8 +338,8 @@ describe('web components', () => {
         onOwnerLogout={onOpenOwnerModal}
       />,
     )
-    expect(screen.getByText('No owner-linked slips are open right now.')).not.toBeNull()
-    expect(screen.getByText('No owner alerts are waiting.')).not.toBeNull()
+    expect(screen.getByText('Tickets')).not.toBeNull()
+    expect(screen.getByText('Alerts')).not.toBeNull()
     expect(screen.getByText('+1 more linked')).not.toBeNull()
 
     rerender(
@@ -376,8 +376,8 @@ describe('web components', () => {
         onOwnerLogout={onOpenOwnerModal}
       />,
     )
-    expect(screen.getByText('1 owner-linked slips are still live')).not.toBeNull()
-    expect(screen.getByText('Settlement and owner notifications are waiting.')).not.toBeNull()
+    expect(screen.getByText('Tickets')).not.toBeNull()
+    expect(screen.getByText('Alerts')).not.toBeNull()
 
     rerender(
       <HeroBanner
