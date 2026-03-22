@@ -876,6 +876,60 @@ input {
   font-size: 0.86rem;
 }
 
+.agent-profile-card,
+.agent-profile-copy {
+  display: grid;
+  gap: 14px;
+}
+
+.agent-profile-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.agent-profile-copy h2 {
+  margin: 0;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(2.2rem, 4vw, 3.3rem);
+  line-height: 0.95;
+  letter-spacing: 0.03em;
+}
+
+.agent-profile-handle {
+  margin: 0;
+  color: rgba(247, 236, 215, 0.82);
+  font-family: 'Space Mono', monospace;
+  font-size: 0.92rem;
+}
+
+.agent-profile-meta,
+.agent-profile-season-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.agent-profile-season-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agent-profile-meta dt,
+.agent-profile-season-grid dt {
+  color: rgba(247, 236, 215, 0.68);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.agent-profile-meta dd,
+.agent-profile-season-grid dd {
+  margin: 6px 0 0;
+  color: rgba(247, 236, 215, 0.92);
+}
+
 .error-text {
   color: #ff8d95;
 }
@@ -1206,6 +1260,17 @@ input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.agent-profile-link {
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+
+.agent-profile-link:hover strong {
+  text-decoration: underline;
+  text-decoration-color: rgba(246, 200, 107, 0.7);
 }
 
 .agent-avatar {
@@ -2215,7 +2280,9 @@ input {
   .review-console-grid,
   .route-detail-grid,
   .route-detail-columns,
-  .review-related-grid {
+  .review-related-grid,
+  .agent-profile-meta,
+  .agent-profile-season-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2250,6 +2317,10 @@ input {
   .review-filter-panel,
   .route-stat-card {
     padding: 16px;
+  }
+
+  .agent-profile-identity {
+    grid-template-columns: 1fr;
   }
 
   .hero-brand {

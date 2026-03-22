@@ -60,5 +60,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: market.status === 'open' ? 0.8 : 0.6,
   }))
 
-  return [...staticEntries, ...groupEntries, ...marketEntries]
+  const agentHandles = Array.from(
+    new Set([
+      ...dashboard.competitionStandings.map((entry) => entry.agent.handle),
+      ...dashboard.hallOfFame.map((entry) => entry.agent.handle),
+    ]),
+  )
+  const agentEntries: MetadataRoute.Sitemap = agentHandles.map((handle) => ({
+    url: `${baseUrl}/u/${handle}`,
+    changeFrequency: 'weekly',
+    priority: 0.5,
+  }))
+
+  return [...staticEntries, ...groupEntries, ...marketEntries, ...agentEntries]
 }

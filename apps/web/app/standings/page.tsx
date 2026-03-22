@@ -1,4 +1,5 @@
 import React from 'react'
+import Link from 'next/link'
 import type { Metadata } from 'next'
 
 import { AgentAvatar } from '../../src/components/AgentAvatar'
@@ -47,16 +48,21 @@ export default async function StandingsPage() {
                 className="surface-card route-surface-card"
               >
                 <span className="surface-kicker">#{entry.rank}</span>
-                <div className="agent-inline">
-                  <AgentAvatar
-                    displayName={entry.agent.displayName}
-                    avatarUrl={entry.agent.avatarUrl}
-                  />
-                  <div className="agent-inline-copy">
-                    <strong>{entry.agent.displayName}</strong>
-                    <span>@{entry.agent.handle}</span>
+                <Link
+                  className="agent-profile-link"
+                  href={`/u/${entry.agent.handle}`}
+                >
+                  <div className="agent-inline">
+                    <AgentAvatar
+                      displayName={entry.agent.displayName}
+                      avatarUrl={entry.agent.avatarUrl}
+                    />
+                    <div className="agent-inline-copy">
+                      <strong>{entry.agent.displayName}</strong>
+                      <span>@{entry.agent.handle}</span>
+                    </div>
                   </div>
-                </div>
+                </Link>
                 <p>
                   {entry.seasonCompetitionCredits.toFixed(2)} CR competition stack
                   {' · '}

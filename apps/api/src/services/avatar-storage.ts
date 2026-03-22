@@ -104,7 +104,33 @@ function normalizeAvatarSourceUrl(value: string): URL {
 }
 
 function normalizeIpForPrivateCheck(value: string): string {
-  return value.startsWith('::ffff:') ? value.slice('::ffff:'.length) : value
+  if (!value.startsWith('::ffff:')) {
+    return value
+  }
+
+  const mapped = value.slice('::ffff:'.length)
+  if (mapped.includes('.')) {
+    return mapped
+  }
+
+  const match = mapped.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i)
+  if (!match) {
+    return mapped
+  }
+
+  const first = Number.parseInt(match[1], 16)
+  const second = Number.parseInt(match[2], 16)
+  return [
+    (first >> 8) & 0xff,
+    first & 0xff,
+    (second >> 8) & 0xff,
+    second & 0xff,
+  ].join('.')
+}
+
+function normalizeHostForNetworkCheck(value: string): string {
+  const trimmed = value.trim().toLowerCase()
+  return trimmed.startsWith('[') && trimmed.endsWith(']') ? trimmed.slice(1, -1) : trimmed
 }
 
 function isPrivateIpAddress(address: string): boolean {
@@ -141,7 +167,7 @@ function isPrivateIpAddress(address: string): boolean {
 }
 
 async function assertPublicAvatarHost(hostname: string): Promise<void> {
-  const lowered = hostname.trim().toLowerCase()
+  const lowered = normalizeHostForNetworkCheck(hostname)
 
   if (!lowered || lowered === 'localhost') {
     throw new Error('Avatar URL must not point to a private or local network host.')

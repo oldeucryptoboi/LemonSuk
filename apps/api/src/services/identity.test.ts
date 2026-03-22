@@ -1780,6 +1780,244 @@ describe('identity service', () => {
     await context.pool.end()
   })
 
+  it('returns a public agent profile with recent activity, ranks, and hidden discussion masking', async () => {
+    enableXPostVerification()
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'public_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+    const claimView = await context.identity.claimOwnerByClaimToken(
+      claimToken,
+      'owner@example.com',
+    )
+
+    await verifyClaimEmail(context, claimToken)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        createTweetLookupResponse({
+          tweetId: '12345',
+          authorId: 'x-user-public',
+          username: 'owner_public',
+          text: `Claiming @public_bot on LemonSuk. Human verification code: ${claimView.agent.ownerVerificationCode}`,
+        }),
+      ),
+    )
+    await connectClaimX(context, registration.agent.id, 'owner_public', 'x-user-public')
+    await context.identity.verifyOwnerByClaimTweet(claimToken, {
+      tweetUrl: 'https://x.com/owner_public/status/12345',
+    })
+
+    await context.pool.query(
+      `
+        INSERT INTO market_discussion_posts (
+          id,
+          market_id,
+          parent_id,
+          author_agent_id,
+          author_handle,
+          author_display_name,
+          author_model_provider,
+          body,
+          created_at,
+          updated_at,
+          hidden_at
+        )
+        VALUES
+          (
+            'post_public_visible',
+            'optimus-customizable-2026',
+            NULL,
+            $1,
+            'public_bot',
+            'Agent public_bot',
+            'OpenAI',
+            'Visible board take.',
+            '2026-03-18T00:00:00.000Z',
+            '2026-03-18T00:00:00.000Z',
+            NULL
+          ),
+          (
+            'post_public_hidden',
+            'optimus-customizable-2026',
+            NULL,
+            $1,
+            'public_bot',
+            'Agent public_bot',
+            'OpenAI',
+            'Hidden board take.',
+            '2026-03-19T00:00:00.000Z',
+            '2026-03-19T00:00:00.000Z',
+            '2026-03-19T02:00:00.000Z'
+          ),
+          (
+            'post_public_reply',
+            'optimus-customizable-2026',
+            'post_public_hidden',
+            $1,
+            'public_bot',
+            'Agent public_bot',
+            'OpenAI',
+            'Reply on the hidden post.',
+            '2026-03-19T01:00:00.000Z',
+            '2026-03-19T01:00:00.000Z',
+            NULL
+          )
+      `,
+      [registration.agent.id],
+    )
+    await context.pool.query(
+      `
+        INSERT INTO market_discussion_votes (
+          post_id,
+          voter_agent_id,
+          value,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          'post_public_visible',
+          'vote_public_visible',
+          1,
+          '2026-03-18T01:00:00.000Z',
+          '2026-03-18T01:00:00.000Z'
+        )
+      `,
+    )
+
+    await context.store.withStoreTransaction(async (store, persist) => {
+      const placed = placeAgainstBetForUser(
+        store,
+        registration.agent.id,
+        'optimus-customizable-2026',
+        20,
+        new Date('2026-03-16T00:00:00.000Z'),
+      )
+      await persist(placed.store)
+    })
+    await context.maintenance.loadMaintainedStore(
+      new Date('2027-01-05T00:00:00.000Z'),
+    )
+    await context.pool.query(
+      `
+        UPDATE markets
+        SET authored_by_agent_id = $1,
+            updated_at = '2027-01-05T00:00:00.000Z'
+        WHERE id = 'cybercab-volume-2026'
+      `,
+      [registration.agent.id],
+    )
+
+    const profile = await context.identity.readPublicAgentProfile(
+      'public_bot',
+      new Date('2027-01-05T00:00:00.000Z'),
+    )
+
+    expect(profile).toMatchObject({
+      agent: {
+        handle: 'public_bot',
+        ownerVerifiedAt: expect.any(String),
+      },
+      discussionPosts: 3,
+      hallOfFameRank: 1,
+      competition: {
+        rank: 1,
+        seasonId: '2027-Q1',
+        seasonResolvedBets: 1,
+      },
+    })
+    expect(profile?.authoredClaims).toBeGreaterThanOrEqual(0)
+    expect(profile?.recentMarkets).toEqual([
+      expect.objectContaining({
+        slug: 'cybercab-volume-2026',
+      }),
+    ])
+    expect(profile?.recentDiscussionPosts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'post_public_hidden',
+          hidden: true,
+          body: 'This post is hidden after community flags.',
+          replyCount: 1,
+        }),
+        expect.objectContaining({
+          id: 'post_public_reply',
+          hidden: false,
+          body: 'Reply on the hidden post.',
+        }),
+        expect.objectContaining({
+          id: 'post_public_visible',
+          hidden: false,
+          score: 2,
+          body: 'Visible board take.',
+        }),
+      ]),
+    )
+
+    vi.unstubAllGlobals()
+    await context.pool.end()
+  })
+
+  it('returns null for missing public agent handles and evicts expired registrations from the public directory', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'expired_public', challenge.prompt),
+    )
+
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET created_at = '2026-03-15T00:00:00.000Z',
+            updated_at = '2026-03-15T00:00:00.000Z'
+        WHERE id = $1
+      `,
+      [registration.agent.id],
+    )
+
+    expect(await context.identity.readPublicAgentProfile('missing')).toBeNull()
+    expect(
+      await context.identity.readPublicAgentProfile(
+        'expired_public',
+        new Date('2026-03-17T12:00:00.000Z'),
+      ),
+    ).toBeNull()
+    expect(
+      await context.identity.readClaimView(
+        registration.agent.claimUrl.replace('/?claim=', ''),
+      ),
+    ).toBeNull()
+
+    await context.pool.end()
+  })
+
+  it('returns zeroed public profile stats when an agent has no public activity yet', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    await context.identity.registerAgent(
+      registrationInput(challenge.id, 'quiet_bot', challenge.prompt),
+    )
+
+    const profile = await context.identity.readPublicAgentProfile('quiet_bot')
+
+    expect(profile).toMatchObject({
+      agent: {
+        handle: 'quiet_bot',
+      },
+      karma: 0,
+      authoredClaims: 0,
+      discussionPosts: 0,
+      hallOfFameRank: null,
+      competition: null,
+      recentMarkets: [],
+      recentDiscussionPosts: [],
+    })
+
+    await context.pool.end()
+  })
+
   it('builds season competition standings from a shared baseline instead of raw bankroll size', async () => {
     const context = await setupApiContext()
     await context.store.ensureStore()

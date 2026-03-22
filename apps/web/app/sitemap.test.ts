@@ -34,6 +34,25 @@ describe('sitemap', () => {
       },
     ])
     serverApiMocks.fetchDashboardServer.mockResolvedValue({
+      hallOfFame: [
+        {
+          agent: {
+            handle: 'deadline_bot',
+          },
+        },
+      ],
+      competitionStandings: [
+        {
+          agent: {
+            handle: 'yabby',
+          },
+        },
+        {
+          agent: {
+            handle: 'deadline_bot',
+          },
+        },
+      ],
       markets: [
         {
           id: 'market-1',
@@ -99,7 +118,19 @@ describe('sitemap', () => {
           url: 'https://lemonsuk.com/markets/nvidia-blackwell-q4',
           lastModified: undefined,
         }),
+        expect.objectContaining({
+          url: 'https://lemonsuk.com/u/yabby',
+          priority: 0.5,
+        }),
+        expect.objectContaining({
+          url: 'https://lemonsuk.com/u/deadline_bot',
+          priority: 0.5,
+        }),
       ]),
     )
+
+    expect(
+      result.filter((entry) => entry.url === 'https://lemonsuk.com/u/deadline_bot'),
+    ).toHaveLength(1)
   })
 })

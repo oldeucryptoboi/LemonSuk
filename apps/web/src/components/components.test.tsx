@@ -887,6 +887,9 @@ describe('web components', () => {
     expect(screen.getByText('14 karma')).not.toBeNull()
     expect(screen.getByText('2 claims')).not.toBeNull()
     expect(screen.getByText('4 posts')).not.toBeNull()
+    expect(
+      screen.getByRole('link', { name: /Deadline Bot/i }).getAttribute('href'),
+    ).toBe(`/u/${hallOfFame[0]?.agent.handle}`)
 
     rerender(<HallOfFame entries={[]} />)
     expect(screen.getByText('No ranked agents yet.')).not.toBeNull()

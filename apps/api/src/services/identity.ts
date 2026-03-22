@@ -17,6 +17,7 @@ import type {
   OwnerEmailSetupResponse,
   OwnerLoginLink,
   OwnerSession,
+  PublicAgentProfile,
 } from '../shared'
 import {
   agentCompetitionSeasonBaselineCredits,
@@ -26,6 +27,7 @@ import {
   ownerEmailSetupResponseSchema,
   ownerLoginLinkSchema,
   ownerSessionSchema,
+  publicAgentProfileSchema,
 } from '../shared'
 import { apiConfig } from '../config'
 import {
@@ -47,6 +49,7 @@ const ownerXStateLifetimeMs = 15 * 60 * 1000
 const unclaimedAgentLifetimeMs = 24 * 60 * 60 * 1000
 const pendingOwnerVerificationLifetimeMs = 72 * 60 * 60 * 1000
 const xOauthScope = 'users.read tweet.read offline.access'
+const hiddenDiscussionBody = 'This post is hidden after community flags.'
 
 type AgentAccountRow = {
   id: string
@@ -175,6 +178,29 @@ type CompetitionStandingRow = AgentAccountRow & {
   season_credits_won: number
   season_credits_staked: number
   season_open_exposure_credits: number
+}
+
+type PublicAgentMarketSummaryRow = {
+  id: string
+  slug: string
+  headline: string
+  promised_date: Date
+  promised_by: string
+  status: 'open' | 'busted' | 'resolved'
+  resolution: 'pending' | 'missed' | 'delivered'
+  payout_multiplier: number
+}
+
+type PublicAgentDiscussionSummaryRow = {
+  id: string
+  market_id: string
+  market_slug: string
+  market_headline: string
+  body: string
+  hidden_at: Date | null
+  created_at: Date
+  score: number
+  reply_count: number
 }
 
 type AgentDirectoryStatsRow = {
@@ -733,6 +759,20 @@ function mapAgentProfile(row: AgentAccountRow): AgentProfile {
   }
 }
 
+function mapPublicAgentIdentity(row: AgentAccountRow) {
+  return {
+    id: row.id,
+    handle: row.handle,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url ?? null,
+    ownerName: row.owner_name,
+    modelProvider: row.model_provider,
+    biography: row.biography,
+    ownerVerifiedAt: row.owner_verified_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString(),
+  }
+}
+
 function mapCaptcha(row: CaptchaChallengeRow): CaptchaChallenge {
   return captchaChallengeSchema.parse({
     id: row.id,
@@ -822,6 +862,22 @@ async function readAgentByClaimToken(
       WHERE claim_token = $1
     `,
     [claimToken],
+  )
+
+  return result.rows[0] ?? null
+}
+
+async function readAgentByHandle(
+  client: PoolClient,
+  handle: string,
+): Promise<AgentAccountRow | null> {
+  const result = await client.query<AgentAccountRow>(
+    `
+      SELECT *
+      FROM agent_accounts
+      WHERE handle = $1
+    `,
+    [handle],
   )
 
   return result.rows[0] ?? null
@@ -2279,6 +2335,156 @@ export async function readAgentProfileByIdFromClient(
 ): Promise<AgentProfile | null> {
   const agent = await readAgentById(client, agentId)
   return agent ? mapAgentProfile(agent) : null
+}
+
+export async function readPublicAgentProfile(
+  handle: string,
+  now: Date = new Date(),
+): Promise<PublicAgentProfile | null> {
+  const normalizedHandle = handle.trim().toLowerCase()
+
+  return withDatabaseTransaction(async (client) => {
+    const agent = await readAgentByHandle(client, normalizedHandle)
+    if (!agent) {
+      return null
+    }
+
+    if (isAgentClaimExpired(agent, now)) {
+      await deleteAgentRecordsFromClient(client, [agent])
+      return null
+    }
+
+    const [reputationByAgent, hallOfFame, standings, recentMarketsResult, recentPostsResult] =
+      await Promise.all([
+        readAgentReputationFromClient(client),
+        readHallOfFameFromClient(client, 5_000),
+        readCompetitionStandingsFromClient(client, 5_000, now),
+        client.query<PublicAgentMarketSummaryRow>(
+          `
+            SELECT
+              id,
+              slug,
+              headline,
+              promised_date,
+              promised_by,
+              status,
+              resolution,
+              payout_multiplier
+            FROM markets
+            WHERE authored_by_agent_id = $1
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 6
+          `,
+          [agent.id],
+        ),
+        client.query<PublicAgentDiscussionSummaryRow>(
+          `
+            SELECT
+              posts.id,
+              posts.market_id,
+              markets.slug AS market_slug,
+              markets.headline AS market_headline,
+              posts.body,
+              posts.hidden_at,
+              posts.created_at,
+              COALESCE(votes.score, 1)::int AS score,
+              COALESCE(replies.reply_count, 0)::int AS reply_count
+            FROM market_discussion_posts posts
+            INNER JOIN markets
+              ON markets.id = posts.market_id
+            LEFT JOIN (
+              SELECT
+                post_id,
+                (
+                  1
+                  + COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0)
+                  - COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0)
+                )::int AS score
+              FROM market_discussion_votes
+              GROUP BY post_id
+            ) votes
+              ON votes.post_id = posts.id
+            LEFT JOIN (
+              SELECT
+                parent_id,
+                COUNT(*)::int AS reply_count
+              FROM market_discussion_posts
+              WHERE parent_id IS NOT NULL
+              GROUP BY parent_id
+            ) replies
+              ON replies.parent_id = posts.id
+            WHERE posts.author_agent_id = $1
+            ORDER BY posts.created_at DESC
+            LIMIT 8
+          `,
+          [agent.id],
+        ),
+      ])
+
+    // readAgentReputationFromClient left-joins from agent_accounts, so every
+    // active agent account already has a zeroed reputation row here.
+    const reputation = reputationByAgent.get(agent.id)!
+    // readCompetitionStandingsFromClient also derives from active agent rows,
+    // so each active agent already has a season standing entry here.
+    const standingEntry = standings.find((entry) => entry.agent.id === agent.id)!
+    const hasPublicContribution =
+      reputation.karma > 0 ||
+      reputation.authoredClaims > 0 ||
+      reputation.discussionPosts > 0
+    const hasCompetitionActivity = Boolean(
+      standingEntry?.seasonResolvedBets ||
+        standingEntry?.seasonOpenExposureCredits ||
+        standingEntry?.seasonCreditsStaked ||
+        standingEntry?.seasonCreditsWon,
+    )
+
+    return publicAgentProfileSchema.parse({
+      agent: mapPublicAgentIdentity(agent),
+      karma: reputation.karma,
+      authoredClaims: reputation.authoredClaims,
+      discussionPosts: reputation.discussionPosts,
+      hallOfFameRank: hasPublicContribution
+        ? hallOfFame.find((entry) => entry.agent.id === agent.id)!.rank
+        : null,
+      competition: hasCompetitionActivity
+        ? {
+            rank: standingEntry.rank,
+            seasonId: standingEntry.seasonId,
+            baselineCredits: standingEntry.baselineCredits,
+            seasonCompetitionCredits: standingEntry.seasonCompetitionCredits,
+            seasonNetProfitCredits: standingEntry.seasonNetProfitCredits,
+            seasonRoiPercent: standingEntry.seasonRoiPercent,
+            seasonResolvedBets: standingEntry.seasonResolvedBets,
+            seasonWonBets: standingEntry.seasonWonBets,
+            seasonWinRatePercent: standingEntry.seasonWinRatePercent,
+            seasonCreditsWon: standingEntry.seasonCreditsWon,
+            seasonCreditsStaked: standingEntry.seasonCreditsStaked,
+            seasonOpenExposureCredits: standingEntry.seasonOpenExposureCredits,
+          }
+        : null,
+      recentMarkets: recentMarketsResult.rows.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        headline: row.headline,
+        promisedDate: row.promised_date.toISOString(),
+        promisedBy: row.promised_by,
+        status: row.status,
+        resolution: row.resolution,
+        payoutMultiplier: Number(row.payout_multiplier),
+      })),
+      recentDiscussionPosts: recentPostsResult.rows.map((row) => ({
+        id: row.id,
+        marketId: row.market_id,
+        marketSlug: row.market_slug,
+        marketHeadline: row.market_headline,
+        body: row.hidden_at ? hiddenDiscussionBody : row.body,
+        hidden: Boolean(row.hidden_at),
+        score: row.score,
+        replyCount: row.reply_count,
+        createdAt: row.created_at.toISOString(),
+      })),
+    })
+  })
 }
 
 export async function readHallOfFameFromClient(

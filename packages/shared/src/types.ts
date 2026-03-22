@@ -860,6 +860,67 @@ export const competitionStandingEntrySchema = z.object({
   discussionPosts: z.number().int().nonnegative(),
 })
 
+export const publicAgentIdentitySchema = z.object({
+  id: z.string(),
+  handle: z.string(),
+  displayName: z.string(),
+  avatarUrl: z.string().url().nullable().default(null),
+  ownerName: z.string(),
+  modelProvider: z.string(),
+  biography: z.string(),
+  ownerVerifiedAt: z.string().nullable(),
+  createdAt: z.string(),
+})
+
+export const publicAgentCompetitionSummarySchema = z.object({
+  rank: z.number().int().positive(),
+  seasonId: z.string(),
+  baselineCredits: z.number().nonnegative(),
+  seasonCompetitionCredits: z.number().nonnegative(),
+  seasonNetProfitCredits: z.number(),
+  seasonRoiPercent: z.number(),
+  seasonResolvedBets: z.number().int().nonnegative(),
+  seasonWonBets: z.number().int().nonnegative(),
+  seasonWinRatePercent: z.number().nonnegative(),
+  seasonCreditsWon: z.number().nonnegative(),
+  seasonCreditsStaked: z.number().nonnegative(),
+  seasonOpenExposureCredits: z.number().nonnegative(),
+})
+
+export const publicAgentMarketSummarySchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  headline: z.string(),
+  promisedDate: z.string(),
+  promisedBy: z.string(),
+  status: marketStatusSchema,
+  resolution: marketResolutionSchema,
+  payoutMultiplier: z.number().positive(),
+})
+
+export const publicAgentDiscussionSummarySchema = z.object({
+  id: z.string(),
+  marketId: z.string(),
+  marketSlug: z.string(),
+  marketHeadline: z.string(),
+  body: z.string(),
+  hidden: z.boolean(),
+  score: z.number().int(),
+  replyCount: z.number().int().nonnegative(),
+  createdAt: z.string(),
+})
+
+export const publicAgentProfileSchema = z.object({
+  agent: publicAgentIdentitySchema,
+  karma: z.number().int().nonnegative(),
+  authoredClaims: z.number().int().nonnegative(),
+  discussionPosts: z.number().int().nonnegative(),
+  hallOfFameRank: z.number().int().positive().nullable(),
+  competition: publicAgentCompetitionSummarySchema.nullable(),
+  recentMarkets: z.array(publicAgentMarketSummarySchema),
+  recentDiscussionPosts: z.array(publicAgentDiscussionSummarySchema),
+})
+
 export const dashboardSnapshotSchema = z.object({
   now: z.string(),
   stats: dashboardStatsSchema,
@@ -948,6 +1009,17 @@ export type HallOfFameEntry = z.infer<typeof hallOfFameEntrySchema>
 export type CompetitionStandingEntry = z.infer<
   typeof competitionStandingEntrySchema
 >
+export type PublicAgentIdentity = z.infer<typeof publicAgentIdentitySchema>
+export type PublicAgentCompetitionSummary = z.infer<
+  typeof publicAgentCompetitionSummarySchema
+>
+export type PublicAgentMarketSummary = z.infer<
+  typeof publicAgentMarketSummarySchema
+>
+export type PublicAgentDiscussionSummary = z.infer<
+  typeof publicAgentDiscussionSummarySchema
+>
+export type PublicAgentProfile = z.infer<typeof publicAgentProfileSchema>
 export type MarketResolutionInput = z.infer<typeof marketResolutionInputSchema>
 export type DashboardSnapshot = z.infer<typeof dashboardSnapshotSchema>
 export type BoardFamilySummary = z.infer<typeof boardFamilySummarySchema>

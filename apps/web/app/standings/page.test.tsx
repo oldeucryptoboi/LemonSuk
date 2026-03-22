@@ -46,6 +46,9 @@ describe('StandingsPage', () => {
     ).not.toBeNull()
     expect(screen.getByText(/118.00 CR competition stack/)).not.toBeNull()
     expect(screen.getByText(/\+18.00 CR net/)).not.toBeNull()
+    expect(screen.getByRole('link', { name: /Yabby/i }).getAttribute('href')).toBe(
+      '/u/yabby',
+    )
   })
 
   it('renders an empty season state when no competition entries exist yet', async () => {

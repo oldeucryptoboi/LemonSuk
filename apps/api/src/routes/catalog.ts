@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { asyncHandler } from '../middleware/async-handler'
 import { readEntities, readEventGroups, readPredictionFamilies } from '../services/catalog'
+import { readPublicAgentProfile } from '../services/identity'
 import {
   createBoardEventGroupSummaries,
   createBoardFamilySummaries,
@@ -13,6 +14,25 @@ import { readOperationalSnapshot } from './helpers'
 
 export function createCatalogRouter(): Router {
   const router = Router()
+
+  router.get(
+    '/agents/:handle',
+    asyncHandler(async (request, response) => {
+      const { handle } = z
+        .object({
+          handle: z.string(),
+        })
+        .parse(request.params)
+
+      const profile = await readPublicAgentProfile(handle)
+      if (!profile) {
+        response.status(404).json({ message: 'Agent not found.' })
+        return
+      }
+
+      response.json(profile)
+    }),
+  )
 
   router.get(
     '/families',

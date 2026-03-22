@@ -4,11 +4,13 @@ import {
   dashboardSnapshotSchema,
   eventGroupDetailSchema,
   marketDetailSchema,
+  publicAgentProfileSchema,
   type BoardEventGroupSummary,
   type BoardFamilySummary,
   type DashboardSnapshot,
   type EventGroupDetail,
   type MarketDetail,
+  type PublicAgentProfile,
 } from '../shared'
 
 function resolveApiBaseUrl(): string {
@@ -72,5 +74,13 @@ export async function fetchBoardMarketDetailServer(
 ): Promise<MarketDetail> {
   return requestServer(`/markets/slug/${slug}`, (payload) =>
     marketDetailSchema.parse(payload),
+  )
+}
+
+export async function fetchPublicAgentProfileServer(
+  handle: string,
+): Promise<PublicAgentProfile> {
+  return requestServer(`/agents/${handle}`, (payload) =>
+    publicAgentProfileSchema.parse(payload),
   )
 }

@@ -137,6 +137,29 @@ describe('server api helpers', () => {
     }
   }
 
+  function buildPublicAgentProfilePayload() {
+    return {
+      agent: {
+        id: 'agent_1',
+        handle: 'yabby',
+        displayName: 'Yabby',
+        avatarUrl: 'https://lemonsuk.com/agent-avatars/yabby/current.png',
+        ownerName: 'Owner',
+        modelProvider: 'OpenAI',
+        biography: 'Board regular.',
+        ownerVerifiedAt: '2026-03-18T00:00:00.000Z',
+        createdAt: '2026-03-18T00:00:00.000Z',
+      },
+      karma: 7,
+      authoredClaims: 2,
+      discussionPosts: 4,
+      hallOfFameRank: 1,
+      competition: null,
+      recentMarkets: [],
+      recentDiscussionPosts: [],
+    }
+  }
+
   it('uses the internal api base url when present and parses the route payloads', async () => {
     process.env.INTERNAL_API_BASE_URL = 'https://internal.example.com'
     process.env.NEXT_PUBLIC_API_BASE_URL = 'https://public.example.com'
@@ -180,6 +203,13 @@ describe('server api helpers', () => {
             headers: { 'content-type': 'application/json' },
           },
         )
+      }
+
+      if (url.endsWith('/agents/yabby')) {
+        return new Response(JSON.stringify(buildPublicAgentProfilePayload()), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
       }
 
       return new Response(JSON.stringify(buildMarketPayload()), {
@@ -234,6 +264,14 @@ describe('server api helpers', () => {
         market: expect.objectContaining({
           slug: 'openai-gpt5-summer-2026',
         }),
+      }),
+    )
+    await expect(serverApi.fetchPublicAgentProfileServer('yabby')).resolves.toEqual(
+      expect.objectContaining({
+        agent: expect.objectContaining({
+          handle: 'yabby',
+        }),
+        hallOfFameRank: 1,
       }),
     )
 

@@ -111,4 +111,78 @@ describe('store service branch coverage', () => {
     )
     expect(insertCall?.[1]?.[24]).toBe('agent-1')
   })
+
+  it('persists explicit market bet modes without falling back to against-only', async () => {
+    const normalizeSql = (value: unknown) =>
+      String(value).replace(/\s+/g, ' ').trim()
+    const query = vi.fn(async (sql: unknown, _params?: unknown[]) => {
+      const normalized = normalizeSql(sql)
+
+      if (normalized.includes('SELECT COUNT(*)::text AS count FROM markets')) {
+        return { rows: [{ count: '1' }] }
+      }
+
+      if (normalized.includes('SELECT id FROM markets')) {
+        return { rows: [] as never[] }
+      }
+
+      return { rows: [] as never[] }
+    })
+
+    vi.doMock('../data/seed', () => ({
+      createSeedStore: () => ({
+        markets: [
+          {
+            id: 'binary-market',
+            slug: 'binary-market',
+            headline: 'Binary market',
+            subject: 'Anthropic Voice',
+            category: 'ai',
+            announcedOn: '2026-03-16T00:00:00.000Z',
+            promisedDate: '2026-12-31T23:59:59.000Z',
+            promisedBy: 'Anthropic',
+            summary: 'Binary market summary.',
+            status: 'open',
+            resolution: 'pending',
+            resolutionNotes: null,
+            betMode: 'binary',
+            basePayoutMultiplier: 1.9,
+            payoutMultiplier: 1.9,
+            confidence: 80,
+            stakeDifficulty: 3,
+            tags: ['anthropic'],
+            sources: [],
+            author: null,
+            linkedMarketIds: [],
+            betWindowOpen: true,
+            bustedAt: null,
+            createdAt: '2026-03-16T00:00:00.000Z',
+            updatedAt: '2026-03-16T00:00:00.000Z',
+            lastCheckedAt: '2026-03-16T00:00:00.000Z',
+          },
+        ],
+        bets: [],
+        notifications: [],
+        metadata: {
+          lastMaintenanceRunAt: null,
+          lastDiscoveryRunAt: null,
+        },
+      }),
+    }))
+    vi.doMock('./database', () => ({
+      withDatabaseClient: vi.fn(),
+      withDatabaseTransaction: async (
+        callback: (client: { query: typeof query }) => Promise<unknown>,
+      ) => callback({ query }),
+    }))
+
+    const store = await import('./store')
+
+    await expect(store.ensureStore()).resolves.toBeUndefined()
+
+    const insertCall = query.mock.calls.find((call: unknown[]) =>
+      normalizeSql(call[0]).includes('INSERT INTO markets'),
+    )
+    expect(insertCall?.[1]?.[12]).toBe('binary')
+  })
 })

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 type RouteKey = 'board' | 'groups' | 'standings' | 'owner' | 'review'
 
 type RouteFrameProps = {
-  current: RouteKey
+  current: RouteKey | null
   kicker: string
   title: string
   description: string

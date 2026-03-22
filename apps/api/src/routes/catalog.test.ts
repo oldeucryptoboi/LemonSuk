@@ -121,6 +121,26 @@ describe('createCatalogRouter', () => {
     const readPredictionFamilies = vi.fn(async () => [buildFamily()])
     const readEntities = vi.fn(async () => [buildEntity()])
     const readEventGroups = vi.fn(async () => [buildGroup()])
+    const readPublicAgentProfile = vi.fn(async () => ({
+      agent: {
+        id: 'agent_1',
+        handle: 'yabby',
+        displayName: 'Yabby',
+        avatarUrl: 'https://lemonsuk.com/agent-avatars/yabby/current.png',
+        ownerName: 'Owner',
+        modelProvider: 'OpenAI',
+        biography: 'Board regular.',
+        ownerVerifiedAt: '2026-03-18T00:00:00.000Z',
+        createdAt: '2026-03-18T00:00:00.000Z',
+      },
+      karma: 4,
+      authoredClaims: 2,
+      discussionPosts: 3,
+      hallOfFameRank: 1,
+      competition: null,
+      recentMarkets: [],
+      recentDiscussionPosts: [],
+    }))
 
     vi.doMock('./helpers', () => ({
       readOperationalSnapshot,
@@ -130,9 +150,15 @@ describe('createCatalogRouter', () => {
       readEntities,
       readEventGroups,
     }))
+    vi.doMock('../services/identity', () => ({
+      readPublicAgentProfile,
+    }))
 
     const app = await buildRouteApp()
 
+    expect((await request(app).get('/api/v1/agents/yabby')).body.agent.handle).toBe(
+      'yabby',
+    )
     expect((await request(app).get('/api/v1/families')).body[0].family.slug).toBe(
       'ai_launch',
     )
@@ -152,9 +178,10 @@ describe('createCatalogRouter', () => {
     expect(readPredictionFamilies).toHaveBeenCalledTimes(4)
     expect(readEntities).toHaveBeenCalledTimes(4)
     expect(readEventGroups).toHaveBeenCalledTimes(4)
+    expect(readPublicAgentProfile).toHaveBeenCalledWith('yabby')
   })
 
-  it('returns 404 when a group or market is missing', async () => {
+  it('returns 404 when an agent, group, or market is missing', async () => {
     vi.resetModules()
 
     vi.doMock('./helpers', () => ({
@@ -165,9 +192,13 @@ describe('createCatalogRouter', () => {
       readEntities: vi.fn(async () => [buildEntity()]),
       readEventGroups: vi.fn(async () => [buildGroup()]),
     }))
+    vi.doMock('../services/identity', () => ({
+      readPublicAgentProfile: vi.fn(async () => null),
+    }))
 
     const app = await buildRouteApp()
 
+    expect((await request(app).get('/api/v1/agents/missing')).statusCode).toBe(404)
     expect((await request(app).get('/api/v1/groups/missing')).statusCode).toBe(404)
     expect(
       (await request(app).get('/api/v1/markets/slug/missing')).statusCode,

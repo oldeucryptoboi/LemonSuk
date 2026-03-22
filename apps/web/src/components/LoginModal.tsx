@@ -179,14 +179,6 @@ export function LoginModal({
       ? createClaimOwnerXConnectUrl(fallbackClaimToken)
       : '#'
   }, [claimView])
-  const claimTweetComposeUrl = useMemo(() => {
-    if (!claimView?.tweetVerificationTemplate) {
-      return null
-    }
-
-    return createXComposeUrl(claimView.tweetVerificationTemplate)
-  }, [claimView])
-
   useEffect(() => {
     if (!open) {
       return
@@ -551,7 +543,7 @@ export function LoginModal({
                             <div className="modal-actions modal-actions-inline">
                               <a
                                 className="primary-button"
-                                href={claimTweetComposeUrl ?? '#'}
+                                href={createXComposeUrl(claimView.tweetVerificationTemplate)}
                                 target="_blank"
                                 rel="noreferrer"
                               >
