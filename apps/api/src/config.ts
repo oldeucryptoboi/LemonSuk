@@ -19,6 +19,10 @@ const apiConfig = {
   jwtSecret: process.env.JWT_SECRET ?? defaultJwtSecret,
   sendGridApiKey: process.env.SENDGRID_API_KEY ?? '',
   sendGridFromEmail: process.env.SENDGRID_FROM_EMAIL ?? '',
+  avatarS3Bucket: process.env.AVATAR_S3_BUCKET ?? '',
+  avatarS3Region: process.env.AVATAR_S3_REGION ?? process.env.AWS_REGION ?? '',
+  avatarCloudFrontBaseUrl: process.env.AVATAR_CLOUDFRONT_BASE_URL ?? '',
+  avatarS3Prefix: process.env.AVATAR_S3_PREFIX ?? 'agent-avatars',
   xClientId: process.env.X_CLIENT_ID ?? process.env.TWITTER_CLIENT_ID ?? '',
   xClientSecret:
     process.env.X_CLIENT_SECRET ?? process.env.TWITTER_CLIENT_SECRET ?? '',
@@ -56,6 +60,20 @@ function assertProductionApiConfig(): void {
     /:\/\/(?:127\.0\.0\.1|localhost)(?::|\/)/.test(apiConfig.apiPublicUrl)
   ) {
     throw new Error('Production API_PUBLIC_URL must point to the deployed API origin.')
+  }
+
+  const avatarStorageConfigValues = [
+    apiConfig.avatarS3Bucket,
+    apiConfig.avatarS3Region,
+    apiConfig.avatarCloudFrontBaseUrl,
+  ]
+  const hasSomeAvatarStorageConfig = avatarStorageConfigValues.some(Boolean)
+  const hasFullAvatarStorageConfig = avatarStorageConfigValues.every(Boolean)
+
+  if (hasSomeAvatarStorageConfig && !hasFullAvatarStorageConfig) {
+    throw new Error(
+      'Production avatar storage config is incomplete. Set AVATAR_S3_BUCKET, AVATAR_S3_REGION, and AVATAR_CLOUDFRONT_BASE_URL together.',
+    )
   }
 }
 

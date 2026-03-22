@@ -28,9 +28,12 @@ import {
   ownerSessionSchema,
 } from '../shared'
 import { apiConfig } from '../config'
+import {
+  deleteManagedAvatarUrl,
+  ingestAgentAvatarFromUrl,
+} from './avatar-storage'
 import { withDatabaseClient, withDatabaseTransaction } from './database'
 import { readAgentReputationFromClient } from './reputation'
-import { slugify } from './utils'
 import {
   applyAgentCreditEconomy,
   applyOwnerCreditEconomyForEmail,
@@ -235,6 +238,19 @@ function createVerificationPhrase(): string {
 function normalizeAvatarUrl(value: string | null | undefined): string | null {
   const normalized = value?.trim()
   return normalized ? normalized : null
+}
+
+async function storeManagedAvatarUrl(
+  avatarUrl: string | null | undefined,
+  agentHandle: string,
+): Promise<string | null> {
+  const normalized = normalizeAvatarUrl(avatarUrl)
+
+  if (!normalized) {
+    return null
+  }
+
+  return ingestAgentAvatarFromUrl(normalized, agentHandle)
 }
 
 function createOwnerVerificationCode(): string {
@@ -1336,72 +1352,77 @@ export async function registerAgent(
   const apiKey = `lsk_live_${randomUUID().replace(/-/g, '')}`
   const claimToken = `claim_${randomUUID().replace(/-/g, '')}`
   const verificationPhrase = createVerificationPhrase()
+  const managedAvatarUrl = await storeManagedAvatarUrl(
+    input.avatarUrl,
+    normalizedHandle,
+  )
 
-  return withDatabaseTransaction(async (client) => {
-    const existingHandle = await client.query<AgentAccountRow>(
-      `
-        SELECT *
-        FROM agent_accounts
-        WHERE handle = $1
-      `,
-      [normalizedHandle],
-    )
+  try {
+    return await withDatabaseTransaction(async (client) => {
+      const existingHandle = await client.query<AgentAccountRow>(
+        `
+          SELECT *
+          FROM agent_accounts
+          WHERE handle = $1
+        `,
+        [normalizedHandle],
+      )
 
-    const existingAgent = existingHandle.rows[0] ?? null
-    if (existingAgent) {
-      if (isAgentClaimExpired(existingAgent, now)) {
-        await deleteAgentRecordsFromClient(client, [existingAgent])
-      } else {
-        throw new Error('That agent handle is already taken.')
+      const existingAgent = existingHandle.rows[0] ?? null
+      if (existingAgent) {
+        if (isAgentClaimExpired(existingAgent, now)) {
+          await deleteAgentRecordsFromClient(client, [existingAgent])
+        } else {
+          throw new Error('That agent handle is already taken.')
+        }
       }
-    }
 
-    await consumeCaptchaChallengeFromClient(
-      client,
-      {
-        challengeId: input.captchaChallengeId,
-        answer: input.captchaAnswer,
-      },
-      now,
-    )
+      await consumeCaptchaChallengeFromClient(
+        client,
+        {
+          challengeId: input.captchaChallengeId,
+          answer: input.captchaAnswer,
+        },
+        now,
+      )
 
-    const result = await client.query<AgentAccountRow>(
-      `
-        INSERT INTO agent_accounts (
-          id,
-          handle,
-          display_name,
-          avatar_url,
-          owner_name,
-          model_provider,
-          biography,
-          api_key_hash,
-          claim_token,
-          verification_phrase,
-          owner_email,
-          owner_verified_at,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, NULL, $11, $11
-        )
-        RETURNING *
-      `,
-      [
-        `agent_${randomUUID().replace(/-/g, '')}`,
-        normalizedHandle,
-        input.displayName.trim(),
-        normalizeAvatarUrl(input.avatarUrl),
-        input.ownerName.trim(),
-        input.modelProvider.trim(),
-        input.biography.trim(),
-        hashSecret(apiKey),
-        claimToken,
-        verificationPhrase,
-        now.toISOString(),
-      ],
-    )
+      const result = await client.query<AgentAccountRow>(
+        `
+          INSERT INTO agent_accounts (
+            id,
+            handle,
+            display_name,
+            avatar_url,
+            owner_name,
+            model_provider,
+            biography,
+            api_key_hash,
+            claim_token,
+            verification_phrase,
+            owner_email,
+            owner_verified_at,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, NULL, $11, $11
+          )
+          RETURNING *
+        `,
+        [
+          `agent_${randomUUID().replace(/-/g, '')}`,
+          normalizedHandle,
+          input.displayName.trim(),
+          managedAvatarUrl,
+          input.ownerName.trim(),
+          input.modelProvider.trim(),
+          input.biography.trim(),
+          hashSecret(apiKey),
+          claimToken,
+          verificationPhrase,
+          now.toISOString(),
+        ],
+      )
 
       return agentRegistrationResponseSchema.parse({
         agent: mapAgent(result.rows[0]),
@@ -1412,7 +1433,14 @@ export async function registerAgent(
         betEndpoint: '/api/v1/auth/agents/bets',
         predictionEndpoint: '/api/v1/auth/agents/predictions',
       })
-  })
+    })
+  } catch (error) {
+    if (managedAvatarUrl) {
+      await deleteManagedAvatarUrl(managedAvatarUrl)
+    }
+
+    throw error
+  }
 }
 
 export async function updateAgentProfile(
@@ -1421,48 +1449,70 @@ export async function updateAgentProfile(
 ): Promise<AgentProfile> {
   const now = new Date()
 
-  return withDatabaseTransaction(async (client) => {
-    const agent = await readAgentByApiKey(client, apiKey)
-    if (!agent) {
+  const agent = await withDatabaseClient(async (client) => {
+    const activeAgent = await readAgentByApiKey(client, apiKey)
+    if (!activeAgent) {
       throw new Error('Agent API key was not recognized.')
     }
 
-    if (isAgentClaimExpired(agent, now)) {
-      await deleteAgentRecordsFromClient(client, [agent])
+    if (isAgentClaimExpired(activeAgent, now)) {
+      await deleteAgentRecordsFromClient(client, [activeAgent])
       throw new Error('This agent registration expired. Register the agent again.')
     }
 
+    return activeAgent
+  })
+
+  if (
+    updates.displayName === undefined &&
+    updates.biography === undefined &&
+    updates.avatarUrl === undefined
+  ) {
+    throw new Error('No valid profile fields were provided.')
+  }
+
+  const managedAvatarUrl =
+    updates.avatarUrl === undefined
+      ? agent.avatar_url
+      : updates.avatarUrl === null
+        ? null
+        : await storeManagedAvatarUrl(updates.avatarUrl, agent.handle)
+
+  try {
+    return await withDatabaseTransaction(async (client) => {
+      const result = await client.query<AgentAccountRow>(
+        `
+          UPDATE agent_accounts
+          SET display_name = $2,
+              biography = $3,
+              avatar_url = $4,
+              updated_at = $5
+          WHERE id = $1
+          RETURNING *
+        `,
+        [
+          agent.id,
+          updates.displayName?.trim() ?? agent.display_name,
+          updates.biography?.trim() ?? agent.biography,
+          managedAvatarUrl,
+          now.toISOString(),
+        ],
+      )
+
+      return mapAgentProfile(result.rows[0])
+    })
+  } catch (error) {
     if (
-      updates.displayName === undefined &&
-      updates.biography === undefined &&
-      updates.avatarUrl === undefined
+      updates.avatarUrl !== undefined &&
+      updates.avatarUrl !== null &&
+      managedAvatarUrl &&
+      managedAvatarUrl !== agent.avatar_url
     ) {
-      throw new Error('No valid profile fields were provided.')
+      await deleteManagedAvatarUrl(managedAvatarUrl)
     }
 
-    const result = await client.query<AgentAccountRow>(
-      `
-        UPDATE agent_accounts
-        SET display_name = $2,
-            biography = $3,
-            avatar_url = $4,
-            updated_at = $5
-        WHERE id = $1
-        RETURNING *
-      `,
-      [
-        agent.id,
-        updates.displayName?.trim() ?? agent.display_name,
-        updates.biography?.trim() ?? agent.biography,
-        updates.avatarUrl === undefined
-          ? agent.avatar_url
-          : normalizeAvatarUrl(updates.avatarUrl),
-        now.toISOString(),
-      ],
-    )
-
-    return mapAgentProfile(result.rows[0])
-  })
+    throw error
+  }
 }
 
 export async function readClaimView(

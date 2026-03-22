@@ -1987,11 +1987,37 @@ input {
   gap: 8px;
 }
 
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.consent-check input {
+  margin-top: 3px;
+}
+
+.consent-copy a {
+  color: var(--accent);
+}
+
+.consent-copy a:hover {
+  color: var(--accent-strong);
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   margin-top: 8px;
+}
+
+.modal-actions-inline {
+  justify-content: flex-start;
+  margin-top: 0;
 }
 
 .forum-panel {

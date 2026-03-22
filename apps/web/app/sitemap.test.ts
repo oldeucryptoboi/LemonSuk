@@ -70,6 +70,14 @@ describe('sitemap', () => {
           priority: 0.9,
         }),
         expect.objectContaining({
+          url: 'https://lemonsuk.com/terms',
+          priority: 0.3,
+        }),
+        expect.objectContaining({
+          url: 'https://lemonsuk.com/privacy',
+          priority: 0.3,
+        }),
+        expect.objectContaining({
           url: 'https://lemonsuk.com/groups/apple-launch-calendar',
           priority: 0.8,
         }),

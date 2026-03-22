@@ -34,6 +34,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly',
       priority: 0.5,
     },
+    {
+      url: `${baseUrl}/terms`,
+      changeFrequency: 'monthly',
+      priority: 0.3,
+    },
+    {
+      url: `${baseUrl}/privacy`,
+      changeFrequency: 'monthly',
+      priority: 0.3,
+    },
   ]
 
   const groupEntries: MetadataRoute.Sitemap = groups.map((group) => ({

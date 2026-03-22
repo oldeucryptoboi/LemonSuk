@@ -1,8 +1,21 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { placeAgainstBetForUser } from './betting'
 import { setupApiContext } from '../../../../test/helpers/api-context'
 import { solveCaptchaPrompt as solveCaptcha } from '../../../../test/helpers/captcha'
+
+const avatarStorageMocks = vi.hoisted(() => ({
+  ingestAgentAvatarFromUrl: vi.fn(async (sourceUrl: string, agentHandle: string) => {
+    const extension = sourceUrl.split('.').pop() || 'png'
+    return `https://cdn.lemonsuk.test/agent-avatars/${agentHandle}/${agentHandle}.${extension}`
+  }),
+  deleteManagedAvatarUrl: vi.fn(async () => undefined),
+  isManagedAvatarUrl: vi.fn((url: string | null | undefined) =>
+    typeof url === 'string' && url.startsWith('https://cdn.lemonsuk.test/'),
+  ),
+}))
+
+vi.mock('./avatar-storage', () => avatarStorageMocks)
 
 function registrationInput(challengeId: string, handle: string, prompt: string) {
   return {
@@ -85,6 +98,25 @@ function createTweetLookupResponse(input: {
 }
 
 describe('identity service', () => {
+  beforeEach(() => {
+    avatarStorageMocks.ingestAgentAvatarFromUrl.mockClear()
+    avatarStorageMocks.deleteManagedAvatarUrl.mockClear()
+    avatarStorageMocks.isManagedAvatarUrl.mockClear()
+    avatarStorageMocks.ingestAgentAvatarFromUrl.mockImplementation(
+      async (sourceUrl: string, agentHandle: string) => {
+        const extension = sourceUrl.split('.').pop() || 'png'
+        return `https://cdn.lemonsuk.test/agent-avatars/${agentHandle}/${agentHandle}.${extension}`
+      },
+    )
+    avatarStorageMocks.deleteManagedAvatarUrl.mockImplementation(
+      async () => undefined,
+    )
+    avatarStorageMocks.isManagedAvatarUrl.mockImplementation(
+      (url: string | null | undefined) =>
+        typeof url === 'string' && url.startsWith('https://cdn.lemonsuk.test/'),
+    )
+  })
+
   it('rejects used, expired, and duplicate registrations', async () => {
     const context = await setupApiContext()
     const firstChallenge = await context.identity.createCaptchaChallenge()
@@ -170,13 +202,18 @@ describe('identity service', () => {
     })
 
     expect(registration.agent.avatarUrl).toBe(
+      'https://cdn.lemonsuk.test/agent-avatars/avatar_bot/avatar_bot.png',
+    )
+    expect(avatarStorageMocks.ingestAgentAvatarFromUrl).toHaveBeenCalledWith(
       'https://example.com/avatar-bot.png',
+      'avatar_bot',
     )
     expect(
       await context.identity.authenticateAgentApiKey(registration.apiKey),
     ).toMatchObject({
       handle: 'avatar_bot',
-      avatarUrl: 'https://example.com/avatar-bot.png',
+      avatarUrl:
+        'https://cdn.lemonsuk.test/agent-avatars/avatar_bot/avatar_bot.png',
     })
 
     await context.store.withStoreTransaction(async (_store, _persist, client) => {
@@ -187,7 +224,8 @@ describe('identity service', () => {
         ),
       ).toMatchObject({
         handle: 'avatar_bot',
-        avatarUrl: 'https://example.com/avatar-bot.png',
+        avatarUrl:
+          'https://cdn.lemonsuk.test/agent-avatars/avatar_bot/avatar_bot.png',
       })
     })
 
@@ -220,7 +258,8 @@ describe('identity service', () => {
       displayName: 'Profile Bot Prime',
       biography:
         'Profile bot now carries a sharper biography with an updated photo.',
-      avatarUrl: 'https://example.com/profile-bot-prime.png',
+      avatarUrl:
+        'https://cdn.lemonsuk.test/agent-avatars/profile_bot/profile_bot.png',
     })
 
     const retainedAvatar = await context.identity.updateAgentProfile(
@@ -232,7 +271,8 @@ describe('identity service', () => {
 
     expect(retainedAvatar).toMatchObject({
       displayName: 'Profile Bot Encore',
-      avatarUrl: 'https://example.com/profile-bot-prime.png',
+      avatarUrl:
+        'https://cdn.lemonsuk.test/agent-avatars/profile_bot/profile_bot.png',
     })
 
     const cleared = await context.identity.updateAgentProfile(
@@ -3605,6 +3645,36 @@ describe('identity service', () => {
         },
       ],
     })
+
+    await context.pool.end()
+  })
+
+  it('cleans up an uploaded avatar if registration fails after ingestion', async () => {
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    avatarStorageMocks.ingestAgentAvatarFromUrl.mockResolvedValueOnce(
+      'https://cdn.lemonsuk.test/agent-avatars/duplicate_bot/uploaded.png',
+    )
+
+    await context.identity.registerAgent(
+      registrationInput(challenge.id, 'duplicate_bot', challenge.prompt),
+    )
+
+    const secondChallenge = await context.identity.createCaptchaChallenge()
+    await expect(
+      context.identity.registerAgent({
+        ...registrationInput(
+          secondChallenge.id,
+          'duplicate_bot',
+          secondChallenge.prompt,
+        ),
+        avatarUrl: 'https://example.com/duplicate-bot.png',
+      }),
+    ).rejects.toThrow('That agent handle is already taken.')
+
+    expect(avatarStorageMocks.deleteManagedAvatarUrl).toHaveBeenCalledWith(
+      'https://cdn.lemonsuk.test/agent-avatars/duplicate_bot/uploaded.png',
+    )
 
     await context.pool.end()
   })

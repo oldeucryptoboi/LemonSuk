@@ -229,6 +229,16 @@ describe('LoginModal', () => {
     )
 
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
+    expect(
+      screen.getByRole('button', {
+        name: 'Attach email and send verification link',
+      }),
+    ).toHaveProperty('disabled', true)
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /By checking this box, I agree to the Terms of Service/i,
+      }),
+    )
     await user.click(
       screen.getByRole('button', {
         name: 'Attach email and send verification link',
@@ -270,6 +280,11 @@ describe('LoginModal', () => {
       />,
     )
 
+    expect(
+      screen.getByRole('link', { name: 'Open prefilled X draft' }).getAttribute('href'),
+    ).toBe(
+      'https://x.com/intent/post?text=Claiming%20%40deadlinebot%20on%20LemonSuk.%20Human%20verification%20code%3A%20REEF-1A2B',
+    )
     await user.type(
       screen.getByLabelText('Public tweet URL'),
       'https://x.com/deadlinebot_owner/status/123',
@@ -442,6 +457,11 @@ describe('LoginModal', () => {
 
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
     await user.click(
+      screen.getByRole('checkbox', {
+        name: /By checking this box, I agree to the Terms of Service/i,
+      }),
+    )
+    await user.click(
       screen.getByRole('button', {
         name: 'Attach email and send verification link',
       }),
@@ -467,7 +487,17 @@ describe('LoginModal', () => {
         name: 'Email me a fresh verification link',
       }),
     ).not.toBeNull()
+    expect(
+      screen.getByRole('button', {
+        name: 'Email me a fresh verification link',
+      }),
+    ).toHaveProperty('disabled', true)
 
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /By checking this box, I agree to the Terms of Service/i,
+      }),
+    )
     await user.click(
       screen.getByRole('button', {
         name: 'Email me a fresh verification link',
@@ -639,6 +669,14 @@ describe('LoginModal', () => {
     expect(screen.getByRole('heading', { name: 'Owner login' })).not.toBeNull()
     expect(screen.getAllByText('Owner access')).toHaveLength(2)
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
+    expect(
+      screen.getByRole('button', { name: 'Email me a login link' }),
+    ).toHaveProperty('disabled', true)
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /By checking this box, I agree to the Terms of Service/i,
+      }),
+    )
     await user.click(
       screen.getByRole('button', { name: 'Email me a login link' }),
     )
@@ -659,6 +697,11 @@ describe('LoginModal', () => {
 
     await user.clear(screen.getByLabelText('Owner email'))
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /By checking this box, I agree to the Terms of Service/i,
+      }),
+    )
     await user.click(
       screen.getByRole('button', { name: 'Email me a login link' }),
     )
@@ -748,6 +791,11 @@ describe('LoginModal', () => {
     ).not.toBeNull()
 
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /By checking this box, I agree to the Terms of Service/i,
+      }),
+    )
     await user.click(
       screen.getByRole('button', {
         name: 'Email me a verification link',
@@ -892,6 +940,11 @@ describe('LoginModal', () => {
 
     expect(apiMocks.createClaimOwnerXConnectUrl).not.toHaveBeenCalled()
     await user.type(screen.getByLabelText('Owner email'), 'owner@example.com')
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /By checking this box, I agree to the Terms of Service/i,
+      }),
+    )
     await user.click(
       screen.getByRole('button', {
         name: 'Attach email and send verification link',

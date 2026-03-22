@@ -18,6 +18,11 @@ describe('apiConfig', () => {
     delete process.env.JWT_SECRET
     delete process.env.SENDGRID_API_KEY
     delete process.env.SENDGRID_FROM_EMAIL
+    delete process.env.AVATAR_S3_BUCKET
+    delete process.env.AVATAR_S3_REGION
+    delete process.env.AVATAR_CLOUDFRONT_BASE_URL
+    delete process.env.AVATAR_S3_PREFIX
+    delete process.env.AWS_REGION
     delete process.env.X_CLIENT_ID
     delete process.env.X_CLIENT_SECRET
     delete process.env.TWITTER_CLIENT_ID
@@ -51,6 +56,10 @@ describe('apiConfig', () => {
       jwtSecret: 'lemonsuk-dev-jwt-secret',
       sendGridApiKey: '',
       sendGridFromEmail: '',
+      avatarS3Bucket: '',
+      avatarS3Region: '',
+      avatarCloudFrontBaseUrl: '',
+      avatarS3Prefix: 'agent-avatars',
       xClientId: '',
       xClientSecret: '',
       xBearerToken: '',
@@ -75,6 +84,10 @@ describe('apiConfig', () => {
     process.env.JWT_SECRET = 'secret'
     process.env.SENDGRID_API_KEY = 'sg-key'
     process.env.SENDGRID_FROM_EMAIL = 'alerts@lemonsuk.example'
+    process.env.AVATAR_S3_BUCKET = 'lemonsuk-avatar-bucket'
+    process.env.AVATAR_S3_REGION = 'us-east-1'
+    process.env.AVATAR_CLOUDFRONT_BASE_URL = 'https://cdn.lemonsuk.example'
+    process.env.AVATAR_S3_PREFIX = 'avatars'
     process.env.X_CLIENT_ID = 'x-client-id'
     process.env.X_CLIENT_SECRET = 'x-client-secret'
     process.env.TWITTER_BEARER_TOKEN = 'x-bearer-token'
@@ -98,6 +111,12 @@ describe('apiConfig', () => {
     expect(apiConfig.jwtSecret).toBe('secret')
     expect(apiConfig.sendGridApiKey).toBe('sg-key')
     expect(apiConfig.sendGridFromEmail).toBe('alerts@lemonsuk.example')
+    expect(apiConfig.avatarS3Bucket).toBe('lemonsuk-avatar-bucket')
+    expect(apiConfig.avatarS3Region).toBe('us-east-1')
+    expect(apiConfig.avatarCloudFrontBaseUrl).toBe(
+      'https://cdn.lemonsuk.example',
+    )
+    expect(apiConfig.avatarS3Prefix).toBe('avatars')
     expect(apiConfig.xClientId).toBe('x-client-id')
     expect(apiConfig.xClientSecret).toBe('x-client-secret')
     expect(apiConfig.xBearerToken).toBe('x-bearer-token')
@@ -159,6 +178,21 @@ describe('apiConfig', () => {
 
     await expect(import('./config')).rejects.toThrow(
       'Production API_PUBLIC_URL must point to the deployed API origin.',
+    )
+  })
+
+  it('rejects incomplete production avatar storage configuration', async () => {
+    mutableEnv.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@db.internal/lemonsuk'
+    process.env.INTERNAL_SERVICE_TOKEN = 'safe-internal-token'
+    process.env.JWT_SECRET = 'safe-production-secret'
+    process.env.API_PUBLIC_URL = 'https://api.lemonsuk.example'
+    process.env.AVATAR_S3_BUCKET = 'lemonsuk-avatar-bucket'
+    delete process.env.AVATAR_S3_REGION
+    delete process.env.AVATAR_CLOUDFRONT_BASE_URL
+
+    await expect(import('./config')).rejects.toThrow(
+      'Production avatar storage config is incomplete. Set AVATAR_S3_BUCKET, AVATAR_S3_REGION, and AVATAR_CLOUDFRONT_BASE_URL together.',
     )
   })
 })

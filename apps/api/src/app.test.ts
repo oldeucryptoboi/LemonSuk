@@ -1,14 +1,46 @@
 import express from 'express'
 import request from 'supertest'
 import { ZodError } from 'zod'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { supportMarketId } from './shared'
 import { createSeedStore } from './data/seed'
 import { setupApiContext } from '../../../test/helpers/api-context'
 import { solveCaptchaPrompt as solveCaptcha } from '../../../test/helpers/captcha'
 
+const avatarStorageMocks = vi.hoisted(() => ({
+  ingestAgentAvatarFromUrl: vi.fn(async (sourceUrl: string, agentHandle: string) => {
+    const extension = sourceUrl.split('.').pop() || 'png'
+    return `https://cdn.lemonsuk.test/agent-avatars/${agentHandle}/${agentHandle}.${extension}`
+  }),
+  deleteManagedAvatarUrl: vi.fn(async () => undefined),
+  isManagedAvatarUrl: vi.fn((url: string | null | undefined) =>
+    typeof url === 'string' && url.startsWith('https://cdn.lemonsuk.test/'),
+  ),
+}))
+
+vi.mock('./services/avatar-storage', () => avatarStorageMocks)
+
 describe('app routes', () => {
+  beforeEach(() => {
+    avatarStorageMocks.ingestAgentAvatarFromUrl.mockClear()
+    avatarStorageMocks.deleteManagedAvatarUrl.mockClear()
+    avatarStorageMocks.isManagedAvatarUrl.mockClear()
+    avatarStorageMocks.ingestAgentAvatarFromUrl.mockImplementation(
+      async (sourceUrl: string, agentHandle: string) => {
+        const extension = sourceUrl.split('.').pop() || 'png'
+        return `https://cdn.lemonsuk.test/agent-avatars/${agentHandle}/${agentHandle}.${extension}`
+      },
+    )
+    avatarStorageMocks.deleteManagedAvatarUrl.mockImplementation(
+      async () => undefined,
+    )
+    avatarStorageMocks.isManagedAvatarUrl.mockImplementation(
+      (url: string | null | undefined) =>
+        typeof url === 'string' && url.startsWith('https://cdn.lemonsuk.test/'),
+    )
+  })
+
   it('serves health, dashboard, agent auth, and maintenance flows', async () => {
     process.env.SENDGRID_API_KEY = 'test-sendgrid-key'
     process.env.SENDGRID_FROM_EMAIL = 'noreply@lemonsuk.test'
@@ -117,7 +149,7 @@ describe('app routes', () => {
     const registration = registrationResponse.body
     const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
     expect(registration.agent.avatarUrl).toBe(
-      'https://example.com/deadline-bot.png',
+      'https://cdn.lemonsuk.test/agent-avatars/deadlinebot/deadlinebot.png',
     )
 
     const profileUpdateResponse = await request(app)
@@ -132,7 +164,7 @@ describe('app routes', () => {
     expect(profileUpdateResponse.statusCode).toBe(200)
     expect(profileUpdateResponse.body.displayName).toBe('Deadline Bot Prime')
     expect(profileUpdateResponse.body.avatarUrl).toBe(
-      'https://example.com/deadline-bot-prime.png',
+      'https://cdn.lemonsuk.test/agent-avatars/deadlinebot/deadlinebot.png',
     )
 
     expect(

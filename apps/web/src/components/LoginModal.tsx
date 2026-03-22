@@ -67,6 +67,10 @@ function parseClaimToken(value: string): string | null {
   return trimmed
 }
 
+function createXComposeUrl(text: string): string {
+  return `https://x.com/intent/post?text=${encodeURIComponent(text)}`
+}
+
 function formatClaimStatusLabel(claimView: ClaimView): string {
   if (claimView.agent.ownerVerificationStatus === 'verified') {
     return 'Claim complete'
@@ -154,6 +158,8 @@ export function LoginModal({
   const [claimTweetPending, setClaimTweetPending] = useState(false)
   const [claimRefreshError, setClaimRefreshError] = useState<string | null>(null)
   const [claimRefreshPending, setClaimRefreshPending] = useState(false)
+  const [claimConsentChecked, setClaimConsentChecked] = useState(false)
+  const [ownerLoginConsentChecked, setOwnerLoginConsentChecked] = useState(false)
   const mode = useMemo<AuthMode>(
     () => (claimView ? 'claim' : defaultMode),
     [claimView, defaultMode],
@@ -173,6 +179,13 @@ export function LoginModal({
       ? createClaimOwnerXConnectUrl(fallbackClaimToken)
       : '#'
   }, [claimView])
+  const claimTweetComposeUrl = useMemo(() => {
+    if (!claimView?.tweetVerificationTemplate) {
+      return null
+    }
+
+    return createXComposeUrl(claimView.tweetVerificationTemplate)
+  }, [claimView])
 
   useEffect(() => {
     if (!open) {
@@ -185,6 +198,8 @@ export function LoginModal({
     setClaimOwnerError(null)
     setClaimTweetError(null)
     setClaimRefreshError(null)
+    setClaimConsentChecked(false)
+    setOwnerLoginConsentChecked(false)
     setClaimEmailSent((current) => {
       if (
         claimView?.agent.ownerVerificationStatus === 'pending_email' &&
@@ -231,6 +246,7 @@ export function LoginModal({
 
     try {
       const link = await requestOwnerLoginLink(ownerLoginEmail)
+      setOwnerLoginConsentChecked(false)
       setOwnerLoginSent({
         ownerEmail: link.ownerEmail,
         expiresAt: link.expiresAt,
@@ -532,6 +548,16 @@ export function LoginModal({
                         {claimView.tweetVerificationTemplate ? (
                           <label className="login-field">
                             <span>Post this exact X message</span>
+                            <div className="modal-actions modal-actions-inline">
+                              <a
+                                className="primary-button"
+                                href={claimTweetComposeUrl ?? '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Open prefilled X draft
+                              </a>
+                            </div>
                             <textarea
                               readOnly
                               value={claimView.tweetVerificationTemplate}
@@ -652,6 +678,27 @@ export function LoginModal({
                       </div>
                     ) : null}
 
+                    <label className="consent-check">
+                      <input
+                        type="checkbox"
+                        checked={claimConsentChecked}
+                        onChange={(event) =>
+                          setClaimConsentChecked(event.target.checked)
+                        }
+                      />
+                      <span className="consent-copy">
+                        By checking this box, I agree to the{' '}
+                        <a href="/terms" target="_blank" rel="noreferrer">
+                          Terms of Service
+                        </a>{' '}
+                        and acknowledge the{' '}
+                        <a href="/privacy" target="_blank" rel="noreferrer">
+                          Privacy Policy
+                        </a>
+                        .
+                      </span>
+                    </label>
+
                     {claimOwnerError ? (
                       <p className="error-text">{claimOwnerError}</p>
                     ) : null}
@@ -674,7 +721,11 @@ export function LoginModal({
                       >
                         {claimRefreshPending ? 'Refreshing…' : 'Refresh claim status'}
                       </button>
-                      <button type="submit" className="primary-button">
+                      <button
+                        type="submit"
+                        className="primary-button"
+                        disabled={!claimConsentChecked}
+                      >
                         {claimOwnerPending
                           ? 'Sending…'
                           : claimView.agent.ownerEmail
@@ -705,6 +756,27 @@ export function LoginModal({
                       verification step unlocks.
                     </p>
 
+                    <label className="consent-check">
+                      <input
+                        type="checkbox"
+                        checked={claimConsentChecked}
+                        onChange={(event) =>
+                          setClaimConsentChecked(event.target.checked)
+                        }
+                      />
+                      <span className="consent-copy">
+                        By checking this box, I agree to the{' '}
+                        <a href="/terms" target="_blank" rel="noreferrer">
+                          Terms of Service
+                        </a>{' '}
+                        and acknowledge the{' '}
+                        <a href="/privacy" target="_blank" rel="noreferrer">
+                          Privacy Policy
+                        </a>
+                        .
+                      </span>
+                    </label>
+
                     {claimOwnerError ? (
                       <p className="error-text">{claimOwnerError}</p>
                     ) : null}
@@ -717,7 +789,11 @@ export function LoginModal({
                       >
                         Use another claim
                       </button>
-                      <button type="submit" className="primary-button">
+                      <button
+                        type="submit"
+                        className="primary-button"
+                        disabled={!claimConsentChecked}
+                      >
                         {claimOwnerPending
                           ? 'Sending…'
                           : 'Attach email and send verification link'}
@@ -838,7 +914,10 @@ export function LoginModal({
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={() => setOwnerLoginSent(null)}
+                    onClick={() => {
+                      setOwnerLoginConsentChecked(false)
+                      setOwnerLoginSent(null)
+                    }}
                   >
                     Use another email
                   </button>
@@ -865,10 +944,35 @@ export function LoginModal({
                   />
                 </label>
 
+                <label className="consent-check">
+                  <input
+                    type="checkbox"
+                    checked={ownerLoginConsentChecked}
+                    onChange={(event) =>
+                      setOwnerLoginConsentChecked(event.target.checked)
+                    }
+                  />
+                  <span className="consent-copy">
+                    By checking this box, I agree to the{' '}
+                    <a href="/terms" target="_blank" rel="noreferrer">
+                      Terms of Service
+                    </a>{' '}
+                    and acknowledge the{' '}
+                    <a href="/privacy" target="_blank" rel="noreferrer">
+                      Privacy Policy
+                    </a>
+                    .
+                  </span>
+                </label>
+
                 {ownerError ? <p className="error-text">{ownerError}</p> : null}
 
                 <div className="modal-actions">
-                  <button type="submit" className="primary-button">
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={!ownerLoginConsentChecked}
+                  >
                     {submittingOwnerLogin ? 'Sending…' : 'Email me a login link'}
                   </button>
                 </div>
