@@ -279,7 +279,7 @@ describe('web components', () => {
     expect(screen.getByText('Available bankroll')).not.toBeNull()
     expect(screen.getByText('Owner alerts')).not.toBeNull()
     expect(screen.queryByText('Owner workspace live')).toBeNull()
-    expect(screen.getByRole('link', { name: 'Open owner deck' })).not.toBeNull()
+    expect(screen.queryByRole('link', { name: 'Open owner deck' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Submit source' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Jump to intake' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Log out' }))

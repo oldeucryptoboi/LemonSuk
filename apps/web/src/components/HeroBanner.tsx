@@ -287,11 +287,6 @@ export function HeroBanner({
                   ) : null}
                 </div>
               ) : null}
-              <div className="instruction-actions">
-                <a className="surface-link" href="/owner">
-                  Open owner deck
-                </a>
-              </div>
             </>
           ) : (
             <>
