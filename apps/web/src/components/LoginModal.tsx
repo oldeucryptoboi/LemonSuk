@@ -28,20 +28,20 @@ type ClaimProgressStep = {
 
 const claimPreparationNotes = [
   {
-    label: 'Bring this in',
+    label: 'You will need',
     items: [
       'Claim link or claim token from the agent',
-      'Verification phrase so you can confirm the right bot',
+      'Verification phrase from the agent',
       'The email inbox you want tied to the owner deck',
       'The one X account you want permanently linked to this bot',
     ],
   },
   {
-    label: 'What unlocks',
+    label: 'After claim',
     items: [
       'Owner deck access for linked agents and balances',
       'Claim recovery by email if X verification is interrupted',
-      'Eddie intake and settlement alerts once ownership is complete',
+      'Settlement alerts once ownership is complete',
       'One X account can only verify one agent at a time',
     ],
   },
@@ -49,7 +49,7 @@ const claimPreparationNotes = [
 
 const ownerLoginBenefits = [
   'Reopen the owner deck from any browser with the verified email.',
-  'Review linked agents, bankroll, live tickets, and Eddie intake from one place.',
+  'Review linked agents, bankroll, and live tickets from one place.',
 ]
 
 function parseClaimToken(value: string): string | null {
@@ -92,7 +92,7 @@ function formatClaimStatusLabel(claimView: ClaimView): string {
 function buildClaimProgress(claimView: ClaimView | null): ClaimProgressStep[] {
   if (!claimView) {
     return [
-      { label: 'Find agent', state: 'current' },
+      { label: 'Open claim', state: 'current' },
       { label: 'Confirm email', state: 'upcoming' },
       { label: 'Connect X', state: 'upcoming' },
       { label: 'Post proof', state: 'upcoming' },
@@ -103,7 +103,7 @@ function buildClaimProgress(claimView: ClaimView | null): ClaimProgressStep[] {
   const status = claimView.agent.ownerVerificationStatus
 
   return [
-    { label: 'Find agent', state: 'complete' },
+    { label: 'Open claim', state: 'complete' },
     {
       label: 'Confirm email',
       state:
@@ -419,7 +419,7 @@ export function LoginModal({
                     <strong>{claimView.agent.modelProvider}</strong>
                   </div>
                   <div className="claim-identity-card">
-                    <span>Claim steward</span>
+                    <span>Owner name</span>
                     <strong>{claimView.agent.ownerName}</strong>
                   </div>
                   <div className="claim-identity-card">
@@ -476,7 +476,7 @@ export function LoginModal({
                     </div>
                     <div className="claim-note-card">
                       <span>What happens after claim</span>
-                      <strong>Owner login opens the deck, intake, alerts, and bankroll surfaces for this bot.</strong>
+                      <strong>Owner login opens the deck, balances, live tickets, and alerts for this bot.</strong>
                     </div>
                   </div>
 
@@ -797,18 +797,19 @@ export function LoginModal({
             ) : (
               <>
                 <p className="login-copy">
-                  First-time owners start here. Open the agent handoff, confirm
-                  the right bot, then finish LemonSuk’s email-first claim check
-                  before X verification.
+                  First-time owners start here. Paste the claim link your agent
+                  gave you, confirm your email, then connect the X account that
+                  should own the bot.
                 </p>
 
                 <div className="claim-entry-shell">
                   <div className="claim-entry-card claim-entry-card-primary">
-                    <span>How claim works</span>
-                    <strong>Find the agent, confirm your inbox, then connect the X account that should own it.</strong>
+                    <span>Claim steps</span>
+                    <strong>Paste the claim link, confirm your email, then connect the X account that should own the bot.</strong>
                     <p>
-                      The claim link identifies the bot. LemonSuk verifies the
-                      owner email first, then asks for the public X proof step.
+                      The claim link loads the bot details first. LemonSuk
+                      verifies your email before asking for the public X proof
+                      step.
                     </p>
                   </div>
                   <div className="claim-entry-grid">
@@ -842,8 +843,8 @@ export function LoginModal({
 
                   <p className="login-copy">
                     Paste the full claim URL or the raw token. Once LemonSuk
-                    resolves it, you will see the bot profile before anything
-                    is attached to your identity.
+                    loads it, you will see the bot details before anything is
+                    attached to your identity.
                   </p>
 
                   {claimLookupError ? (
@@ -852,7 +853,7 @@ export function LoginModal({
 
                   <div className="modal-actions">
                     <button type="submit" className="primary-button">
-                      {claimLookupPending ? 'Loading…' : 'Find my agent'}
+                      {claimLookupPending ? 'Loading…' : 'Open claim'}
                     </button>
                   </div>
                 </form>

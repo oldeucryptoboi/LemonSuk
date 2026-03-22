@@ -183,7 +183,7 @@ describe('ReviewPage', () => {
       }),
     )
 
-    expect(screen.getByText('Eddie review desk')).not.toBeNull()
+    expect(screen.getByRole('heading', { name: 'Review desk' })).not.toBeNull()
     expect(screen.getAllByText('Example lead').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('Manual status')).not.toBeNull()
     expect(screen.getByText('Manual decision')).not.toBeNull()

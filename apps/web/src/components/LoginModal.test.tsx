@@ -81,29 +81,29 @@ describe('LoginModal', () => {
     )
 
     expect(screen.getByText('Claim a bot')).not.toBeNull()
-    expect(screen.getByText('How claim works')).not.toBeNull()
-    expect(screen.getByText('Bring this in')).not.toBeNull()
-    expect(screen.getByText('What unlocks')).not.toBeNull()
+    expect(screen.getByText('Claim steps')).not.toBeNull()
+    expect(screen.getByText('You will need')).not.toBeNull()
+    expect(screen.getByText('After claim')).not.toBeNull()
     expect(screen.queryByRole('button', { name: 'Owner login' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Find my agent' }))
+    await user.click(screen.getByRole('button', { name: 'Open claim' }))
     expect(
       await screen.findByText(
         'Paste a claim link or claim token from your agent.',
       ),
     ).not.toBeNull()
     await user.type(screen.getByLabelText('Claim link or token'), 'claim_1')
-    await user.click(screen.getByRole('button', { name: 'Find my agent' }))
+    await user.click(screen.getByRole('button', { name: 'Open claim' }))
     expect(await screen.findByText('Claim lookup failed.')).not.toBeNull()
     await user.clear(screen.getByLabelText('Claim link or token'))
     await user.type(screen.getByLabelText('Claim link or token'), 'claim_1')
-    await user.click(screen.getByRole('button', { name: 'Find my agent' }))
+    await user.click(screen.getByRole('button', { name: 'Open claim' }))
     expect(await screen.findByText('Could not load that claim.')).not.toBeNull()
     await user.clear(screen.getByLabelText('Claim link or token'))
     await user.type(
       screen.getByLabelText('Claim link or token'),
       'https://lemonsuk.com/?claim=claim_1',
     )
-    await user.click(screen.getByRole('button', { name: 'Find my agent' }))
+    await user.click(screen.getByRole('button', { name: 'Open claim' }))
 
     expect(apiMocks.fetchClaimView).toHaveBeenCalledWith('claim_1')
     expect(onClaimViewChange).toHaveBeenCalledWith(
@@ -133,7 +133,7 @@ describe('LoginModal', () => {
             modelProvider: 'Anthropic',
             biography: 'Tracks launch rumors and supply-chain timing.',
           }),
-          claimInstructions: 'Confirm the right bot, then attach your email.',
+          claimInstructions: 'Check the bot details, then attach your email.',
           emailVerificationInstructions: null,
           tweetVerificationInstructions: null,
           tweetVerificationTemplate: null,
@@ -148,7 +148,7 @@ describe('LoginModal', () => {
     expect(screen.getByRole('heading', { name: 'Apple Scout' })).not.toBeNull()
     expect(screen.getByText('Model provider')).not.toBeNull()
     expect(screen.getByText('Anthropic')).not.toBeNull()
-    expect(screen.getByText('Claim steward')).not.toBeNull()
+    expect(screen.getByText('Owner name')).not.toBeNull()
     expect(screen.getByText('Research Desk')).not.toBeNull()
     expect(screen.getByText('What this proves')).not.toBeNull()
     expect(screen.getByText('What happens after claim')).not.toBeNull()
@@ -513,7 +513,7 @@ describe('LoginModal', () => {
     ).not.toBeNull()
     expect(screen.getByRole('link', { name: 'Connect with X' })).not.toBeNull()
     await user.click(screen.getByRole('button', { name: 'Use another claim' }))
-    expect(screen.getByRole('button', { name: 'Find my agent' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Open claim' })).not.toBeNull()
   })
 
   it('shows refresh errors for both pending-email and pending-tweet claim states', async () => {

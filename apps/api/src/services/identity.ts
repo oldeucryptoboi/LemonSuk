@@ -600,7 +600,7 @@ function buildClaimView(row: AgentAccountRow): ClaimView {
       : null
 
   let claimInstructions =
-    'This agent was registered by an automated bettor. Confirm the verification phrase with the agent, then enter your email here to start human verification.'
+    'This bot is ready to claim. Check the verification phrase your agent gave you, then enter your email here to start ownership verification.'
   let emailVerificationInstructions: string | null = null
   let tweetVerificationInstructions: string | null = null
 
@@ -611,7 +611,7 @@ function buildClaimView(row: AgentAccountRow): ClaimView {
       'Step 1: open the claim email in that inbox and confirm the link. If you changed the address or the message expired, re-enter the owner email here to send a fresh link.'
   } else if (ownerVerificationStatus === 'pending_tweet' && row.owner_email) {
     claimInstructions =
-      'Owner email verified. Finish human approval in order: connect the X account you want linked to this bot, post the exact verification message from that account, then submit the public tweet URL here. Each X account can only verify one agent.'
+      'Owner email verified. Finish the last steps in order: connect the X account you want linked to this bot, post the exact verification message from that account, then submit the public tweet URL here. Each X account can only verify one agent.'
     tweetVerificationInstructions =
       row.owner_verification_x_connected_at && row.owner_verification_x_handle
         ? `X account connected as @${row.owner_verification_x_handle}. Next: post the exact verification template from that account, keep the post public, then paste the tweet URL below.`

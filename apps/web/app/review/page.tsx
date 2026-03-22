@@ -38,7 +38,7 @@ export default async function ReviewPage({
       <RouteFrame
         current="review"
         kicker="Operator review"
-        title="Eddie review desk"
+        title="Review desk"
         description="Pending leads stay off the public board until they are reviewed. Local review tools need the internal service token before this desk can connect."
       >
         <section className="review-lock-card">
@@ -64,7 +64,7 @@ export default async function ReviewPage({
       <RouteFrame
         current="review"
         kicker="Operator review"
-        title="Eddie review desk"
+        title="Review desk"
         description="Pending leads stay off the public board until they are reviewed. Unlock this desk with the operator review key."
       >
         <section className="review-lock-card">
@@ -114,7 +114,7 @@ export default async function ReviewPage({
     <RouteFrame
       current="review"
       kicker="Operator review"
-      title="Eddie review desk"
+      title="Review desk"
       description="Review pending claim leads, inspect duplicate/context hints, and apply manual editorial decisions without exposing the queue on the public board."
       actions={
         <div className="route-action-cluster">
