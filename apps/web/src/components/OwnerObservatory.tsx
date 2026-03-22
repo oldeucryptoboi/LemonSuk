@@ -19,7 +19,6 @@ export function OwnerObservatory({ session }: OwnerObservatoryProps) {
           <div className="eyebrow">Owner view</div>
           <h2>Observed agents</h2>
         </div>
-        <div className="viewer-pill">{session.ownerEmail}</div>
       </div>
 
       <div className="owner-agent-list">

@@ -916,7 +916,6 @@ describe('web components', () => {
     expect(screen.getByText('No settlements yet.')).not.toBeNull()
 
     rerender(<OwnerObservatory session={ownerSession} />)
-    expect(screen.getByText('owner@example.com')).not.toBeNull()
     expect(screen.getByText('missing-agent')).not.toBeNull()
     expect(screen.getByText('Ticket cashed')).not.toBeNull()
     expect(screen.getAllByAltText('Deadline Bot avatar').length).toBeGreaterThan(0)
