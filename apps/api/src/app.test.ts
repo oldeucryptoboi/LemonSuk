@@ -418,55 +418,6 @@ describe('app routes', () => {
     expect(queuedDashboardResponse.statusCode).toBe(200)
     expect(queuedDashboardResponse.body.submissionQueue).toBeUndefined()
 
-    const reviewCaptchaResponse = await request(app).get('/api/v1/auth/captcha')
-    const reviewCaptcha = reviewCaptchaResponse.body
-
-    expect(
-      (
-        await request(app).post('/api/v1/auth/owners/review-submissions').send({
-          sessionToken: loginLink.sessionToken,
-          sourceUrl: 'https://example.com/musk-quote',
-          note: 'Potential date-bound claim for offline review.',
-          captchaChallengeId: reviewCaptcha.id,
-          captchaAnswer: solveCaptcha(reviewCaptcha.prompt),
-        })
-      ).body,
-    ).toEqual({
-      queued: true,
-      leadId: expect.stringMatching(/^lead_/),
-      submissionId: expect.stringMatching(/^lead_/),
-      sourceUrl: 'https://example.com/musk-quote',
-      sourceDomain: 'example.com',
-      submittedAt: expect.any(String),
-      reviewHint: expect.stringContaining('offline review'),
-    })
-    const duplicateReviewCaptcha = (
-      await request(app).get('/api/v1/auth/captcha')
-    ).body
-    expect(
-      (
-        await request(app).post('/api/v1/auth/owners/review-submissions').send({
-          sessionToken: loginLink.sessionToken,
-          sourceUrl: 'https://example.com/musk-quote',
-          note: 'Potential date-bound claim for offline review.',
-          captchaChallengeId: duplicateReviewCaptcha.id,
-          captchaAnswer: solveCaptcha(duplicateReviewCaptcha.prompt),
-        })
-      ).body.message,
-    ).toBe('That source is already queued for offline review.')
-
-    expect(
-      (
-        await request(app).post('/api/v1/auth/owners/review-submissions').send({
-          sessionToken: 'missing-owner-session',
-          sourceUrl: 'https://example.com/missing-owner',
-          note: 'This should not be accepted without a live owner session.',
-          captchaChallengeId: duplicateReviewCaptcha.id,
-          captchaAnswer: solveCaptcha(duplicateReviewCaptcha.prompt),
-        })
-      ).body.message,
-    ).toBe('Owner session is required to submit review leads.')
-
     expect(
       (
         await request(app).post('/api/v1/auth/agents/bets').send({
@@ -560,8 +511,7 @@ describe('app routes', () => {
       .send({
         query: 'musk deadlines',
       })
-    expect(discoveryResponse.statusCode).toBe(200)
-    expect(discoveryResponse.body.report.query).toBe('musk deadlines')
+    expect(discoveryResponse.statusCode).toBe(404)
 
     const maintenanceResponse = await request(app).post(
       '/api/v1/maintenance/run',
@@ -920,9 +870,6 @@ describe('app routes', () => {
         )
         return router
       },
-    }))
-    vi.doMock('./routes/agent', () => ({
-      createAgentRouter: () => express.Router(),
     }))
     vi.doMock('./routes/auth', () => ({
       createAuthRouter: () => express.Router(),

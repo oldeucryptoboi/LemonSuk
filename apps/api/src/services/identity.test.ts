@@ -1452,6 +1452,12 @@ describe('identity service', () => {
       'owner@example.com',
     )
     expect(
+      await context.identity.authenticateOwnerSession(ownerLogin.sessionToken),
+    ).toMatchObject({
+      sessionToken: ownerLogin.sessionToken,
+      ownerEmail: 'owner@example.com',
+    })
+    expect(
       await context.identity.authenticateAgentApiKey(alpha.apiKey),
     ).toMatchObject({
       availableCredits: 100,
@@ -1564,6 +1570,9 @@ describe('identity service', () => {
     )
     expect(
       await context.identity.readOwnerSession(expiringLink.sessionToken),
+    ).toBeNull()
+    expect(
+      await context.identity.authenticateOwnerSession(expiringLink.sessionToken),
     ).toBeNull()
 
     vi.unstubAllGlobals()

@@ -10,16 +10,13 @@ import {
   createMarketDiscussionPost,
   fetchBoardFamilies,
   fetchBoardGroups,
-  fetchCaptchaChallenge,
   fetchClaimView,
   fetchDashboard,
   fetchMarketDiscussion,
   fetchOwnerSession,
   registerAgentIdentity,
   requestOwnerLoginLink,
-  runDiscovery,
   setupAgentOwnerEmail,
-  submitHumanReviewSubmission,
   subscribeToDashboard,
   verifyClaimOwnerTweet,
   voteOnDiscussionPost,
@@ -104,48 +101,6 @@ describe('web api client', () => {
             },
           ]),
           { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            report: {
-              query: 'musk deadlines',
-              searchedAt: '2026-03-16T00:00:00.000Z',
-              resultCount: 4,
-              candidateCount: 2,
-              createdMarketIds: ['market-1'],
-              updatedMarketIds: ['market-2'],
-              discardedResults: ['https://example.com/discarded'],
-            },
-            snapshot,
-          }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            id: 'captcha-1',
-            prompt: 'Solve the slug.',
-            hint: 'slug-hint',
-            expiresAt: '2026-03-16T00:20:00.000Z',
-          }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            queued: true,
-            leadId: 'lead_human_1',
-            submissionId: 'human_submission_1',
-            sourceUrl: 'https://example.com/human-tip',
-            sourceDomain: 'example.com',
-            submittedAt: '2026-03-16T00:00:00.000Z',
-            reviewHint: 'Queued for offline review.',
-          }),
-          { status: 202 },
         ),
       )
       .mockResolvedValueOnce(
@@ -263,21 +218,6 @@ describe('web api client', () => {
     expect((await fetchBoardGroups())[0]?.group.slug).toBe(
       'openai-release-radar',
     )
-    expect((await runDiscovery('musk deadlines')).report.query).toBe(
-      'musk deadlines',
-    )
-    expect((await fetchCaptchaChallenge()).id).toBe('captcha-1')
-    expect(
-      (
-        await submitHumanReviewSubmission({
-          sessionToken: 'owner_1',
-          sourceUrl: 'https://example.com/human-tip',
-          note: 'This source has a precise date.',
-          captchaChallengeId: 'captcha-1',
-          captchaAnswer: 'solved',
-        })
-      ).submissionId,
-    ).toBe('human_submission_1')
     expect(
       (
         await registerAgentIdentity({
@@ -325,21 +265,7 @@ describe('web api client', () => {
     ).toBe(1)
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
-      '/api/v1/auth/owners/review-submissions',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          sessionToken: 'owner_1',
-          sourceUrl: 'https://example.com/human-tip',
-          note: 'This source has a precise date.',
-          captchaChallengeId: 'captcha-1',
-          captchaAnswer: 'solved',
-        }),
-      }),
-    )
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      8,
+      5,
       '/api/v1/auth/agents/setup-owner-email',
       expect.objectContaining({
         method: 'POST',
@@ -350,12 +276,12 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      12,
+      9,
       '/api/v1/markets/cybercab-volume-2026/discussion',
       expect.anything(),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      13,
+      10,
       '/api/v1/markets/cybercab-volume-2026/discussion/posts',
       expect.objectContaining({
         method: 'POST',
@@ -366,7 +292,7 @@ describe('web api client', () => {
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
-      14,
+      11,
       '/api/v1/discussion/posts/post-1/vote',
       expect.objectContaining({
         method: 'POST',

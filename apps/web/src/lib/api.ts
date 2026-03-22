@@ -2,28 +2,22 @@ import {
   boardEventGroupSummarySchema,
   boardFamilySummarySchema,
   agentRegistrationResponseSchema,
-  captchaChallengeSchema,
   claimViewSchema,
   dashboardLiveEventSchema,
   dashboardSnapshotSchema,
   discussionThreadSchema,
-  discoveryReportSchema,
   ownerEmailSetupResponseSchema,
   ownerLoginLinkSchema,
   ownerSessionSchema,
   claimOwnerTweetVerificationInputSchema,
-  humanReviewSubmissionReceiptSchema,
   type DiscussionThread,
   type AgentRegistrationInput,
   type AgentRegistrationResponse,
   type BoardEventGroupSummary,
   type BoardFamilySummary,
-  type CaptchaChallenge,
   type ClaimView,
   type DashboardLiveEvent,
   type DashboardSnapshot,
-  type DiscoveryReport,
-  type HumanReviewSubmissionReceipt,
   type OwnerEmailSetupResponse,
   type OwnerLoginLink,
   type OwnerSession,
@@ -32,11 +26,6 @@ import {
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
 const apiBasePath = `${apiBaseUrl}/api/v1`
 const reconnectDelayMs = 2_500
-
-type DiscoveryResponse = {
-  report: DiscoveryReport
-  snapshot: DashboardSnapshot
-}
 
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -143,44 +132,6 @@ export function subscribeToDashboard(
 
     socket?.close()
   }
-}
-
-export async function runDiscovery(query: string): Promise<DiscoveryResponse> {
-  const response = await request<{ report: unknown; snapshot: unknown }>(
-    `${apiBasePath}/agent/discover`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ query }),
-    },
-  )
-
-  return {
-    report: discoveryReportSchema.parse(response.report),
-    snapshot: dashboardSnapshotSchema.parse(response.snapshot),
-  }
-}
-
-export async function submitHumanReviewSubmission(input: {
-  sessionToken: string
-  sourceUrl: string
-  note?: string
-  captchaChallengeId: string
-  captchaAnswer: string
-}): Promise<HumanReviewSubmissionReceipt> {
-  const response = await request<unknown>(
-    `${apiBasePath}/auth/owners/review-submissions`,
-    {
-      method: 'POST',
-      body: JSON.stringify(input),
-    },
-  )
-
-  return humanReviewSubmissionReceiptSchema.parse(response)
-}
-
-export async function fetchCaptchaChallenge(): Promise<CaptchaChallenge> {
-  const response = await request<unknown>(`${apiBasePath}/auth/captcha`)
-  return captchaChallengeSchema.parse(response)
 }
 
 export async function registerAgentIdentity(

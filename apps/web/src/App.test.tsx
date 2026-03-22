@@ -21,47 +21,10 @@ const apiMocks = vi.hoisted(() => ({
   fetchClaimView: vi.fn(),
   fetchDashboard: vi.fn(),
   fetchOwnerSession: vi.fn(),
-  runDiscovery: vi.fn(),
   subscribeToDashboard: vi.fn(() => () => undefined),
 }))
 
 vi.mock('./lib/api', () => apiMocks)
-
-vi.mock('./components/AgentConsole', () => ({
-  AgentConsole: ({
-    query,
-    report,
-    ownerSessionToken,
-    ownerEmail,
-    onQueryChange,
-    onRun,
-    onOpenOwnerModal,
-  }: {
-    query: string
-    report: { query: string } | null
-    ownerSessionToken: string | null
-    ownerEmail: string | null
-    onQueryChange: (query: string) => void
-    onRun: () => void
-    onOpenOwnerModal: () => void
-  }) => (
-    <div>
-      <span>{query}</span>
-      <span>{report?.query ?? 'no-report'}</span>
-      <span>{ownerSessionToken ?? 'no-owner-session'}</span>
-      <span>{ownerEmail ?? 'no-owner-email'}</span>
-      <button type="button" onClick={() => onQueryChange('fresh query')}>
-        set query
-      </button>
-      <button type="button" onClick={onRun}>
-        run discovery
-      </button>
-      <button type="button" onClick={onOpenOwnerModal}>
-        open owner modal
-      </button>
-    </div>
-  ),
-}))
 
 vi.mock('./components/BetSlipPanel', () => ({
   BetSlipPanel: ({
@@ -299,7 +262,7 @@ describe('App', () => {
     expect(screen.getByText(firstVisibleMarketId!)).not.toBeNull()
   })
 
-  it('loads the board, handles owner and claim params, and runs discovery', async () => {
+  it('loads the board and handles owner and claim params', async () => {
     const user = userEvent.setup()
     const openSpacexMarket = baseSnapshot.markets.find(
       (market) => market.company === 'spacex' && market.status === 'open',
@@ -350,19 +313,6 @@ describe('App', () => {
       bets: [],
       notifications: [],
     })
-    apiMocks.runDiscovery.mockResolvedValue({
-      report: {
-        query: 'fresh query',
-        searchedAt: '2026-03-16T00:00:00.000Z',
-        resultCount: 3,
-        candidateCount: 1,
-        createdMarketIds: ['market-9'],
-        updatedMarketIds: [],
-        discardedResults: [],
-      },
-      snapshot: baseSnapshot,
-    })
-
     window.history.pushState({}, '', '/?claim=claim_1&owner_session=owner_1')
     render(<App />)
 
@@ -371,7 +321,6 @@ describe('App', () => {
         screen.getByText('Owner deck opened for owner@example.com.'),
       ).not.toBeNull()
     })
-    expect(screen.getByText('Work the intake before the archive')).not.toBeNull()
     expect(screen.queryByText('Q2 close')).toBeNull()
     expect(screen.queryByText('Year-end graveyard')).toBeNull()
     expect(screen.getByText(/Signed in as/i)).not.toBeNull()
@@ -437,15 +386,6 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'close forum' }))
     expect(screen.queryByText('market forum')).toBeNull()
-
-    await user.click(screen.getByRole('button', { name: 'set query' }))
-    await user.click(screen.getByRole('button', { name: 'run discovery' }))
-
-    expect(apiMocks.runDiscovery).toHaveBeenCalledWith('fresh query')
-    expect(
-      await screen.findByText(/Discovery scanned 3 results/),
-    ).not.toBeNull()
-    expect(screen.getAllByText('fresh query')).toHaveLength(2)
 
     await user.click(screen.getByRole('button', { name: 'busted' }))
     expect(screen.getByText('No cards match this filter yet.')).not.toBeNull()
@@ -798,7 +738,7 @@ describe('App', () => {
     expect(screen.getByText('owner')).not.toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'close modal' }))
-    await user.click(screen.getByRole('button', { name: 'open owner modal' }))
+    await user.click(screen.getByRole('button', { name: 'Owner login' }))
     expect(screen.getByTestId('login-modal')).not.toBeNull()
     expect(screen.getByText('owner')).not.toBeNull()
 
@@ -969,28 +909,6 @@ describe('App', () => {
     expect(screen.queryByTestId('login-modal')).toBeNull()
   })
 
-  it('shows fallback discovery error copy after scrolling near the bottom', async () => {
-    apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
-    apiMocks.runDiscovery.mockRejectedValueOnce('discovery failed')
-
-    render(<App />)
-    expect(await screen.findByText('hero banner')).not.toBeNull()
-    await screen.findByRole('button', {
-      name: baseSnapshot.markets[0]?.headline ?? '',
-    })
-
-    setPageMetrics({
-      scrollHeight: 2000,
-      innerHeight: 300,
-      scrollY: 1450,
-    })
-    fireEvent.scroll(window)
-    fireEvent.scroll(window)
-
-    fireEvent.click(screen.getByRole('button', { name: 'run discovery' }))
-    expect(await screen.findByText('Discovery failed.')).not.toBeNull()
-  })
-
   it('auto-expands the feed when the page is shorter than the viewport', async () => {
     apiMocks.fetchDashboard.mockResolvedValue({
       ...baseSnapshot,
@@ -1011,7 +929,7 @@ describe('App', () => {
     ).not.toBeNull()
   })
 
-  it('shows dashboard and discovery errors', async () => {
+  it('shows dashboard load errors', async () => {
     apiMocks.fetchDashboard.mockRejectedValueOnce(new Error('board offline'))
 
     const { unmount } = render(<App />)
@@ -1022,14 +940,5 @@ describe('App', () => {
     const fallbackLoad = render(<App />)
     expect(await screen.findByText('Unable to load the board.')).not.toBeNull()
     fallbackLoad.unmount()
-
-    apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
-    apiMocks.runDiscovery.mockRejectedValueOnce(new Error('discovery failed'))
-
-    render(<App />)
-    expect(await screen.findByText('hero banner')).not.toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: 'run discovery' }))
-    expect(await screen.findByText('discovery failed')).not.toBeNull()
   })
 })

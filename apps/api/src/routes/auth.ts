@@ -7,7 +7,6 @@ import {
   agentRegistrationInputSchema,
   claimOwnerInputSchema,
   claimOwnerTweetVerificationInputSchema,
-  ownerReviewSubmissionInputSchema,
   ownerEmailSetupInputSchema,
   ownerLoginLinkRequestSchema,
   betSideSchema,
@@ -16,7 +15,6 @@ import { apiConfig } from '../config'
 import { asyncHandler } from '../middleware/async-handler'
 import { createRateLimitMiddleware } from '../middleware/rate-limit'
 import { placeBetForUser } from '../services/betting'
-import { createHumanReviewSubmission } from '../services/human-review-submissions'
 import { runMaintenance } from '../services/maintenance'
 import { enqueuePredictionSubmission } from '../services/submission-queue'
 import { debitAgentCredits } from '../services/wallet'
@@ -71,19 +69,6 @@ function readApiKeyFromBody(body: unknown): string | undefined {
     typeof body.apiKey === 'string'
   ) {
     return body.apiKey
-  }
-
-  return undefined
-}
-
-function readSessionTokenFromBody(body: unknown): string | undefined {
-  if (
-    typeof body === 'object' &&
-    body !== null &&
-    'sessionToken' in body &&
-    typeof body.sessionToken === 'string'
-  ) {
-    return body.sessionToken
   }
 
   return undefined
@@ -483,48 +468,6 @@ export function createAuthRouter(): Router {
       }
 
       response.json(session)
-    }),
-  )
-
-  router.post(
-    '/owners/review-submissions',
-    createRateLimitMiddleware({
-      bucket: 'owner-review-submissions',
-      limit: 12,
-      windowMs: 60 * 60 * 1_000,
-      key: (request) =>
-        readSessionTokenFromBody(request.body) ?? request.ip ?? 'anonymous',
-    }),
-    asyncHandler(async (request, response) => {
-      const body = ownerReviewSubmissionInputSchema.parse(request.body)
-      const ownerSession = await authenticateOwnerSession(body.sessionToken)
-
-      if (!ownerSession) {
-        response.status(401).json({
-          message: 'Owner session is required to submit review leads.',
-        })
-        return
-      }
-
-      try {
-        const receipt = await createHumanReviewSubmission(
-          {
-            sourceUrl: body.sourceUrl,
-            note: body.note,
-            captchaChallengeId: body.captchaChallengeId,
-            captchaAnswer: body.captchaAnswer,
-          },
-          ownerSession.ownerEmail,
-        )
-        response.status(202).json(receipt)
-      } catch (error) {
-        response.status(400).json({
-          message:
-            error instanceof Error
-              ? error.message
-              : 'Could not queue this review lead.',
-        })
-      }
     }),
   )
 

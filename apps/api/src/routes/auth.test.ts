@@ -10,11 +10,6 @@ describe('createAuthRouter fallback errors', () => {
       throw 'prediction-queue'
     })
 
-    vi.doMock('../services/human-review-submissions', () => ({
-      createHumanReviewSubmission: vi.fn(async () => {
-        throw 'owner-review'
-      }),
-    }))
     vi.doMock('../services/submission-queue', () => ({
       enqueuePredictionSubmission,
     }))
@@ -216,20 +211,6 @@ describe('createAuthRouter fallback errors', () => {
       ).body.message,
     ).toBe('Could not create login link.')
 
-    expect(
-      (
-        await request(app)
-          .post('/api/v1/auth/owners/review-submissions')
-          .send({
-            sessionToken: 'owner_1',
-            sourceUrl: 'https://example.com/review',
-            note: 'Forward this source to Eddie.',
-            captchaChallengeId: 'captcha-1',
-            captchaAnswer: 'solved',
-          })
-      ).body.message,
-    ).toBe('Could not queue this review lead.')
-
     const predictionResponse = await request(app)
       .post('/api/v1/auth/agents/predictions')
       .send({
@@ -287,11 +268,6 @@ describe('createAuthRouter fallback errors', () => {
 
     const capturedKeys: string[] = []
 
-    vi.doMock('../services/human-review-submissions', () => ({
-      createHumanReviewSubmission: vi.fn(async () => ({
-        queued: true,
-      })),
-    }))
     vi.doMock('../middleware/rate-limit', () => ({
       createRateLimitMiddleware:
         (options: {

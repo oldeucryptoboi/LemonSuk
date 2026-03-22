@@ -10,10 +10,8 @@ import {
   type BoardFamilySummary,
   type ClaimView,
   type DashboardSnapshot,
-  type DiscoveryReport,
   type OwnerSession,
 } from './shared'
-import { AgentConsole } from './components/AgentConsole'
 import { BetSlipPanel } from './components/BetSlipPanel'
 import { HallOfFame } from './components/HallOfFame'
 import { HeroBanner } from './components/HeroBanner'
@@ -29,7 +27,6 @@ import {
   fetchClaimView,
   fetchDashboard,
   fetchOwnerSession,
-  runDiscovery,
   subscribeToDashboard,
 } from './lib/api'
 import {
@@ -102,13 +99,8 @@ export default function App({
   )
   const [statusFilters, setStatusFilters] = useState<MarketStatusFilter[]>([])
   const [companyFilters, setCompanyFilters] = useState<ActiveCompanyFilter[]>([])
-  const [agentQuery, setAgentQuery] = useState(
-    'AI launches product ship dates CEO claims Apple OpenAI Anthropic Meta Tesla Musk deadlines',
-  )
-  const [report, setReport] = useState<DiscoveryReport | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [runningAgent, setRunningAgent] = useState(false)
   const [loading, setLoading] = useState(initialSnapshot === null)
   const [visibleMarketCount, setVisibleMarketCount] = useState(feedPageSize)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
@@ -348,30 +340,6 @@ export default function App({
     visibleMarkets.length,
   ])
 
-  async function handleRunDiscovery() {
-    setRunningAgent(true)
-    setError(null)
-
-    try {
-      const response = await runDiscovery(agentQuery)
-      applySnapshot(response.snapshot)
-      startTransition(() => {
-        setReport(response.report)
-      })
-      setMessage(
-        `Discovery scanned ${response.report.resultCount} results and wrote ${response.report.createdMarketIds.length} new cards.`,
-      )
-    } catch (discoveryError) {
-      setError(
-        discoveryError instanceof Error
-          ? discoveryError.message
-          : 'Discovery failed.',
-      )
-    } finally {
-      setRunningAgent(false)
-    }
-  }
-
   return (
     <div className="app-shell">
       {snapshot ? (
@@ -555,43 +523,6 @@ export default function App({
                   </section>
                 ) : null}
 
-                {ownerSession ? (
-                  <>
-                    <section className="board-surface-panel owner-priority-panel">
-                      <div className="section-heading compact">
-                        <div>
-                          <div className="eyebrow">Owner workspace</div>
-                          <h2>Work the intake before the archive</h2>
-                        </div>
-                        <div className="owner-priority-actions">
-                          <a className="surface-link" href="/owner">
-                            Owner deck
-                          </a>
-                          <a className="surface-link" href="#review-desk">
-                            Review intake
-                          </a>
-                        </div>
-                      </div>
-                      <p className="surface-copy">
-                        You&apos;re signed in. Fresh source URLs and claim leads
-                        should go to Eddie first. The public archive stays below
-                        when you want board context.
-                      </p>
-                    </section>
-
-                    <AgentConsole
-                      query={agentQuery}
-                      report={report}
-                      running={runningAgent}
-                      ownerSessionToken={ownerSession.sessionToken}
-                      ownerEmail={ownerSession.ownerEmail}
-                      onQueryChange={setAgentQuery}
-                      onRun={handleRunDiscovery}
-                      onOpenOwnerModal={openOwnerLogin}
-                    />
-                  </>
-                ) : null}
-
                 <div className="feed-sticky-chrome">
                   <section className="section-heading">
                     <div>
@@ -744,18 +675,6 @@ export default function App({
                   />
                 ) : null}
 
-                {ownerSession ? null : (
-                  <AgentConsole
-                    query={agentQuery}
-                    report={report}
-                    running={runningAgent}
-                    ownerSessionToken={null}
-                    ownerEmail={null}
-                    onQueryChange={setAgentQuery}
-                    onRun={handleRunDiscovery}
-                    onOpenOwnerModal={openOwnerLogin}
-                  />
-                )}
               </div>
             </section>
           )}

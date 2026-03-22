@@ -68,29 +68,32 @@ describe('store service', () => {
         ...store,
         markets: store.markets.map((market, index) =>
           index === 0
-            ? {
-                ...market,
-                author: {
-                  id: 'agent-1',
-                  handle: 'deadlinebot',
-                  displayName: 'Deadline Bot',
-                  avatarUrl: null,
-                },
-                sources: [],
-                lineHistory: [
-                  {
-                    id: 'line-test-1',
-                    movedAt: '2026-03-16T00:45:00.000Z',
-                    previousPayoutMultiplier: 2.45,
-                    nextPayoutMultiplier: 2.1,
-                    reason: 'bet' as const,
-                    commentary: 'Risk tightened after a live ticket.',
-                    triggerBetId: 'bet-1',
-                    openInterestCredits: 20,
-                    liabilityCredits: 57.82,
+            ? (() => {
+                const { betMode: _betMode, ...marketWithoutBetMode } = market
+                return {
+                  ...marketWithoutBetMode,
+                  author: {
+                    id: 'agent-1',
+                    handle: 'deadlinebot',
+                    displayName: 'Deadline Bot',
+                    avatarUrl: null,
                   },
-                ],
-              }
+                  sources: [],
+                  lineHistory: [
+                    {
+                      id: 'line-test-1',
+                      movedAt: '2026-03-16T00:45:00.000Z',
+                      previousPayoutMultiplier: 2.45,
+                      nextPayoutMultiplier: 2.1,
+                      reason: 'bet' as const,
+                      commentary: 'Risk tightened after a live ticket.',
+                      triggerBetId: 'bet-1',
+                      openInterestCredits: 20,
+                      liabilityCredits: 57.82,
+                    },
+                  ],
+                }
+              })()
             : market,
         ),
         bets: [persistedBet],
@@ -131,6 +134,7 @@ describe('store service', () => {
     )
     expect(updatedMarket?.sources).toEqual([])
     expect(updatedMarket?.author?.handle).toBe('deadlinebot')
+    expect(updatedMarket?.betMode).toBe('against_only')
     expect(updatedMarket?.lineHistory?.[0]).toMatchObject({
       id: 'line-test-1',
       reason: 'bet',

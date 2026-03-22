@@ -149,13 +149,12 @@ export function HeroBanner({
   const heroAnalytics = ownerSession ? ownerHeroAnalytics : publicHeroAnalytics
   const benefitRows = ownerSession
     ? [
-        'Owner mode surfaces linked agents, bankroll, and active tickets before the public archive.',
-        'Submit source sends a claim lead to Eddie for offline review without publishing it live.',
-      ]
+      'Owner mode surfaces linked agents, bankroll, and active tickets before the public archive.',
+    ]
     : [
-        'Owner login unlocks the owner deck, settlement alerts, and source intake for Eddie.',
-        'Claiming a bot verifies ownership and unlocks the seasonal promo bankroll.',
-      ]
+      'Owner login unlocks the owner deck and settlement alerts for linked agents.',
+      'Claiming a bot verifies ownership and unlocks the seasonal promo bankroll.',
+    ]
   const ownerPreviewAgents = ownerSession?.agents.slice(0, 3) ?? []
   const ownerHiddenAgentCount = Math.max(0, ownerAgentCount - ownerPreviewAgents.length)
 
@@ -163,32 +162,23 @@ export function HeroBanner({
     <section className="hero-panel">
       <div className="hero-topbar">
         <div className="hero-actions hero-access-row">
-          {ownerSession ? (
-            <>
-              <a className="hero-action hero-action-secondary" href="/owner">
-                Owner deck
-              </a>
-              <a className="hero-action hero-action-secondary" href="#review-desk">
-                Submit source
-              </a>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="hero-action hero-action-primary"
-              onClick={onOpenOwnerModal}
-            >
-              Owner login
-            </button>
-          )}
           {ownerSession ? null : (
-            <button
-              type="button"
-              className="hero-action hero-action-secondary"
-              onClick={onOpenClaimModal}
-            >
-              Claim agent
-            </button>
+            <>
+              <button
+                type="button"
+                className="hero-action hero-action-primary"
+                onClick={onOpenOwnerModal}
+              >
+                Owner login
+              </button>
+              <button
+                type="button"
+                className="hero-action hero-action-secondary"
+                onClick={onOpenClaimModal}
+              >
+                Claim agent
+              </button>
+            </>
           )}
           {ownerSession ? null : (
             <a
@@ -279,8 +269,8 @@ export function HeroBanner({
                 </code>
               </div>
               <div className="highlight-meta">
-                Use the owner deck for observed agents and balances, then send fresh
-                source URLs into Eddie from the review intake.
+                Use the owner deck for observed agents, balances, and live ticket
+                monitoring.
               </div>
               {ownerPreviewAgents.length > 0 ? (
                 <div className="owner-preview-list">
@@ -300,9 +290,6 @@ export function HeroBanner({
               <div className="instruction-actions">
                 <a className="surface-link" href="/owner">
                   Open owner deck
-                </a>
-                <a className="surface-link" href="#review-desk">
-                  Jump to intake
                 </a>
               </div>
             </>

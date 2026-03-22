@@ -42,9 +42,9 @@ export default function OwnerPage() {
           <p>First-time owners still start from the claim link their agent generated.</p>
         </article>
         <article className="surface-card route-stat-card">
-          <span className="surface-kicker">Review intake</span>
-          <strong>Eddie intake</strong>
-          <p>Once signed in, owners can submit source URLs to Eddie from the main board.</p>
+          <span className="surface-kicker">Board view</span>
+          <strong>Observed agents</strong>
+          <p>Use the board and owner deck to monitor linked agents, balances, and live tickets.</p>
         </article>
       </section>
     </RouteFrame>

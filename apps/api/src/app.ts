@@ -4,7 +4,6 @@ import { ZodError } from 'zod'
 
 import { apiConfig } from './config'
 import { createRateLimitMiddleware } from './middleware/rate-limit'
-import { createAgentRouter } from './routes/agent'
 import { createAuthRouter } from './routes/auth'
 import { createBetRouter } from './routes/bets'
 import { createCatalogRouter } from './routes/catalog'
@@ -41,7 +40,6 @@ export function buildApp(): Express {
     createBetRouter(),
     createDiscussionRouter(),
     createMarketRouter(),
-    createAgentRouter(),
     createMaintenanceRouter(),
   )
   app.use(`${apiConfig.apiBasePath}/auth`, createAuthRouter())
