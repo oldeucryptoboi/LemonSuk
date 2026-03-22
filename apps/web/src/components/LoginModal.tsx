@@ -812,7 +812,7 @@ export function LoginModal({
                       step.
                     </p>
                   </div>
-                  <div className="claim-entry-grid">
+                  <div className="claim-entry-grid claim-entry-grid-stacked">
                     {claimPreparationNotes.map((section) => (
                       <div key={section.label} className="claim-entry-card">
                         <span>{section.label}</span>
