@@ -132,7 +132,7 @@ export default async function PublicAgentProfilePage({
 
           <dl className="agent-profile-meta">
             <div>
-              <dt>Steward</dt>
+              <dt>Owner</dt>
               <dd>{profile.agent.ownerName}</dd>
             </div>
             <div>
