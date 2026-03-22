@@ -33,15 +33,18 @@ import {
   subscribeToDashboard,
 } from './lib/api'
 import {
-  companyLabel,
   createCompanyTabs,
   createSeasonalSurfaces,
   isBoardMarket,
-  type CompanyFilter,
 } from './lib/markets'
 import {
   pickFirstVisibleMarketIdFromSnapshot,
+  toggleCompanyFilter,
+  toggleMarketStatusFilter,
+  matchesBoardFilters,
+  type ActiveCompanyFilter,
   type MarketFilter,
+  type MarketStatusFilter,
 } from './lib/board'
 
 const feedPageSize = 4
@@ -97,8 +100,8 @@ export default function App({
   const [groupSummaries, setGroupSummaries] = useState<BoardEventGroupSummary[]>(
     initialGroupSummaries,
   )
-  const [filter, setFilter] = useState<MarketFilter>('all')
-  const [companyFilter, setCompanyFilter] = useState<CompanyFilter>('all')
+  const [statusFilters, setStatusFilters] = useState<MarketStatusFilter[]>([])
+  const [companyFilters, setCompanyFilters] = useState<ActiveCompanyFilter[]>([])
   const [agentQuery, setAgentQuery] = useState(
     'AI launches product ship dates CEO claims Apple OpenAI Anthropic Meta Tesla Musk deadlines',
   )
@@ -267,17 +270,9 @@ export default function App({
   const boardMarkets = snapshot?.markets.filter(isBoardMarket) ?? []
   const supportTopicMarket =
     snapshot?.markets.find((market) => market.id === supportMarketId) ?? null
-  const visibleMarkets = boardMarkets.filter((market) => {
-    if (companyFilter !== 'all' && market.company !== companyFilter) {
-      return false
-    }
-
-    if (filter === 'all') {
-      return true
-    }
-
-    return market.status === filter
-  })
+  const visibleMarkets = boardMarkets.filter((market) =>
+    matchesBoardFilters(market, statusFilters, companyFilters),
+  )
   const renderedMarkets = visibleMarkets.slice(0, visibleMarketCount)
   const hasMoreMarkets = renderedMarkets.length < visibleMarkets.length
 
@@ -303,6 +298,10 @@ export default function App({
 
   const bonusPercent = snapshot?.stats.globalBonusPercent ?? 0
   const agentInstructionsUrl = '/agent.md'
+  const archiveScopeLabel =
+    statusFilters.length === 0 && companyFilters.length === 0
+      ? 'full'
+      : 'filtered'
 
   const openOwnerLogin = useCallback(() => {
     setLoginModalMode('owner')
@@ -326,7 +325,7 @@ export default function App({
 
   useEffect(() => {
     setVisibleMarketCount(Math.min(feedPageSize, visibleMarkets.length))
-  }, [companyFilter, filter, visibleMarkets.length])
+  }, [companyFilters, statusFilters, visibleMarkets.length])
 
   useEffect(() => {
     if (!hasMoreMarkets || loginModalOpen || topicMarket) {
@@ -599,13 +598,10 @@ export default function App({
                       <div className="eyebrow">
                         {ownerSession ? 'Public archive' : 'Archive layer'}
                       </div>
-                      <h2>{ownerSession ? 'Board archive' : 'Full prediction feed'}</h2>
+                        <h2>{ownerSession ? 'Board archive' : 'Full prediction feed'}</h2>
                       <p className="feed-status">
                         Showing {renderedMarkets.length} of{' '}
-                        {visibleMarkets.length} cards in the{' '}
-                        {companyFilter === 'all'
-                          ? 'full'
-                          : companyLabel(companyFilter)}{' '}
+                        {visibleMarkets.length} cards in the {archiveScopeLabel}{' '}
                         archive.
                       </p>
                     </div>
@@ -616,14 +612,26 @@ export default function App({
                             <button
                               key={entry}
                               type="button"
-                              className={`filter-button ${filter === entry ? 'active' : ''}`}
+                              className={`filter-button ${
+                                entry === 'all'
+                                  ? statusFilters.length === 0
+                                    ? 'active'
+                                    : ''
+                                  : statusFilters.includes(entry)
+                                    ? 'active'
+                                    : ''
+                              }`}
                               onClick={() => {
-                                setFilter(entry)
+                                const nextStatusFilters = toggleMarketStatusFilter(
+                                  statusFilters,
+                                  entry,
+                                )
+                                setStatusFilters(nextStatusFilters)
                                 setSelectedMarketId(
                                   pickFirstVisibleMarketIdFromSnapshot(
                                     snapshot,
-                                    entry,
-                                    companyFilter,
+                                    nextStatusFilters,
+                                    companyFilters,
                                   ),
                                 )
                               }}
@@ -644,14 +652,26 @@ export default function App({
                       <button
                         key={entry.value}
                         type="button"
-                        className={`filter-button ${companyFilter === entry.value ? 'active' : ''}`}
+                        className={`filter-button ${
+                          entry.value === 'all'
+                            ? companyFilters.length === 0
+                              ? 'active'
+                              : ''
+                            : companyFilters.includes(entry.value)
+                              ? 'active'
+                              : ''
+                        }`}
                         onClick={() => {
-                          setCompanyFilter(entry.value)
+                          const nextCompanyFilters = toggleCompanyFilter(
+                            companyFilters,
+                            entry.value,
+                          )
+                          setCompanyFilters(nextCompanyFilters)
                           setSelectedMarketId(
                             pickFirstVisibleMarketIdFromSnapshot(
                               snapshot,
-                              filter,
-                              entry.value,
+                              statusFilters,
+                              nextCompanyFilters,
                             ),
                           )
                         }}

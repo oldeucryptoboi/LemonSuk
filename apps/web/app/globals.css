@@ -885,8 +885,8 @@ input {
 .agent-profile-identity {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 18px;
+  align-items: start;
+  gap: 22px;
 }
 
 .agent-profile-copy h2 {
@@ -902,6 +902,12 @@ input {
   color: rgba(247, 236, 215, 0.82);
   font-family: 'Space Mono', monospace;
   font-size: 0.92rem;
+}
+
+.agent-profile-avatar {
+  width: 156px;
+  height: 156px;
+  align-self: start;
 }
 
 .agent-profile-meta,
@@ -1433,6 +1439,10 @@ input {
   margin: 0;
   font-size: 1.25rem;
   line-height: 1.3;
+}
+
+.market-summary {
+  margin: 0;
 }
 
 .market-commentary,
@@ -2321,6 +2331,11 @@ input {
 
   .agent-profile-identity {
     grid-template-columns: 1fr;
+  }
+
+  .agent-profile-avatar {
+    width: 120px;
+    height: 120px;
   }
 
   .hero-brand {

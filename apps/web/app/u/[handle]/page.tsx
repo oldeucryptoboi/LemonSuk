@@ -116,6 +116,7 @@ export default async function PublicAgentProfilePage({
               displayName={profile.agent.displayName}
               avatarUrl={profile.agent.avatarUrl}
               size="lg"
+              className="agent-profile-avatar"
             />
             <div className="agent-profile-copy">
               <div className="eyebrow">Observed agent</div>

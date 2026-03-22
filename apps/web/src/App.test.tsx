@@ -289,8 +289,8 @@ describe('App', () => {
     }
     const firstVisibleMarketId = pickFirstVisibleMarketIdFromSnapshot(
       closedSnapshot,
-      'all',
-      'all',
+      [],
+      [],
     )
 
     render(<App initialSnapshot={closedSnapshot} />)
@@ -411,7 +411,7 @@ describe('App', () => {
         name: /SpaceX/i,
       }),
     )
-    expect(screen.getByText(/SpaceX archive\./)).not.toBeNull()
+    expect(screen.getByText(/filtered archive\./)).not.toBeNull()
 
     await user.click(
       screen.getByRole('button', {
@@ -814,10 +814,8 @@ describe('App', () => {
   })
 
   it('picks the first visible market from a snapshot or returns null', () => {
-    expect(pickFirstVisibleMarketIdFromSnapshot(null, 'all', 'all')).toBeNull()
-    expect(
-      pickFirstVisibleMarketIdFromSnapshot(baseSnapshot, 'open', 'spacex'),
-    ).toBe(
+    expect(pickFirstVisibleMarketIdFromSnapshot(null, [], [])).toBeNull()
+    expect(pickFirstVisibleMarketIdFromSnapshot(baseSnapshot, ['open'], ['spacex'])).toBe(
       baseSnapshot.markets.find(
         (market) => market.company === 'spacex' && market.status === 'open',
       )?.id ?? null,
@@ -880,6 +878,75 @@ describe('App', () => {
       }),
     ).toBeNull()
     expect(window.scrollTo).not.toHaveBeenCalled()
+  })
+
+  it('stacks archive pills and lets all clear the row selections', async () => {
+    const user = userEvent.setup()
+    const filteredSnapshot = {
+      ...baseSnapshot,
+      markets: baseSnapshot.markets.map((market, index) =>
+        index === 0
+          ? {
+              ...market,
+              status: 'busted' as const,
+              betWindowOpen: false,
+            }
+          : market,
+      ),
+    }
+    const openSpacexMarket = filteredSnapshot.markets.find(
+      (market) => market.company === 'spacex' && market.status === 'open',
+    )!
+    const bustedTeslaMarket = filteredSnapshot.markets.find(
+      (market) => market.company === 'tesla' && market.status === 'busted',
+    )!
+
+    apiMocks.fetchDashboard.mockResolvedValue(filteredSnapshot)
+
+    render(<App />)
+
+    expect(await screen.findByText('hero banner')).not.toBeNull()
+
+    const companyLanes = screen.getByLabelText('Company lanes')
+
+    await user.click(screen.getByRole('button', { name: 'open' }))
+    await user.click(within(companyLanes).getByRole('button', { name: /spacex/i }))
+    await user.click(within(companyLanes).getByRole('button', { name: /tesla/i }))
+
+    expect(screen.getByRole('button', { name: 'open' }).className).toContain('active')
+    expect(
+      within(companyLanes).getByRole('button', { name: /spacex/i }).className,
+    ).toContain('active')
+    expect(
+      within(companyLanes).getByRole('button', { name: /tesla/i }).className,
+    ).toContain('active')
+    expect(
+      within(companyLanes).getByRole('button', { name: /^all/i }).className,
+    ).not.toContain('active')
+
+    expect(
+      screen.getByRole('button', {
+        name: openSpacexMarket.headline,
+      }),
+    ).not.toBeNull()
+    expect(
+      screen.queryByRole('button', {
+        name: bustedTeslaMarket.headline,
+      }),
+    ).toBeNull()
+
+    await user.click(within(companyLanes).getByRole('button', { name: /^all/i }))
+
+    expect(
+      within(companyLanes).getByRole('button', { name: /^all/i }).className,
+    ).toContain('active')
+    expect(
+      within(companyLanes).getByRole('button', { name: /spacex/i }).className,
+    ).not.toContain('active')
+    expect(
+      within(companyLanes).getByRole('button', { name: /tesla/i }).className,
+    ).not.toContain('active')
+    expect(screen.getByText(/Showing 4 of \d+ cards in the filtered archive\./)).not.toBeNull()
   })
 
   it('does not open the login modal from scroll alone', async () => {
