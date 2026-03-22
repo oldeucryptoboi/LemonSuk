@@ -1283,21 +1283,16 @@ input {
 .agent-verified-badge {
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
-  border-radius: 999px;
-  background: #1d9bf0;
-  color: #f8fcff;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 8px 20px rgba(11, 92, 176, 0.35);
+  color: #1d9bf0;
 }
 
 .agent-verified-badge svg {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   fill: currentColor;
 }
 
