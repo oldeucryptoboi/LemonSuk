@@ -205,6 +205,13 @@ type XTweetLookupResponse = {
   }
 }
 
+type PostgresConstraintError = Error & {
+  code?: string
+  constraint?: string
+}
+
+const activeXOwnerConstraint = 'uniq_agent_accounts_active_x_owner'
+
 function hashSecret(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -562,7 +569,7 @@ function buildClaimView(row: AgentAccountRow): ClaimView {
       'Step 1: open the claim email in that inbox and confirm the link. If you changed the address or the message expired, re-enter the owner email here to send a fresh link.'
   } else if (ownerVerificationStatus === 'pending_tweet' && row.owner_email) {
     claimInstructions =
-      'Owner email verified. Finish human approval in order: connect the X account you want linked to this bot, post the exact verification message from that account, then submit the public tweet URL here.'
+      'Owner email verified. Finish human approval in order: connect the X account you want linked to this bot, post the exact verification message from that account, then submit the public tweet URL here. Each X account can only verify one agent.'
     tweetVerificationInstructions =
       row.owner_verification_x_connected_at && row.owner_verification_x_handle
         ? `X account connected as @${row.owner_verification_x_handle}. Next: post the exact verification template from that account, keep the post public, then paste the tweet URL below.`
@@ -802,6 +809,48 @@ async function readAgentByClaimToken(
   )
 
   return result.rows[0] ?? null
+}
+
+async function findConflictingActiveAgentByXUserId(
+  client: PoolClient,
+  xUserId: string,
+  claimToken: string,
+  now: Date,
+): Promise<AgentAccountRow | null> {
+  const result = await client.query<AgentAccountRow>(
+    `
+      SELECT *
+      FROM agent_accounts
+      WHERE owner_verification_x_user_id = $1
+        AND claim_token <> $2
+        AND owner_verification_status IN ('pending_tweet', 'verified')
+      ORDER BY updated_at DESC
+    `,
+    [xUserId, claimToken],
+  )
+
+  const staleAgents = result.rows.filter((row) => isAgentClaimExpired(row, now))
+  if (staleAgents.length > 0) {
+    await deleteAgentRecordsFromClient(client, staleAgents)
+  }
+
+  return result.rows.find((row) => !isAgentClaimExpired(row, now)) ?? null
+}
+
+function buildXOwnershipCapError(conflictingAgent: AgentAccountRow): Error {
+  return new Error(
+    `That X account is already linked to @${conflictingAgent.handle}. One X account can only verify one agent.`,
+  )
+}
+
+function isActiveXOwnerConstraintError(
+  error: unknown,
+): error is PostgresConstraintError {
+  return (
+    error instanceof Error &&
+    (error as PostgresConstraintError).code === '23505' &&
+    (error as PostgresConstraintError).constraint === activeXOwnerConstraint
+  )
 }
 
 async function deleteAgentRecordsFromClient(
@@ -1282,7 +1331,7 @@ export async function readCaptchaChallenge(
 export async function registerAgent(
   input: AgentRegistrationInput,
 ): Promise<AgentRegistrationResponse> {
-  const normalizedHandle = slugify(input.handle).replace(/-/g, '_')
+  const normalizedHandle = input.handle.toLowerCase().trim()
   const now = new Date()
   const apiKey = `lsk_live_${randomUUID().replace(/-/g, '')}`
   const claimToken = `claim_${randomUUID().replace(/-/g, '')}`
@@ -1867,17 +1916,43 @@ export async function completeOwnerClaimXConnection(input: {
       [stateRow.state, now.toISOString()],
     )
 
-    await client.query(
-      `
-        UPDATE agent_accounts
-        SET owner_verification_x_handle = $2,
-            owner_verification_x_user_id = $3,
-            owner_verification_x_connected_at = $4,
-            updated_at = $4
-        WHERE id = $1
-      `,
-      [agent.id, user.username, user.id, now.toISOString()],
+    const conflictingAgent = await findConflictingActiveAgentByXUserId(
+      client,
+      user.id,
+      stateRow.claim_token,
+      now,
     )
+    if (conflictingAgent) {
+      throw buildXOwnershipCapError(conflictingAgent)
+    }
+
+    try {
+      await client.query(
+        `
+          UPDATE agent_accounts
+          SET owner_verification_x_handle = $2,
+              owner_verification_x_user_id = $3,
+              owner_verification_x_connected_at = $4,
+              updated_at = $4
+          WHERE id = $1
+        `,
+        [agent.id, user.username, user.id, now.toISOString()],
+      )
+    } catch (error) {
+      if (isActiveXOwnerConstraintError(error)) {
+        const latestConflict = await findConflictingActiveAgentByXUserId(
+          client,
+          user.id,
+          stateRow.claim_token,
+          now,
+        )
+        if (latestConflict) {
+          throw buildXOwnershipCapError(latestConflict)
+        }
+      }
+
+      throw error
+    }
 
     return {
       claimToken: stateRow.claim_token,

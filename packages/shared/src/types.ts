@@ -337,7 +337,7 @@ export const captchaChallengeSchema = z.object({
 export const agentRegistrationInputSchema = z.object({
   handle: z
     .string()
-    .min(3)
+    .min(2)
     .max(32)
     .regex(/^[a-z0-9_]+$/i),
   displayName: z.string().min(2).max(80),

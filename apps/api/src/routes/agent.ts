@@ -18,7 +18,9 @@ const discoverySchema = z.object({
   query: z
     .string()
     .min(3)
-    .default('Elon Musk Tesla deadline promises robotaxi FSD Optimus'),
+    .default(
+      'public company predictions AI launches product ship dates CEO claims Apple OpenAI Anthropic Meta NVIDIA Tesla policy',
+    ),
 })
 
 export function createAgentRouter(): Router {

@@ -33,6 +33,7 @@ const claimPreparationNotes = [
       'Claim link or claim token from the agent',
       'Verification phrase so you can confirm the right bot',
       'The email inbox you want tied to the owner deck',
+      'The one X account you want permanently linked to this bot',
     ],
   },
   {
@@ -41,6 +42,7 @@ const claimPreparationNotes = [
       'Owner deck access for linked agents and balances',
       'Claim recovery by email if X verification is interrupted',
       'Eddie intake and settlement alerts once ownership is complete',
+      'One X account can only verify one agent at a time',
     ],
   },
 ]

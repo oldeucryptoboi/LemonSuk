@@ -55,7 +55,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
       description={
         activeFamily
           ? `${activeFamily.family.displayName} groups on the board right now. Clear the filter to return to the full reviewed catalog.`
-          : 'Families organize the prediction board by market type, while groups turn those families into entity-specific lanes like Musk deadlines, Apple launch windows, and OpenAI release radar.'
+          : 'Families organize the prediction board by market type, while groups turn those families into entity-specific lanes like Apple launch windows, OpenAI release radar, NVIDIA AI roadmaps, and flagship Musk boards.'
       }
       actions={
         <div className="route-action-cluster">
