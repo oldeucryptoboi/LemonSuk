@@ -459,6 +459,36 @@ input {
   margin-top: 14px;
 }
 
+.owner-access-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.owner-access-stat {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(246, 200, 107, 0.16);
+  background: rgba(7, 17, 13, 0.7);
+}
+
+.owner-access-label {
+  color: rgba(247, 236, 215, 0.64);
+  font-family: 'Space Mono', monospace;
+  font-size: 0.73rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.owner-access-value {
+  color: rgba(247, 236, 215, 0.94);
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
 .owner-preview-chip {
   display: inline-flex;
   align-items: center;
@@ -2420,6 +2450,7 @@ input {
   .feed-controls,
   .hero-actions,
   .instruction-actions,
+  .owner-access-grid,
   .owner-preview-list,
   .owner-priority-actions,
   .hero-topbar,
@@ -2439,5 +2470,9 @@ input {
   .feed-controls,
   .modal-actions {
     align-items: stretch;
+  }
+
+  .owner-access-grid {
+    grid-template-columns: 1fr;
   }
 }

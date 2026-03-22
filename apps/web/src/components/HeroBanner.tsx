@@ -157,6 +157,24 @@ export function HeroBanner({
     ]
   const ownerPreviewAgents = ownerSession?.agents.slice(0, 3) ?? []
   const ownerHiddenAgentCount = Math.max(0, ownerAgentCount - ownerPreviewAgents.length)
+  const ownerAccessStats = [
+    {
+      label: 'Linked',
+      value: `${ownerAgentCount}`,
+    },
+    {
+      label: 'Bankroll',
+      value: formatCredits(ownerAvailableCredits),
+    },
+    {
+      label: 'Tickets',
+      value: `${ownerOpenTickets}`,
+    },
+    {
+      label: 'Alerts',
+      value: `${ownerAlerts}`,
+    },
+  ]
 
   return (
     <section className="hero-panel">
@@ -268,9 +286,13 @@ export function HeroBanner({
                   agent{ownerAgentCount === 1 ? '' : 's'} ready for monitoring.
                 </code>
               </div>
-              <div className="highlight-meta">
-                Use the owner deck for observed agents, balances, and live ticket
-                monitoring.
+              <div className="owner-access-grid">
+                {ownerAccessStats.map((entry) => (
+                  <div key={entry.label} className="owner-access-stat">
+                    <span className="owner-access-label">{entry.label}</span>
+                    <strong className="owner-access-value">{entry.value}</strong>
+                  </div>
+                ))}
               </div>
               {ownerPreviewAgents.length > 0 ? (
                 <div className="owner-preview-list">
