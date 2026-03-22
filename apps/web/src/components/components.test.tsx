@@ -275,7 +275,7 @@ describe('web components', () => {
       screen.queryByRole('link', { name: 'Agent instructions' }),
     ).toBeNull()
     expect(screen.queryByRole('link', { name: 'Owner deck' })).toBeNull()
-    expect(screen.getByText('Owner access')).not.toBeNull()
+    expect(screen.getByText('Owner access v2')).not.toBeNull()
     expect(screen.getByText('Available bankroll')).not.toBeNull()
     expect(screen.getByText('Owner alerts')).not.toBeNull()
     expect(screen.queryByText('Owner workspace live')).toBeNull()

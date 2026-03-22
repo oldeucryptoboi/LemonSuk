@@ -279,7 +279,7 @@ export function HeroBanner({
         <div className="highlight-card instruction-card">
           {ownerSession ? (
             <>
-              <div className="highlight-label">Owner access</div>
+              <div className="highlight-label">Owner access v2</div>
               <div className="instruction-shell">
                 <code>
                   Signed in as {ownerSession.ownerEmail}. {ownerAgentCount} linked
