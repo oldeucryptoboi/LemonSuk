@@ -1475,6 +1475,124 @@ input {
   gap: 18px;
 }
 
+.archive-market-list {
+  display: grid;
+  gap: 12px;
+}
+
+.archive-market-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(246, 200, 107, 0.12);
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(246, 200, 107, 0.08),
+      transparent 34%
+    ),
+    rgba(7, 17, 13, 0.76);
+}
+
+.archive-market-row.selected {
+  border-color: rgba(246, 200, 107, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(246, 200, 107, 0.18);
+}
+
+.archive-market-main,
+.archive-market-side,
+.archive-market-price,
+.archive-market-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.archive-market-topline,
+.archive-market-meta,
+.archive-market-author {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.archive-market-headline {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.archive-market-headline:hover {
+  color: var(--gold);
+}
+
+.archive-market-summary {
+  margin: 0;
+  color: rgba(247, 236, 215, 0.78);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.archive-market-meta {
+  color: rgba(247, 236, 215, 0.68);
+  font-size: 0.88rem;
+}
+
+.archive-market-author .agent-avatar {
+  margin-right: 2px;
+}
+
+.archive-market-side {
+  justify-items: end;
+  min-width: 160px;
+}
+
+.archive-market-price {
+  justify-items: end;
+}
+
+.archive-market-price strong {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2rem;
+  line-height: 0.95;
+  letter-spacing: 0.05em;
+}
+
+.archive-market-delta {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.archive-market-delta.up {
+  color: #70d99d;
+}
+
+.archive-market-delta.down {
+  color: #ff9a8c;
+}
+
+.archive-market-delta.flat {
+  color: rgba(247, 236, 215, 0.66);
+}
+
+.archive-market-actions {
+  grid-auto-flow: row;
+}
+
 .market-card-slot {
   display: block;
 }
@@ -2404,6 +2522,20 @@ input {
 
   .review-filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .archive-market-row {
+    grid-template-columns: 1fr;
+  }
+
+  .archive-market-side,
+  .archive-market-price {
+    justify-items: start;
+  }
+
+  .archive-market-actions {
+    grid-auto-flow: column;
+    justify-content: start;
   }
 
   .content-grid,

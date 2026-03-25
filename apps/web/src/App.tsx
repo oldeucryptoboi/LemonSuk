@@ -13,11 +13,11 @@ import {
   type OwnerSession,
 } from './shared'
 import { BetSlipPanel } from './components/BetSlipPanel'
+import { ArchiveMarketRow } from './components/ArchiveMarketRow'
 import { HallOfFame } from './components/HallOfFame'
 import { HeroBanner } from './components/HeroBanner'
 import { LoginModal } from './components/LoginModal'
 import { MarketForum } from './components/MarketForum'
-import { MarketCard } from './components/MarketCard'
 import { NotificationRail } from './components/NotificationRail'
 import { OwnerObservatory } from './components/OwnerObservatory'
 import { SupportTopicCard } from './components/SupportTopicCard'
@@ -44,7 +44,7 @@ import {
   type MarketStatusFilter,
 } from './lib/board'
 
-const feedPageSize = 4
+const feedPageSize = 12
 const pageScrollLoadAhead = 280
 const ownerSessionStorageKey = 'lemonsuk.ownerSessionToken'
 const boardSurfaceAnchorId = 'board-surface-top'
@@ -532,7 +532,7 @@ export default function App({
                         <h2>{ownerSession ? 'Board archive' : 'Full prediction feed'}</h2>
                       <p className="feed-status">
                         Showing {renderedMarkets.length} of{' '}
-                        {visibleMarkets.length} cards in the {archiveScopeLabel}{' '}
+                        {visibleMarkets.length} markets in the {archiveScopeLabel}{' '}
                         archive.
                       </p>
                     </div>
@@ -637,22 +637,21 @@ export default function App({
 
                 {renderedMarkets.length === 0 ? (
                   <p className="empty-copy feed-empty">
-                    No cards match this filter yet.
+                    No markets match this filter yet.
                   </p>
                 ) : (
-                  <section className="market-grid">
+                  <section className="archive-market-list">
                     {renderedMarkets.map((market) => (
-                      <div key={market.id} className="market-card-slot">
-                        <MarketCard
-                          market={market}
-                          selected={selectedMarketId === market.id}
-                          onSelect={setSelectedMarketId}
-                          onOpenForum={(marketId) => {
-                            setSelectedMarketId(marketId)
-                            setTopicMarketId(marketId)
-                          }}
-                        />
-                      </div>
+                      <ArchiveMarketRow
+                        key={market.id}
+                        market={market}
+                        selected={selectedMarketId === market.id}
+                        onSelect={setSelectedMarketId}
+                        onOpenForum={(marketId) => {
+                          setSelectedMarketId(marketId)
+                          setTopicMarketId(marketId)
+                        }}
+                      />
                     ))}
                   </section>
                 )}

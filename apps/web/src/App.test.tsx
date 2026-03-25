@@ -128,8 +128,8 @@ vi.mock('./components/MarketForum', () => ({
   ),
 }))
 
-vi.mock('./components/MarketCard', () => ({
-  MarketCard: ({
+vi.mock('./components/ArchiveMarketRow', () => ({
+  ArchiveMarketRow: ({
     market,
     onSelect,
     onOpenForum,
@@ -388,7 +388,7 @@ describe('App', () => {
     expect(screen.queryByText('market forum')).toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'busted' }))
-    expect(screen.getByText('No cards match this filter yet.')).not.toBeNull()
+    expect(screen.getByText('No markets match this filter yet.')).not.toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'all' }))
     expect(screen.getByText('End of the current feed.')).not.toBeNull()
@@ -729,7 +729,7 @@ describe('App', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByText('No cards match this filter yet.')).not.toBeNull()
+      expect(screen.getByText('No markets match this filter yet.')).not.toBeNull()
     })
     expect(window.localStorage.getItem('lemonsuk.ownerSessionToken')).toBeNull()
 
@@ -886,7 +886,7 @@ describe('App', () => {
     expect(
       within(companyLanes).getByRole('button', { name: /tesla/i }).className,
     ).not.toContain('active')
-    expect(screen.getByText(/Showing 4 of \d+ cards in the filtered archive\./)).not.toBeNull()
+    expect(screen.getByText(/Showing \d+ of \d+ markets in the filtered archive\./)).not.toBeNull()
   })
 
   it('does not open the login modal from scroll alone', async () => {
@@ -925,7 +925,7 @@ describe('App', () => {
 
     expect(await screen.findByText('hero banner')).not.toBeNull()
     expect(
-      await screen.findByText('Showing 5 of 5 cards in the full archive.'),
+      await screen.findByText('Showing 5 of 5 markets in the full archive.'),
     ).not.toBeNull()
   })
 
