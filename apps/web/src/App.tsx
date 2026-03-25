@@ -99,6 +99,7 @@ export default function App({
   )
   const [statusFilters, setStatusFilters] = useState<MarketStatusFilter[]>([])
   const [companyFilters, setCompanyFilters] = useState<ActiveCompanyFilter[]>([])
+  const [companyFilterQuery, setCompanyFilterQuery] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(initialSnapshot === null)
@@ -275,6 +276,21 @@ export default function App({
   const topicMarket =
     snapshot?.markets.find((market) => market.id === topicMarketId) ?? null
   const companyTabs = createCompanyTabs(boardMarkets)
+  const filteredCompanyTabs = companyTabs.filter((entry) => {
+    if (entry.value === 'all') {
+      return true
+    }
+
+    if (companyFilters.includes(entry.value)) {
+      return true
+    }
+
+    if (!companyFilterQuery.trim()) {
+      return true
+    }
+
+    return entry.label.toLowerCase().includes(companyFilterQuery.trim().toLowerCase())
+  })
   const seasonalSurfaces = createSeasonalSurfaces(
     boardMarkets,
     snapshot?.now ?? new Date().toISOString(),
@@ -294,6 +310,14 @@ export default function App({
     statusFilters.length === 0 && companyFilters.length === 0
       ? 'full'
       : 'filtered'
+  const companyFilterSummary =
+    companyFilters.length === 0
+      ? 'All companies'
+      : `${companyFilters.length} active: ${companyFilters
+          .map((company) =>
+            companyTabs.find((entry) => entry.value === company)?.label ?? company,
+          )
+          .join(', ')}`
 
   const openOwnerLogin = useCallback(() => {
     setLoginModalMode('owner')
@@ -576,41 +600,63 @@ export default function App({
                   </section>
 
                   <section
-                    className="company-tab-row"
+                    className="archive-filter-panel"
                     aria-label="Company lanes"
                   >
-                    {companyTabs.map((entry) => (
-                      <button
-                        key={entry.value}
-                        type="button"
-                        className={`filter-button ${
-                          entry.value === 'all'
-                            ? companyFilters.length === 0
-                              ? 'active'
-                              : ''
-                            : companyFilters.includes(entry.value)
-                              ? 'active'
-                              : ''
-                        }`}
-                        onClick={() => {
-                          const nextCompanyFilters = toggleCompanyFilter(
-                            companyFilters,
-                            entry.value,
-                          )
-                          setCompanyFilters(nextCompanyFilters)
-                          setSelectedMarketId(
-                            pickFirstVisibleMarketIdFromSnapshot(
-                              snapshot,
-                              statusFilters,
-                              nextCompanyFilters,
-                            ),
-                          )
-                        }}
-                      >
-                        {entry.label}{' '}
-                        <span className="filter-count">{entry.count}</span>
-                      </button>
-                    ))}
+                    <div className="archive-filter-panel-header">
+                      <div>
+                        <div className="eyebrow">Company filters</div>
+                        <p className="archive-filter-summary">
+                          {companyFilterSummary}
+                        </p>
+                      </div>
+                      <label className="archive-filter-search">
+                        <span>Find company</span>
+                        <input
+                          type="search"
+                          value={companyFilterQuery}
+                          onChange={(event) =>
+                            setCompanyFilterQuery(event.target.value)
+                          }
+                          placeholder="Apple, OpenAI, NVIDIA..."
+                        />
+                      </label>
+                    </div>
+
+                    <div className="company-filter-grid">
+                      {filteredCompanyTabs.map((entry) => (
+                        <button
+                          key={entry.value}
+                          type="button"
+                          className={`filter-button ${
+                            entry.value === 'all'
+                              ? companyFilters.length === 0
+                                ? 'active'
+                                : ''
+                              : companyFilters.includes(entry.value)
+                                ? 'active'
+                                : ''
+                          }`}
+                          onClick={() => {
+                            const nextCompanyFilters = toggleCompanyFilter(
+                              companyFilters,
+                              entry.value,
+                            )
+                            setCompanyFilters(nextCompanyFilters)
+                            setSelectedMarketId(
+                              pickFirstVisibleMarketIdFromSnapshot(
+                                snapshot,
+                                statusFilters,
+                                nextCompanyFilters,
+                              ),
+                            )
+                          }}
+                        >
+                          {entry.label}{' '}
+                          <span className="filter-count">{entry.count}</span>
+                        </button>
+                      ))}
+                    </div>
                   </section>
                 </div>
 

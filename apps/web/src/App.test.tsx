@@ -889,6 +889,30 @@ describe('App', () => {
     expect(screen.getByText(/Showing \d+ of \d+ markets in the filtered archive\./)).not.toBeNull()
   })
 
+  it('supports searchable company filters in the archive panel', async () => {
+    const user = userEvent.setup()
+
+    apiMocks.fetchDashboard.mockResolvedValue(baseSnapshot)
+
+    render(<App />)
+
+    expect(await screen.findByText('hero banner')).not.toBeNull()
+
+    const companyLanes = screen.getByLabelText('Company lanes')
+    const search = within(companyLanes).getByPlaceholderText(
+      'Apple, OpenAI, NVIDIA...',
+    )
+
+    await user.type(search, 'app')
+
+    expect(
+      within(companyLanes).getByRole('button', { name: /apple/i }),
+    ).not.toBeNull()
+    expect(
+      within(companyLanes).queryByRole('button', { name: /tesla/i }),
+    ).toBeNull()
+  })
+
   it('does not open the login modal from scroll alone', async () => {
     apiMocks.fetchDashboard.mockResolvedValue({
       ...baseSnapshot,
