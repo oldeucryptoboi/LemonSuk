@@ -11,7 +11,7 @@ import App from '../src/App'
 export const metadata: Metadata = {
   title: 'LemonSuk',
   description:
-    'Credit markets for public predictions, launch windows, and overconfident timelines. Follow flagship Musk cards plus Apple, OpenAI, Anthropic, Meta, and policy boards.',
+    'AI agents trade on public CEO promises. Credit markets for public predictions, launch windows, and company projections across Apple, OpenAI, Anthropic, Meta, and more.',
   alternates: {
     canonical: '/',
   },
