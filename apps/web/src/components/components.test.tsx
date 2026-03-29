@@ -208,6 +208,78 @@ describe('web components', () => {
           readAt: null,
         },
       ],
+      activity: [
+        {
+          id: 'activity-0',
+          type: 'claim_verified' as const,
+          agent: {
+            id: 'agent-1',
+            handle: 'deadlinebot',
+            displayName: 'Deadline Bot',
+            avatarUrl: 'https://example.com/deadline-bot.png',
+          },
+          title: 'Claim verified',
+          detail: 'Owner verified the claim from X.',
+          href: null,
+          createdAt: '2026-03-16T03:00:00.000Z',
+        },
+        {
+          id: 'activity-placed',
+          type: 'bet_placed' as const,
+          agent: {
+            id: 'agent-1',
+            handle: 'deadlinebot',
+            displayName: 'Deadline Bot',
+            avatarUrl: 'https://example.com/deadline-bot.png',
+          },
+          title: 'Ticket placed',
+          detail: 'Laid 20 CR on Optimus.',
+          href: '/markets/optimus-customizable-2026',
+          createdAt: '2026-03-16T02:30:00.000Z',
+        },
+        {
+          id: 'activity-authored',
+          type: 'market_authored' as const,
+          agent: {
+            id: 'agent-1',
+            handle: 'deadlinebot',
+            displayName: 'Deadline Bot',
+            avatarUrl: 'https://example.com/deadline-bot.png',
+          },
+          title: 'Claim went live',
+          detail: 'Optimus customizable market went live.',
+          href: '/markets/optimus-customizable-2026',
+          createdAt: '2026-03-16T02:15:00.000Z',
+        },
+        {
+          id: 'activity-1',
+          type: 'bet_settled' as const,
+          agent: {
+            id: 'agent-1',
+            handle: 'deadlinebot',
+            displayName: 'Deadline Bot',
+            avatarUrl: 'https://example.com/deadline-bot.png',
+          },
+          title: 'Ticket won',
+          detail: 'Cashed 72.28 CR on FSD reaches coast-to-coast.',
+          href: '/markets/fsd-coast-to-coast-2017',
+          createdAt: '2026-03-16T02:00:00.000Z',
+        },
+        {
+          id: 'activity-2',
+          type: 'discussion_posted' as const,
+          agent: {
+            id: 'agent-1',
+            handle: 'deadlinebot',
+            displayName: 'Deadline Bot',
+            avatarUrl: 'https://example.com/deadline-bot.png',
+          },
+          title: 'Discussion post added',
+          detail: 'FSD reaches coast-to-coast: Evidence stack looks weak.',
+          href: '/markets/fsd-coast-to-coast-2017',
+          createdAt: '2026-03-16T01:00:00.000Z',
+        },
+      ],
     }
 
     const { rerender } = render(
@@ -242,6 +314,26 @@ describe('web components', () => {
     expect(
       screen.getByRole('link', { name: 'Agent instructions' }),
     ).not.toBeNull()
+
+    rerender(
+      <HeroBanner
+        snapshot={{
+          ...heroSnapshot,
+          markets: heroSnapshot.markets.map((market) => ({
+            ...market,
+            status: 'busted',
+          })),
+        }}
+        ownerSession={null}
+        agentInstructionsUrl="https://lemonsuk.com/agent.md"
+        onOpenOwnerModal={onOpenOwnerModal}
+        onOpenClaimModal={onOpenClaimModal}
+        onOwnerLogout={() => {}}
+      />,
+    )
+    expect(screen.getByText('No live markets')).not.toBeNull()
+    expect(screen.getByText(/As of /)).not.toBeNull()
+    expect(screen.queryByText(/#2 in line/i)).toBeNull()
 
     rerender(
       <HeroBanner
@@ -615,6 +707,19 @@ describe('web components', () => {
         /Verified agents top up to the seasonal 100 CR promo floor/,
       ),
     ).not.toBeNull()
+    expect(screen.getByText('Agent activity')).not.toBeNull()
+    expect(screen.getByText('Claim')).not.toBeNull()
+    expect(screen.getByText('Ticket')).not.toBeNull()
+    expect(screen.getByText('Board')).not.toBeNull()
+    expect(screen.getByText('Ticket won')).not.toBeNull()
+    expect(
+      screen.getByText('Cashed 72.28 CR on FSD reaches coast-to-coast.'),
+    ).not.toBeNull()
+    expect(screen.getByText('Settlement')).not.toBeNull()
+    expect(screen.getByText('Owner verified the claim from X.')).not.toBeNull()
+    expect(
+      screen.queryByRole('link', { name: 'Owner verified the claim from X.' }),
+    ).toBeNull()
 
     rerender(
       <OwnerObservatory
@@ -651,6 +756,7 @@ describe('web components', () => {
           ...ownerSession,
           bets: [],
           notifications: [],
+          activity: undefined,
         }}
       />,
     )
@@ -658,6 +764,7 @@ describe('web components', () => {
       screen.getByText('No agent tickets have been written yet.'),
     ).not.toBeNull()
     expect(screen.getByText('No owner alerts yet.')).not.toBeNull()
+    expect(screen.getByText('No linked agent activity yet.')).not.toBeNull()
   })
 
   it('renders the support topic card with fallback and leader bylines', async () => {

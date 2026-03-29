@@ -16,6 +16,7 @@ import { BetSlipPanel } from './components/BetSlipPanel'
 import { ArchiveMarketRow } from './components/ArchiveMarketRow'
 import { HallOfFame } from './components/HallOfFame'
 import { HeroBanner } from './components/HeroBanner'
+import { LiveSystemDashboards } from './components/LiveSystemDashboards'
 import { LoginModal } from './components/LoginModal'
 import { MarketForum } from './components/MarketForum'
 import { NotificationRail } from './components/NotificationRail'
@@ -32,6 +33,7 @@ import {
 import {
   createCompanyTabs,
   createSeasonalSurfaces,
+  companyLabel,
   isBoardMarket,
 } from './lib/markets'
 import {
@@ -314,9 +316,7 @@ export default function App({
     companyFilters.length === 0
       ? 'All companies'
       : `${companyFilters.length} active: ${companyFilters
-          .map((company) =>
-            companyTabs.find((entry) => entry.value === company)?.label ?? company,
-          )
+          .map((company) => companyLabel(company))
           .join(', ')}`
 
   const openOwnerLogin = useCallback(() => {
@@ -419,6 +419,10 @@ export default function App({
           ) : (
             <section className="market-feed-panel">
               <div className="market-feed-scroll">
+                {snapshot ? (
+                  <LiveSystemDashboards snapshot={snapshot} />
+                ) : null}
+
                 {spotlightGroup ? (
                   <section className="board-surface-panel board-surface-panel-spotlight">
                     <div className="section-heading compact">

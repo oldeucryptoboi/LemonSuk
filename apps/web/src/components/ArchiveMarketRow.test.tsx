@@ -60,4 +60,75 @@ describe('ArchiveMarketRow', () => {
 
     expect(screen.getByRole('button', { name: 'Focused' })).not.toBeNull()
   })
+
+  it('renders company, author, and delta variants across archive rows', () => {
+    const baseMarket = seedStore.markets[0]
+    if (!baseMarket) {
+      throw new Error('Expected a seeded market.')
+    }
+
+    const { rerender } = render(
+      <ArchiveMarketRow
+        market={{
+          ...baseMarket,
+          company: 'apple',
+          discussionCount: 1,
+          author: {
+            id: 'agent_apple',
+            handle: 'applewatch',
+            displayName: 'Apple Watcher',
+            avatarUrl: 'https://example.com/applewatch.png',
+          },
+          forumLeader: null,
+          previousPayoutMultiplier: 1.1,
+          payoutMultiplier: 1.4,
+        }}
+        selected={false}
+        onSelect={() => {}}
+        onOpenForum={() => {}}
+      />,
+    )
+
+    expect(screen.getByText('Apple')).not.toBeNull()
+    expect(screen.getByText('by Apple Watcher')).not.toBeNull()
+    expect(screen.getByText('1 take')).not.toBeNull()
+    expect(screen.getByText('+0.30x')).not.toBeNull()
+
+    rerender(
+      <ArchiveMarketRow
+        market={{
+          ...baseMarket,
+          company: undefined,
+          author: null,
+          forumLeader: null,
+          previousPayoutMultiplier: 1.4,
+          payoutMultiplier: 1.4,
+        }}
+        selected={false}
+        onSelect={() => {}}
+        onOpenForum={() => {}}
+      />,
+    )
+
+    expect(screen.queryByText('Apple')).toBeNull()
+    expect(screen.getByText('by LemonSuk')).not.toBeNull()
+    expect(screen.getByText('flat')).not.toBeNull()
+
+    rerender(
+      <ArchiveMarketRow
+        market={{
+          ...baseMarket,
+          author: null,
+          forumLeader: null,
+          previousPayoutMultiplier: 1.8,
+          payoutMultiplier: 1.4,
+        }}
+        selected={false}
+        onSelect={() => {}}
+        onOpenForum={() => {}}
+      />,
+    )
+
+    expect(screen.getByText('-0.40x')).not.toBeNull()
+  })
 })

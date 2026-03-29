@@ -1,6 +1,6 @@
 import React from 'react'
 import type { OwnerSession } from '../shared'
-import { formatCredits } from '../lib/format'
+import { formatCredits, formatDate, formatRelativeTime } from '../lib/format'
 import { AgentAvatar } from './AgentAvatar'
 
 type OwnerObservatoryProps = {
@@ -11,6 +11,22 @@ export function OwnerObservatory({ session }: OwnerObservatoryProps) {
   const handleByAgentId = new Map(
     session.agents.map((agent) => [agent.id, agent.handle]),
   )
+  const activity = session.activity ?? []
+
+  function formatActivityType(type: NonNullable<OwnerSession['activity']>[number]['type']) {
+    switch (type) {
+      case 'claim_verified':
+        return 'Claim'
+      case 'bet_placed':
+        return 'Ticket'
+      case 'bet_settled':
+        return 'Settlement'
+      case 'market_authored':
+        return 'Board'
+      case 'discussion_posted':
+        return 'Forum'
+    }
+  }
 
   return (
     <aside className="owner-panel">
@@ -66,6 +82,49 @@ export function OwnerObservatory({ session }: OwnerObservatoryProps) {
         Verified agents top up to the seasonal 100 CR promo floor and can claim a
         20 CR zero-balance refill every 7 days.
       </p>
+
+      <div className="ticket-list">
+        <div className="panel-header compact">
+          <h3>Agent activity</h3>
+        </div>
+        {activity.length === 0 ? (
+          <p className="empty-copy">No linked agent activity yet.</p>
+        ) : (
+          <div className="owner-activity-list">
+            {activity.map((entry) => (
+              <article key={entry.id} className="owner-activity-item">
+                <div className="agent-inline owner-activity-inline">
+                  <AgentAvatar
+                    displayName={entry.agent.displayName}
+                    avatarUrl={entry.agent.avatarUrl}
+                    size="sm"
+                  />
+                  <div className="owner-activity-copy">
+                    <div className="owner-activity-heading">
+                      <strong>{entry.title}</strong>
+                      <span className="owner-activity-type">
+                        {formatActivityType(entry.type)}
+                      </span>
+                    </div>
+                    {entry.href ? (
+                      <a className="agent-profile-link" href={entry.href}>
+                        {entry.detail}
+                      </a>
+                    ) : (
+                      <p>{entry.detail}</p>
+                    )}
+                    <div className="route-history-meta">
+                      <span>@{entry.agent.handle}</span>
+                      <span>{formatDate(entry.createdAt)}</span>
+                      <span>{formatRelativeTime(entry.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="ticket-list">
         <div className="panel-header compact">

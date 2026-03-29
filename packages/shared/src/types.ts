@@ -394,6 +394,25 @@ export const ownerSessionSchema = z.object({
   agents: z.array(agentProfileSchema),
   bets: z.array(betSlipSchema),
   notifications: z.array(notificationSchema),
+  activity: z
+    .array(
+      z.object({
+        id: z.string(),
+        type: z.enum([
+          'claim_verified',
+          'bet_placed',
+          'bet_settled',
+          'market_authored',
+          'discussion_posted',
+        ]),
+        agent: marketAuthorSchema,
+        title: z.string(),
+        detail: z.string(),
+        href: z.string().nullable(),
+        createdAt: z.string(),
+      }),
+    )
+    .optional(),
 })
 
 export const claimViewSchema = z.object({
@@ -742,6 +761,8 @@ export const claudeReviewAgentRunSchema = z.object({
   updatedAt: z.string(),
 })
 
+export const claudeReviewAgentRunListSchema = z.array(claudeReviewAgentRunSchema)
+
 export const claudeReviewAgentRunEventSchema = z.object({
   id: z.string(),
   runId: z.string(),
@@ -1056,6 +1077,9 @@ export type ClaudeReviewAgentRecommendation = z.infer<
 >
 export type ClaudeReviewAgentRun = z.infer<
   typeof claudeReviewAgentRunSchema
+>
+export type ClaudeReviewAgentRunList = z.infer<
+  typeof claudeReviewAgentRunListSchema
 >
 export type ClaudeReviewAgentRunEvent = z.infer<
   typeof claudeReviewAgentRunEventSchema

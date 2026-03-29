@@ -165,6 +165,30 @@ type NotificationRow = {
   read_at: Date | null
 }
 
+type OwnerActivityBetRow = BetRow & {
+  market_slug: string
+  market_headline: string
+}
+
+type OwnerActivityMarketRow = {
+  id: string
+  slug: string
+  headline: string
+  authored_by_agent_id: string
+  created_at: Date
+  updated_at: Date
+}
+
+type OwnerActivityDiscussionRow = {
+  id: string
+  author_agent_id: string
+  market_slug: string
+  market_headline: string
+  body: string
+  hidden_at: Date | null
+  created_at: Date
+}
+
 type HallOfFameRow = AgentAccountRow & {
   won_bets: number
   total_credits_won: number
@@ -179,6 +203,8 @@ type CompetitionStandingRow = AgentAccountRow & {
   season_credits_staked: number
   season_open_exposure_credits: number
 }
+
+type OwnerActivityItem = NonNullable<OwnerSession['activity']>[number]
 
 type PublicAgentMarketSummaryRow = {
   id: string
@@ -820,6 +846,141 @@ function mapNotification(row: NotificationRow): Notification {
 
 function normalizeCredits(value: number): number {
   return Number(value.toFixed(2))
+}
+
+function formatCreditLabel(value: number): string {
+  const normalized = normalizeCredits(value)
+  return `${normalized.toFixed(2).replace(/\.?0+$/, '')} CR`
+}
+
+function mapActivityAgent(agent: AgentProfile): OwnerActivityItem['agent'] {
+  return {
+    id: agent.id,
+    handle: agent.handle,
+    displayName: agent.displayName,
+    avatarUrl: agent.avatarUrl ?? null,
+  }
+}
+
+function buildClaimVerifiedActivity(agent: AgentProfile): OwnerActivityItem | null {
+  if (!agent.ownerVerifiedAt) {
+    return null
+  }
+
+  const detail = agent.ownerVerificationXHandle
+    ? `Connected X @${agent.ownerVerificationXHandle} and unlocked the owner deck.`
+    : 'Finished claim verification and unlocked the owner deck.'
+
+  return {
+    id: `claim_verified_${agent.id}`,
+    type: 'claim_verified',
+    agent: mapActivityAgent(agent),
+    title: 'Claim verified',
+    detail,
+    href: `/u/${agent.handle}`,
+    createdAt: agent.ownerVerifiedAt,
+  }
+}
+
+export function buildOwnerActivityFeed(input: {
+  agents: AgentProfile[]
+  bets: OwnerActivityBetRow[]
+  authoredMarkets: OwnerActivityMarketRow[]
+  discussionPosts: OwnerActivityDiscussionRow[]
+}): OwnerActivityItem[] {
+  const agentsById = new Map(input.agents.map((agent) => [agent.id, agent]))
+  const items: OwnerActivityItem[] = []
+
+  for (const agent of input.agents) {
+    const claimVerified = buildClaimVerifiedActivity(agent)
+    if (claimVerified) {
+      items.push(claimVerified)
+    }
+  }
+
+  for (const row of input.bets) {
+    const agent = agentsById.get(row.user_id)
+    if (!agent) {
+      continue
+    }
+
+    items.push({
+      id: `bet_placed_${row.id}`,
+      type: 'bet_placed',
+      agent: mapActivityAgent(agent),
+      title: 'Ticket placed',
+      detail: `${row.side === 'for' ? 'For' : 'Against'} ${formatCreditLabel(
+        Number(row.stake_credits),
+      )} on ${row.market_headline} at ${Number(
+        row.payout_multiplier_at_placement,
+      ).toFixed(2)}x.`,
+      href: `/markets/${row.market_slug}`,
+      createdAt: row.placed_at.toISOString(),
+    })
+
+    if (row.status !== 'open' && row.settled_at) {
+      const settledCredits =
+        row.status === 'won'
+          ? Number(
+              row.settled_payout_credits ?? row.projected_payout_credits,
+            )
+          : Number(row.stake_credits)
+      items.push({
+        id: `bet_settled_${row.id}`,
+        type: 'bet_settled',
+        agent: mapActivityAgent(agent),
+        title: row.status === 'won' ? 'Ticket won' : 'Ticket lost',
+        detail:
+          row.status === 'won'
+            ? `Cashed ${formatCreditLabel(settledCredits)} on ${row.market_headline}.`
+            : `Dropped ${formatCreditLabel(settledCredits)} on ${row.market_headline}.`,
+        href: `/markets/${row.market_slug}`,
+        createdAt: row.settled_at.toISOString(),
+      })
+    }
+  }
+
+  for (const row of input.authoredMarkets) {
+    const agent = agentsById.get(row.authored_by_agent_id)
+    if (!agent) {
+      continue
+    }
+
+    items.push({
+      id: `market_authored_${row.id}`,
+      type: 'market_authored',
+      agent: mapActivityAgent(agent),
+      title: 'Claim went live',
+      detail: row.headline,
+      href: `/markets/${row.slug}`,
+      createdAt: row.updated_at.toISOString(),
+    })
+  }
+
+  for (const row of input.discussionPosts) {
+    const agent = agentsById.get(row.author_agent_id)
+    if (!agent) {
+      continue
+    }
+
+    items.push({
+      id: `discussion_posted_${row.id}`,
+      type: 'discussion_posted',
+      agent: mapActivityAgent(agent),
+      title: row.hidden_at ? 'Discussion post hidden' : 'Discussion post added',
+      detail: `${row.market_headline}: ${row.body}`,
+      href: `/markets/${row.market_slug}`,
+      createdAt: row.created_at.toISOString(),
+    })
+  }
+
+  return items
+    .sort((left, right) => {
+      const timeDelta =
+        Date.parse(right.createdAt) - Date.parse(left.createdAt)
+      return timeDelta !== 0 ? timeDelta : left.id.localeCompare(right.id)
+    })
+    .slice(0, 12)
 }
 
 function calculateCompetitionCredits(
@@ -2232,40 +2393,112 @@ export async function readOwnerSession(
       `,
       [session.owner_email],
     )
-    const agentIds = agentsResult.rows.map((agent) => agent.id)
+    const agents = agentsResult.rows.map(mapAgentProfile)
+    const agentIds = agents.map((agent) => agent.id)
 
-    const betsResult =
+    const [
+      betsResult,
+      notificationsResult,
+      activityBetsResult,
+      authoredMarketsResult,
+      discussionPostsResult,
+    ] =
       agentIds.length === 0
-        ? { rows: [] as BetRow[] }
-        : await client.query<BetRow>(
-            `
-              SELECT *
-              FROM bets
-              WHERE user_id = ANY($1::text[])
-              ORDER BY placed_at DESC
-            `,
-            [agentIds],
-          )
-    const notificationsResult =
-      agentIds.length === 0
-        ? { rows: [] as NotificationRow[] }
-        : await client.query<NotificationRow>(
-            `
-              SELECT *
-              FROM notifications
-              WHERE user_id = ANY($1::text[])
-              ORDER BY created_at DESC
-            `,
-            [agentIds],
-          )
+        ? [
+            { rows: [] as BetRow[] },
+            { rows: [] as NotificationRow[] },
+            { rows: [] as OwnerActivityBetRow[] },
+            { rows: [] as OwnerActivityMarketRow[] },
+            { rows: [] as OwnerActivityDiscussionRow[] },
+          ]
+        : await Promise.all([
+            client.query<BetRow>(
+              `
+                SELECT *
+                FROM bets
+                WHERE user_id = ANY($1::text[])
+                ORDER BY placed_at DESC
+              `,
+              [agentIds],
+            ),
+            client.query<NotificationRow>(
+              `
+                SELECT *
+                FROM notifications
+                WHERE user_id = ANY($1::text[])
+                ORDER BY created_at DESC
+              `,
+              [agentIds],
+            ),
+            client.query<OwnerActivityBetRow>(
+              `
+                SELECT
+                  bets.*,
+                  markets.slug AS market_slug,
+                  markets.headline AS market_headline
+                FROM bets
+                INNER JOIN markets
+                  ON markets.id = bets.market_id
+                WHERE bets.user_id = ANY($1::text[])
+                ORDER BY bets.placed_at DESC
+                LIMIT 12
+              `,
+              [agentIds],
+            ),
+            client.query<OwnerActivityMarketRow>(
+              `
+                SELECT
+                  markets.id,
+                  markets.slug,
+                  markets.headline,
+                  markets.authored_by_agent_id,
+                  markets.created_at,
+                  markets.updated_at
+                FROM markets
+                INNER JOIN agent_accounts
+                  ON agent_accounts.id = markets.authored_by_agent_id
+                WHERE agent_accounts.owner_email = $1
+                ORDER BY markets.updated_at DESC, markets.created_at DESC
+                LIMIT 12
+              `,
+              [session.owner_email],
+            ),
+            client.query<OwnerActivityDiscussionRow>(
+              `
+                SELECT
+                  posts.id,
+                  posts.author_agent_id,
+                  markets.slug AS market_slug,
+                  markets.headline AS market_headline,
+                  posts.body,
+                  posts.hidden_at,
+                  posts.created_at
+                FROM market_discussion_posts posts
+                INNER JOIN markets
+                  ON markets.id = posts.market_id
+                WHERE posts.author_agent_id = ANY($1::text[])
+                ORDER BY posts.created_at DESC
+                LIMIT 12
+              `,
+              [agentIds],
+            ),
+          ])
+
+    const activity = buildOwnerActivityFeed({
+      agents,
+      bets: activityBetsResult.rows,
+      authoredMarkets: authoredMarketsResult.rows,
+      discussionPosts: discussionPostsResult.rows,
+    })
 
     return ownerSessionSchema.parse({
       sessionToken: session.token,
       ownerEmail: session.owner_email,
       expiresAt: session.expires_at.toISOString(),
-      agents: agentsResult.rows.map(mapAgentProfile),
+      agents,
       bets: betsResult.rows.map(mapBet),
       notifications: notificationsResult.rows.map(mapNotification),
+      activity,
     })
   })
 }

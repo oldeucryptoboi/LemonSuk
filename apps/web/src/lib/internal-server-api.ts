@@ -1,12 +1,14 @@
 import { timingSafeEqual } from 'node:crypto'
 
 import {
+  claudeReviewAgentRunListSchema,
   internalPredictionLeadDetailSchema,
   internalPredictionLeadSchema,
   internalPredictionSubmissionReviewResultInputSchema,
   internalPredictionSubmissionStatusInputSchema,
   predictionLeadQueueSchema,
   predictionReviewResultSchema,
+  type ClaudeReviewAgentRunList,
   type PredictionLead,
   type InternalPredictionLead,
   type InternalPredictionLeadDetail,
@@ -144,6 +146,18 @@ export async function fetchInternalLeadInspectionServer(
 ): Promise<InternalPredictionLeadDetail> {
   return requestInternal(`/internal/leads/${leadId}/inspect`, (payload) =>
     internalPredictionLeadDetailSchema.parse(payload),
+  )
+}
+
+export async function fetchInternalClaudeReviewRunsServer(
+  limit: number = 8,
+): Promise<ClaudeReviewAgentRunList> {
+  const params = new URLSearchParams()
+  params.set('limit', String(limit))
+
+  return requestInternal(
+    `/internal/claude-review-agent/runs?${params.toString()}`,
+    (payload) => claudeReviewAgentRunListSchema.parse(payload),
   )
 }
 

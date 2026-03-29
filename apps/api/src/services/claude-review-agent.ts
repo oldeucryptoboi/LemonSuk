@@ -385,6 +385,24 @@ export async function appendClaudeReviewAgentRunEvent(
   })
 }
 
+export async function readRecentClaudeReviewAgentRuns(
+  limit: number = 8,
+): Promise<ClaudeReviewAgentRun[]> {
+  return withDatabaseTransaction(async (client) => {
+    const result = await client.query<ClaudeRunnerRunRow>(
+      `
+        SELECT *
+        FROM claude_runner_runs
+        ORDER BY started_at DESC, created_at DESC
+        LIMIT $1
+      `,
+      [limit],
+    )
+
+    return result.rows.map(mapClaudeRunnerRun)
+  })
+}
+
 export async function completeClaudeReviewAgentRun(
   runId: string,
   input: ClaudeReviewAgentCompleteRunInput,

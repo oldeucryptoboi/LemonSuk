@@ -181,6 +181,92 @@ describe('claude review agent service', () => {
     await context.pool.end()
   })
 
+  it('lists recent Claude review runs in descending started-at order', async () => {
+    const context = await setupApiContext()
+    const claudeReview = await import('./claude-review-agent')
+
+    const olderLead = await enqueueLead(
+      context,
+      'claude_review_recent_alpha',
+      'https://example.com/recent-alpha-source',
+    )
+    const newerLead = await enqueueLead(
+      context,
+      'claude_review_recent_beta',
+      'https://example.com/recent-beta-source',
+    )
+
+    await context.pool.query(
+      `
+        INSERT INTO claude_runner_runs (
+          id,
+          agent_key,
+          lead_id,
+          status,
+          trigger,
+          workspace_cwd,
+          prompt_summary,
+          cost_usd,
+          started_at,
+          completed_at,
+          created_at,
+          updated_at
+        )
+        VALUES
+          (
+            'claude_run_recent_older',
+            'review-default',
+            $1,
+            'completed',
+            'scheduled',
+            '/tmp/review-default',
+            'Inspect older lead.',
+            0.010000,
+            '2026-03-20T12:00:00.000Z',
+            '2026-03-20T12:01:00.000Z',
+            '2026-03-20T12:00:00.000Z',
+            '2026-03-20T12:01:00.000Z'
+          ),
+          (
+            'claude_run_recent_newer',
+            'review-default',
+            $2,
+            'failed',
+            'manual',
+            '/tmp/review-default',
+            'Inspect newer lead.',
+            0.020000,
+            '2026-03-21T12:00:00.000Z',
+            '2026-03-21T12:02:00.000Z',
+            '2026-03-21T12:00:00.000Z',
+            '2026-03-21T12:02:00.000Z'
+          )
+      `,
+      [olderLead.leadId, newerLead.leadId],
+    )
+
+    await expect(claudeReview.readRecentClaudeReviewAgentRuns(1)).resolves.toEqual([
+      expect.objectContaining({
+        id: 'claude_run_recent_newer',
+        leadId: newerLead.leadId,
+        status: 'failed',
+      }),
+    ])
+
+    await expect(claudeReview.readRecentClaudeReviewAgentRuns(2)).resolves.toEqual([
+      expect.objectContaining({
+        id: 'claude_run_recent_newer',
+        promptSummary: 'Inspect newer lead.',
+      }),
+      expect.objectContaining({
+        id: 'claude_run_recent_older',
+        promptSummary: 'Inspect older lead.',
+      }),
+    ])
+
+    await context.pool.end()
+  })
+
   it('claims the oldest eligible pending lead and creates a running run', async () => {
     const context = await setupApiContext()
     const claudeReview = await import('./claude-review-agent')

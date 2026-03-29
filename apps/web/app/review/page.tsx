@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 
 import { RouteFrame } from '../../src/components/RouteFrame'
 import {
+  fetchInternalClaudeReviewRunsServer,
   fetchInternalLeadInspectionServer,
   fetchInternalLeadQueueServer,
   isReviewConsoleAvailable,
@@ -12,6 +13,9 @@ import {
   buildReviewConsoleHref,
   readReviewConsoleState,
 } from '../../src/lib/review-console'
+import {
+  formatDate,
+} from '../../src/lib/format'
 import { applyLeadReviewAction, applyLeadStatusAction } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -23,6 +27,15 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+}
+
+function formatUsd(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(value)
 }
 
 export default async function ReviewPage({
@@ -89,6 +102,7 @@ export default async function ReviewPage({
     entitySlug: state.entitySlug,
     sourceDomain: state.sourceDomain,
   })
+  const recentClaudeRuns = await fetchInternalClaudeReviewRunsServer(8)
   const activeLeadId = state.leadId ?? queue.items[0]?.id ?? null
   const detail = activeLeadId
     ? await fetchInternalLeadInspectionServer(activeLeadId)
@@ -486,6 +500,55 @@ export default async function ReviewPage({
             </section>
           )}
         </div>
+      </section>
+
+      <section className="route-section">
+        <article className="review-detail-card">
+          <div className="section-heading compact">
+            <div>
+              <div className="eyebrow">Review runtime</div>
+              <h2>Claude review runs</h2>
+            </div>
+            <span className="route-note">
+              {recentClaudeRuns.length} recent run
+              {recentClaudeRuns.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          {recentClaudeRuns.length > 0 ? (
+            <ul className="route-history-list">
+              {recentClaudeRuns.map((run) => {
+                const href = buildReviewConsoleHref({
+                  ...state,
+                  leadId: run.leadId,
+                })
+
+                return (
+                  <li key={run.id} className="route-history-item">
+                    <div>
+                      <strong>{run.promptSummary}</strong>
+                      <p>
+                        {run.recommendation
+                          ? `${run.recommendation.verdict} · ${run.recommendation.summary}`
+                          : run.errorMessage ??
+                            run.finalSummary ??
+                            'Run is still in progress.'}
+                      </p>
+                    </div>
+                    <div className="route-history-meta">
+                      <span>{run.status}</span>
+                      <span>{run.agentKey}</span>
+                      <span>{formatUsd(run.costUsd)}</span>
+                      <span>{formatDate(run.startedAt)}</span>
+                      <a href={href}>Open lead</a>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="empty-copy">No Claude review runs recorded yet.</p>
+          )}
+        </article>
       </section>
     </RouteFrame>
   )

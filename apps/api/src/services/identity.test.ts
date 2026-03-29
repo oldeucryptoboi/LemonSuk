@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { placeAgainstBetForUser } from './betting'
+import { buildOwnerActivityFeed } from './identity'
 import { setupApiContext } from '../../../../test/helpers/api-context'
 import { solveCaptchaPrompt as solveCaptcha } from '../../../../test/helpers/captcha'
 
@@ -2274,6 +2275,332 @@ describe('identity service', () => {
     )
 
     await context.pool.end()
+  })
+
+  it('builds a chronological owner activity feed across claim, board, forum, and ticket events', async () => {
+    enableXPostVerification()
+    const context = await setupApiContext()
+    const challenge = await context.identity.createCaptchaChallenge()
+    const registration = await context.identity.registerAgent(
+      registrationInput(challenge.id, 'timeline_bot', challenge.prompt),
+    )
+    const claimToken = registration.agent.claimUrl.replace('/?claim=', '')
+    const claimView = await context.identity.claimOwnerByClaimToken(
+      claimToken,
+      'owner@example.com',
+    )
+
+    await verifyClaimEmail(context, claimToken)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        createTweetLookupResponse({
+          tweetId: 'tweet_timeline',
+          authorId: 'x-user-timeline',
+          username: 'timeline_owner',
+          text: `Claiming @timeline_bot on LemonSuk. Human verification code: ${claimView.agent.ownerVerificationCode}`,
+        }),
+      ),
+    )
+    await connectClaimX(
+      context,
+      registration.agent.id,
+      'timeline_owner',
+      'x-user-timeline',
+    )
+    await context.identity.verifyOwnerByClaimTweet(claimToken, {
+      tweetUrl: 'https://x.com/timeline_owner/status/12345',
+    })
+    await context.pool.query(
+      `
+        UPDATE agent_accounts
+        SET owner_verified_at = '2026-03-16T00:00:00.000Z'
+        WHERE id = $1
+      `,
+      [registration.agent.id],
+    )
+    await context.pool.query(
+      `
+        UPDATE markets
+        SET authored_by_agent_id = $1,
+            updated_at = '2026-03-18T00:00:00.000Z'
+        WHERE id = 'cybercab-volume-2026'
+      `,
+      [registration.agent.id],
+    )
+    await context.pool.query(
+      `
+        INSERT INTO market_discussion_posts (
+          id,
+          market_id,
+          parent_id,
+          author_agent_id,
+          author_handle,
+          author_display_name,
+          author_model_provider,
+          body,
+          created_at,
+          updated_at,
+          hidden_at
+        )
+        VALUES (
+          'post_timeline',
+          'cybercab-volume-2026',
+          NULL,
+          $1,
+          'timeline_bot',
+          'Agent timeline_bot',
+          'OpenAI',
+          'Quarter-end delivery evidence should tighten this line.',
+          '2026-03-19T00:00:00.000Z',
+          '2026-03-19T00:00:00.000Z',
+          NULL
+        )
+      `,
+      [registration.agent.id],
+    )
+
+    await context.store.withStoreTransaction(async (store, persist) => {
+      const placed = placeAgainstBetForUser(
+        store,
+        registration.agent.id,
+        'optimus-customizable-2026',
+        20,
+        new Date('2026-03-17T00:00:00.000Z'),
+      )
+      await persist(placed.store)
+    })
+    await context.maintenance.loadMaintainedStore(
+      new Date('2027-01-05T00:00:00.000Z'),
+    )
+    await context.pool.query(
+      `
+        UPDATE markets
+        SET authored_by_agent_id = $1,
+            updated_at = '2026-03-18T00:00:00.000Z'
+        WHERE id = 'cybercab-volume-2026'
+      `,
+      [registration.agent.id],
+    )
+    const authoredMarketCheck = await context.pool.query<{
+      authored_by_agent_id: string | null
+    }>(
+      `
+        SELECT authored_by_agent_id
+        FROM markets
+        WHERE id = 'cybercab-volume-2026'
+      `,
+    )
+    expect(authoredMarketCheck.rows[0]?.authored_by_agent_id).toBe(
+      registration.agent.id,
+    )
+
+    const ownerLogin = await context.identity.createOwnerLoginLink(
+      'owner@example.com',
+    )
+    const ownerSession = await context.identity.readOwnerSession(
+      ownerLogin.sessionToken,
+    )
+
+    expect(ownerSession?.activity).toEqual([
+      expect.objectContaining({
+        type: 'bet_settled',
+        title: 'Ticket won',
+        href: '/markets/optimus-customizable-2026',
+      }),
+      expect.objectContaining({
+        type: 'discussion_posted',
+        title: 'Discussion post added',
+        href: '/markets/cybercab-volume-2026',
+      }),
+      expect.objectContaining({
+        type: 'market_authored',
+        title: 'Claim went live',
+        detail: 'Cybercab volume production starts during 2026',
+        href: '/markets/cybercab-volume-2026',
+      }),
+      expect.objectContaining({
+        type: 'bet_placed',
+        title: 'Ticket placed',
+        href: '/markets/optimus-customizable-2026',
+      }),
+      expect.objectContaining({
+        type: 'claim_verified',
+        title: 'Claim verified',
+        href: '/u/timeline_bot',
+      }),
+    ])
+    expect(ownerSession?.activity?.[0]).toMatchObject({
+      agent: {
+        handle: 'timeline_bot',
+      },
+    })
+
+    vi.unstubAllGlobals()
+    await context.pool.end()
+  })
+
+  it('skips authored-market and discussion rows whose agents are missing from the owner session', () => {
+    const activity = buildOwnerActivityFeed({
+      agents: [
+        {
+          id: 'agent_1',
+          handle: 'timeline_bot',
+          displayName: 'Timeline Bot',
+          avatarUrl: null,
+          ownerName: 'Human Owner',
+          ownerEmail: 'owner@example.com',
+          ownerVerifiedAt: '2026-03-16T00:00:00.000Z',
+          ownerVerificationStatus: 'verified',
+          ownerVerificationCode: 'counter-oracle-60',
+          ownerVerificationXHandle: 'timeline_owner',
+          ownerVerificationXUserId: 'x-user-timeline',
+          ownerVerificationXConnectedAt: '2026-03-16T00:00:00.000Z',
+          ownerVerificationTweetUrl: 'https://x.com/timeline_owner/status/12345',
+          modelProvider: 'OpenAI',
+          biography: 'Tracks deadlines and authors markets.',
+          claimUrl: 'https://lemonsuk.test/?claim=claim_1',
+          challengeUrl: 'https://lemonsuk.test/challenge/claim_1',
+          createdAt: '2026-03-15T00:00:00.000Z',
+          promoCredits: 100,
+          earnedCredits: 0,
+          availableCredits: 100,
+        },
+        {
+          id: 'agent_2',
+          handle: 'unverified_bot',
+          displayName: 'Unverified Bot',
+          avatarUrl: null,
+          ownerName: 'Human Owner',
+          ownerEmail: 'owner@example.com',
+          ownerVerifiedAt: null,
+          ownerVerificationStatus: 'pending_email',
+          ownerVerificationCode: 'other-code',
+          ownerVerificationXHandle: null,
+          ownerVerificationXUserId: null,
+          ownerVerificationXConnectedAt: null,
+          ownerVerificationTweetUrl: null,
+          modelProvider: 'OpenAI',
+          biography: 'Should not emit a claim verification event.',
+          claimUrl: 'https://lemonsuk.test/?claim=claim_2',
+          challengeUrl: 'https://lemonsuk.test/challenge/claim_2',
+          createdAt: '2026-03-15T01:00:00.000Z',
+        },
+        {
+          id: 'agent_3',
+          handle: 'email_only_bot',
+          displayName: 'Email Only Bot',
+          avatarUrl: null,
+          ownerName: 'Human Owner',
+          ownerEmail: 'owner@example.com',
+          ownerVerifiedAt: '2026-03-16T01:00:00.000Z',
+          ownerVerificationStatus: 'verified',
+          ownerVerificationCode: 'third-code',
+          ownerVerificationXHandle: null,
+          ownerVerificationXUserId: null,
+          ownerVerificationXConnectedAt: null,
+          ownerVerificationTweetUrl: null,
+          modelProvider: 'OpenAI',
+          biography: 'Verified without an X handle in the persisted profile.',
+          claimUrl: 'https://lemonsuk.test/?claim=claim_3',
+          challengeUrl: 'https://lemonsuk.test/challenge/claim_3',
+          createdAt: '2026-03-15T02:00:00.000Z',
+          promoCredits: 100,
+          earnedCredits: 0,
+          availableCredits: 100,
+        },
+      ],
+      bets: [
+        {
+          id: 'bet_won_projected',
+          user_id: 'agent_1',
+          market_id: 'market_live',
+          side: 'against',
+          stake_credits: 10,
+          status: 'won',
+          payout_multiplier_at_placement: 2.125,
+          global_bonus_percent_at_placement: 0,
+          projected_payout_credits: 21.25,
+          settled_payout_credits: null,
+          placed_at: new Date('2026-03-16T01:00:00.000Z'),
+          settled_at: new Date('2026-03-16T01:30:00.000Z'),
+          market_slug: 'live-market',
+          market_headline: 'Live market',
+        },
+        {
+          id: 'bet_missing_agent',
+          user_id: 'agent_missing',
+          market_id: 'market_ignored',
+          side: 'against',
+          stake_credits: 10,
+          status: 'open',
+          payout_multiplier_at_placement: 1.7,
+          global_bonus_percent_at_placement: 0,
+          projected_payout_credits: 17,
+          settled_payout_credits: null,
+          placed_at: new Date('2026-03-16T02:00:00.000Z'),
+          settled_at: null,
+          market_slug: 'ignored-market',
+          market_headline: 'Ignored bet',
+        },
+      ],
+      authoredMarkets: [
+        {
+          id: 'market_ignored',
+          slug: 'ignored-market',
+          headline: 'Ignored authored market',
+          authored_by_agent_id: 'agent_missing',
+          created_at: new Date('2026-03-16T00:00:00.000Z'),
+          updated_at: new Date('2026-03-16T00:00:00.000Z'),
+        },
+      ],
+      discussionPosts: [
+        {
+          id: 'post_hidden',
+          author_agent_id: 'agent_1',
+          market_slug: 'live-market',
+          market_headline: 'Live market',
+          body: 'This post was hidden after moderation.',
+          hidden_at: new Date('2026-03-16T03:00:00.000Z'),
+          created_at: new Date('2026-03-16T02:45:00.000Z'),
+        },
+        {
+          id: 'post_ignored',
+          author_agent_id: 'agent_missing',
+          market_slug: 'ignored-market',
+          market_headline: 'Ignored discussion',
+          body: 'This should never render into the owner timeline.',
+          hidden_at: null,
+          created_at: new Date('2026-03-16T00:00:00.000Z'),
+        },
+      ],
+    })
+
+    expect(activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'bet_settled',
+          title: 'Ticket won',
+          detail: 'Cashed 21.25 CR on Live market.',
+        }),
+        expect.objectContaining({
+          type: 'claim_verified',
+          href: '/u/timeline_bot',
+          detail: 'Connected X @timeline_owner and unlocked the owner deck.',
+        }),
+        expect.objectContaining({
+          type: 'claim_verified',
+          href: '/u/email_only_bot',
+          detail: 'Finished claim verification and unlocked the owner deck.',
+        }),
+        expect.objectContaining({
+          type: 'discussion_posted',
+          title: 'Discussion post hidden',
+          detail: 'Live market: This post was hidden after moderation.',
+        }),
+      ]),
+    )
+    expect(activity).toHaveLength(5)
   })
 
   it('breaks season standings ties by roi, resolved volume, stake volume, then reputation fallbacks', async () => {

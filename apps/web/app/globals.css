@@ -909,6 +909,20 @@ input {
   gap: 8px;
 }
 
+.route-detail-bullet-list {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: rgba(247, 236, 215, 0.84);
+  line-height: 1.5;
+}
+
+.route-compact-grid {
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
 .route-history-list {
   list-style: none;
   margin: 12px 0 0;
@@ -943,6 +957,15 @@ input {
   gap: 10px;
   color: rgba(247, 236, 215, 0.68);
   font-size: 0.86rem;
+}
+
+.route-history-meta a {
+  color: rgba(246, 200, 107, 0.88);
+  text-decoration: none;
+}
+
+.route-history-meta a:hover {
+  text-decoration: underline;
 }
 
 .agent-profile-card,
@@ -1317,6 +1340,52 @@ input {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.live-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.live-dashboard-card {
+  align-content: start;
+}
+
+.live-pulse-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.live-pulse-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(246, 200, 107, 0.12);
+  background: rgba(7, 17, 13, 0.74);
+}
+
+.live-pulse-label,
+.live-pulse-detail {
+  color: rgba(247, 236, 215, 0.7);
+}
+
+.live-pulse-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.live-pulse-value {
+  font-size: 1.52rem;
+  letter-spacing: 0.04em;
+}
+
+.live-pulse-detail {
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .surface-card {
@@ -1901,6 +1970,57 @@ input {
 
 .ticket-list {
   margin-top: 20px;
+}
+
+.owner-activity-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.owner-activity-item {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(4, 18, 14, 0.82);
+  border: 1px solid rgba(246, 200, 107, 0.16);
+}
+
+.owner-activity-inline {
+  align-items: start;
+}
+
+.owner-activity-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.owner-activity-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.owner-activity-heading strong {
+  margin: 0;
+}
+
+.owner-activity-type {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(246, 200, 107, 0.12);
+  color: rgba(246, 200, 107, 0.88);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.owner-activity-copy p {
+  margin: 0;
+  color: rgba(247, 236, 215, 0.8);
+  line-height: 1.5;
 }
 
 .ticket-row {
@@ -2555,6 +2675,8 @@ input {
   .season-surface-grid,
   .forum-insight-grid,
   .surface-card-grid,
+  .live-dashboard-grid,
+  .live-pulse-grid,
   .claim-detail-grid,
   .claim-entry-grid,
   .claim-identity-grid,

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
       summary: 'OpenAI ships GPT-5 within the summer 2026 window.',
       promisedBy: 'Sam Altman',
       promisedDate: '2026-08-31T23:59:59.000Z',
+      updatedAt: '2026-03-16T12:00:00.000Z',
       status: 'open',
       resolution: 'deadline',
       payoutMultiplier: 1.8,
@@ -29,6 +30,26 @@ const mocks = vi.hoisted(() => ({
       settlementGraceHours: 24,
       autoResolveAt: '2026-09-01T23:59:59.000Z',
       settlementState: 'grace',
+      evidenceUpdates: [
+        {
+          id: 'evidence_1',
+          title: 'Bloomberg follow-up',
+          detail: 'Explicit summer launch language from the company briefing.',
+          publishedAt: '2026-03-16T08:00:00.000Z',
+          url: 'https://example.com/gpt5',
+        },
+        {
+          id: 'evidence_2',
+          title: 'Operator note',
+          detail: 'LemonSuk logged an internal evidence note without an external link.',
+          publishedAt: '2026-03-16T09:00:00.000Z',
+          url: null,
+        },
+      ],
+      oddsCommentary: [
+        'Open tickets are stacking up with 120 CR staked, trimming the premium left in the book.',
+        'House exposure is near the cap on this AI launch market, so the book is tightening and may suspend new tickets.',
+      ],
       lineHistory: [
         {
           id: 'line_1',
@@ -119,9 +140,20 @@ describe('MarketDetailPage', () => {
     ).not.toBeNull()
     expect(screen.getByText('Betting paused.')).not.toBeNull()
     expect(screen.getByText('Current liability is at the market exposure cap.')).not.toBeNull()
-    expect(screen.getByText('Line history')).not.toBeNull()
+    expect(screen.getByText('Evidence trail')).not.toBeNull()
+    expect(screen.getByText('Why the line sits here')).not.toBeNull()
+    expect(screen.getByText('Settlement trail')).not.toBeNull()
+    expect(
+      screen.getByText('Explicit summer launch language from the company briefing.'),
+    ).not.toBeNull()
+    expect(screen.getByText('LemonSuk note')).not.toBeNull()
+    expect(
+      screen.getByText(
+        'Open tickets are stacking up with 120 CR staked, trimming the premium left in the book.',
+      ),
+    ).not.toBeNull()
     expect(screen.getByText('Open tickets compressed the line.')).not.toBeNull()
-    expect(screen.getByText('Book limits')).not.toBeNull()
+    expect(screen.getByText('Auto-resolve watch')).not.toBeNull()
   })
 
   it('falls back to unclassified labels and awaiting-operator copy when family and entity are missing', async () => {
@@ -133,6 +165,7 @@ describe('MarketDetailPage', () => {
         summary: 'Fallback rendering coverage.',
         promisedBy: 'Unknown source',
         promisedDate: '2026-06-30T23:59:59.000Z',
+        updatedAt: '2026-06-30T23:59:59.000Z',
         status: 'open',
         resolution: 'deadline',
         payoutMultiplier: 1.2,
@@ -154,7 +187,10 @@ describe('MarketDetailPage', () => {
 
     expect(screen.getByText('Unclassified')).not.toBeNull()
     expect(screen.getAllByText('Unknown source').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('No evidence trail yet.')).not.toBeNull()
     expect(screen.getByText('No line history yet.')).not.toBeNull()
+    expect(screen.getByText('No linked boards yet.')).not.toBeNull()
+    expect(screen.getByText('No related markets yet.')).not.toBeNull()
     expect(
       screen.getByText(
         'The grace window has passed and the market is waiting for final operator handling.',
@@ -171,8 +207,10 @@ describe('MarketDetailPage', () => {
         summary: 'Settlement coverage.',
         promisedBy: 'Resolved source',
         promisedDate: '2026-06-30T23:59:59.000Z',
+        updatedAt: '2026-07-01T00:00:00.000Z',
         status: 'resolved',
         resolution: 'delivered',
+        resolutionNotes: 'Shipped inside the promised window.',
         payoutMultiplier: 1.05,
         confidence: 94,
         settlementState: 'settled',
@@ -193,6 +231,45 @@ describe('MarketDetailPage', () => {
     expect(
       screen.getByText('This market is settled and no longer reprices.'),
     ).not.toBeNull()
+    expect(screen.getByText('Resolution update')).not.toBeNull()
+    expect(screen.getByText('Shipped inside the promised window.')).not.toBeNull()
+  })
+
+  it('labels missed resolution notes as deadline settlement updates', async () => {
+    mocks.fetchBoardMarketDetailServer.mockResolvedValueOnce({
+      market: {
+        id: 'market_5',
+        slug: 'missed-claim',
+        headline: 'Missed claim',
+        summary: 'Missed settlement coverage.',
+        promisedBy: 'Missed source',
+        promisedDate: '2026-06-30T23:59:59.000Z',
+        updatedAt: '2026-07-02T00:00:00.000Z',
+        bustedAt: '2026-07-01T00:00:00.000Z',
+        status: 'busted',
+        resolution: 'missed',
+        resolutionNotes: 'The promised delivery window passed without shipping.',
+        payoutMultiplier: 1.85,
+        confidence: 77,
+        settlementState: 'settled',
+        sources: [],
+      },
+      family: null as MarketDetail['family'],
+      primaryEntity: null as MarketDetail['primaryEntity'],
+      eventGroups: [],
+      relatedMarkets: [],
+    } as unknown as MarketDetail)
+
+    render(
+      await MarketDetailPage({
+        params: Promise.resolve({ slug: 'missed-claim' }),
+      }),
+    )
+
+    expect(screen.getByText('Deadline settlement')).not.toBeNull()
+    expect(
+      screen.getByText('The promised delivery window passed without shipping.'),
+    ).not.toBeNull()
   })
 
   it('renders live settlement-watch copy for active markets', async () => {
@@ -204,6 +281,7 @@ describe('MarketDetailPage', () => {
         summary: 'Still repricing.',
         promisedBy: 'Live source',
         promisedDate: '2026-09-30T23:59:59.000Z',
+        updatedAt: '2026-03-16T00:00:00.000Z',
         status: 'open',
         resolution: 'pending',
         payoutMultiplier: 1.44,
@@ -228,5 +306,6 @@ describe('MarketDetailPage', () => {
         'The market is still live and reprices as liability, deadline pressure, and linked misses change.',
       ),
     ).not.toBeNull()
+    expect(screen.getByText('Still live')).not.toBeNull()
   })
 })

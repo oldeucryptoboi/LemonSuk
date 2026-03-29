@@ -16,6 +16,7 @@ import {
   claimNextPredictionLeadForClaudeReviewAgent,
   completeClaudeReviewAgentRun,
   failClaudeReviewAgentRun,
+  readRecentClaudeReviewAgentRuns,
 } from '../services/claude-review-agent'
 import {
   applyPredictionLeadReviewResultForInternal,
@@ -123,6 +124,19 @@ export function createInternalRouter(): Router {
     asyncHandler(async (request, response) => {
       const body = claudeReviewAgentClaimNextInputSchema.parse(request.body)
       response.json(await claimNextPredictionLeadForClaudeReviewAgent(body))
+    }),
+  )
+
+  router.get(
+    '/internal/claude-review-agent/runs',
+    asyncHandler(async (request, response) => {
+      const query = z
+        .object({
+          limit: z.coerce.number().int().min(1).max(50).optional(),
+        })
+        .parse(request.query)
+
+      response.json(await readRecentClaudeReviewAgentRuns(query.limit ?? 8))
     }),
   )
 

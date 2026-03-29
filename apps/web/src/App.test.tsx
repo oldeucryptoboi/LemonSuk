@@ -82,6 +82,10 @@ vi.mock('./components/HeroBanner', () => ({
   ),
 }))
 
+vi.mock('./components/LiveSystemDashboards', () => ({
+  LiveSystemDashboards: () => <div>live dashboards</div>,
+}))
+
 vi.mock('./components/LoginModal', () => ({
   LoginModal: ({
     open,
@@ -229,6 +233,7 @@ describe('App', () => {
 
     expect(screen.queryByText('Loading the board…')).toBeNull()
     expect(screen.getByText('hero banner')).not.toBeNull()
+    expect(screen.getByText('live dashboards')).not.toBeNull()
     expect(apiMocks.fetchDashboard).not.toHaveBeenCalled()
     expect(screen.getByRole('link', { name: 'Board' }).getAttribute('href')).toBe(
       '/#board-surface-top',

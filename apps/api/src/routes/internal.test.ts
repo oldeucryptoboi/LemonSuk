@@ -167,6 +167,17 @@ describe('createInternalRouter', () => {
         recentReviewResults: [],
       },
     }))
+    const readRecentClaudeReviewAgentRuns = vi.fn(async (limit: number) => [
+      {
+        ...buildClaudeRun('claude_run_1'),
+        status: 'completed',
+        finalSummary: 'Completed review.',
+        completedAt: '2026-03-21T00:01:00.000Z',
+        updatedAt: '2026-03-21T00:01:00.000Z',
+        costUsd: 0.01,
+        recommendation: buildClaudeRecommendation(),
+      },
+    ])
     const appendClaudeReviewAgentRunEvent = vi.fn(async () => ({
       id: 'claude_event_1',
       runId: 'claude_run_1',
@@ -221,6 +232,7 @@ describe('createInternalRouter', () => {
     }))
     vi.doMock('../services/claude-review-agent', () => ({
       claimNextPredictionLeadForClaudeReviewAgent,
+      readRecentClaudeReviewAgentRuns,
       appendClaudeReviewAgentRunEvent,
       completeClaudeReviewAgentRun,
       failClaudeReviewAgentRun,
@@ -350,6 +362,15 @@ describe('createInternalRouter', () => {
     expect(
       (
         await request(app)
+          .get('/api/v1/internal/claude-review-agent/runs?limit=4')
+          .set(authorization)
+      ).body[0].id,
+    ).toBe('claude_run_1')
+    expect(readRecentClaudeReviewAgentRuns).toHaveBeenCalledWith(4)
+
+    expect(
+      (
+        await request(app)
           .post('/api/v1/internal/claude-review-agent/runs/claude_run_1/events')
           .set(authorization)
           .send({
@@ -417,6 +438,7 @@ describe('createInternalRouter', () => {
     const claimNextPredictionLeadForClaudeReviewAgent = vi
       .fn()
       .mockRejectedValueOnce('claim-failed')
+    const readRecentClaudeReviewAgentRuns = vi.fn().mockRejectedValueOnce('runs-failed')
     const appendClaudeReviewAgentRunEvent = vi
       .fn()
       .mockRejectedValueOnce(new Error('Claude review run not found.'))
@@ -441,6 +463,7 @@ describe('createInternalRouter', () => {
     }))
     vi.doMock('../services/claude-review-agent', () => ({
       claimNextPredictionLeadForClaudeReviewAgent,
+      readRecentClaudeReviewAgentRuns,
       appendClaudeReviewAgentRunEvent,
       completeClaudeReviewAgentRun,
       failClaudeReviewAgentRun,
@@ -584,6 +607,14 @@ describe('createInternalRouter', () => {
           })
       ).body.message,
     ).toBe('Could not apply prediction lead review result.')
+
+    expect(
+      (
+        await request(app)
+          .get('/api/v1/internal/claude-review-agent/runs')
+          .set(authorization)
+      ).body.message,
+    ).toBe('Internal server error.')
 
     expect(
       (

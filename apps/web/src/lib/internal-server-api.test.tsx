@@ -96,6 +96,48 @@ describe('internal server api helpers', () => {
     }
   }
 
+  function buildClaudeRun() {
+    return {
+      id: 'claude_run_1',
+      agentKey: 'review-default',
+      leadId: 'lead_1',
+      sessionId: null,
+      providerRunId: 'provider_1',
+      status: 'completed',
+      trigger: 'manual',
+      workspaceCwd: '/tmp/review-default',
+      promptSummary: 'Inspect next pending lead.',
+      finalSummary: 'Completed review.',
+      errorMessage: null,
+      costUsd: 0.01,
+      tokenUsage: null,
+      toolUsage: null,
+      recommendation: {
+        verdict: 'accept',
+        confidence: 0.82,
+        summary: 'Strong evidence backs this lead.',
+        evidence: [
+          {
+            url: 'https://example.com/source',
+            excerpt: 'Explicit timeline in source.',
+          },
+        ],
+        needsHumanReview: false,
+        recommendedFamilySlug: 'ai_launch',
+        recommendedEntitySlug: 'openai',
+        duplicateLeadIds: [],
+        duplicateMarketIds: [],
+        normalizedHeadline: 'Example lead',
+        normalizedSummary: 'Summary with enough detail.',
+        escalationReason: null,
+      },
+      startedAt: '2026-03-18T00:00:00.000Z',
+      completedAt: '2026-03-18T00:01:00.000Z',
+      createdAt: '2026-03-18T00:00:00.000Z',
+      updatedAt: '2026-03-18T00:01:00.000Z',
+    }
+  }
+
   it('uses the internal api base url, auth header, and parses queue/detail/write payloads', async () => {
     process.env.INTERNAL_API_BASE_URL = 'https://internal.example.com'
     process.env.NEXT_PUBLIC_API_BASE_URL = 'https://public.example.com'
@@ -145,6 +187,13 @@ describe('internal server api helpers', () => {
         )
       }
 
+      if (url.includes('/internal/claude-review-agent/runs?')) {
+        return new Response(JSON.stringify([buildClaudeRun()]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+
       if (url.endsWith('/status')) {
         return new Response(JSON.stringify(buildLead()), {
           status: 200,
@@ -181,6 +230,11 @@ describe('internal server api helpers', () => {
         }),
       }),
     )
+    await expect(api.fetchInternalClaudeReviewRunsServer(6)).resolves.toEqual([
+      expect.objectContaining({
+        id: 'claude_run_1',
+      }),
+    ])
     await expect(
       api.updateInternalLeadStatusServer('lead_1', {
         status: 'in_review',
@@ -215,6 +269,10 @@ describe('internal server api helpers', () => {
     expect(api.isReviewConsoleAuthorized('bad-secret')).toBe(false)
     expect(fetchMock).toHaveBeenCalledWith(
       'https://internal.example.com/api/v1/internal/leads?limit=12&leadType=structured_agent_lead&familySlug=ai_launch&entitySlug=openai&sourceDomain=example.com',
+      expect.any(Object),
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://internal.example.com/api/v1/internal/claude-review-agent/runs?limit=6',
       expect.any(Object),
     )
   })

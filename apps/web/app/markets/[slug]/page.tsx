@@ -2,6 +2,7 @@ import React from 'react'
 import type { Metadata } from 'next'
 
 import { RouteFrame } from '../../../src/components/RouteFrame'
+import type { MarketDetail } from '../../../src/shared'
 import {
   formatCredits,
   formatDate,
@@ -12,6 +13,84 @@ import {
 import { fetchBoardMarketDetailServer } from '../../../src/lib/server-api'
 
 export const dynamic = 'force-dynamic'
+
+type SettlementTrailEntry = {
+  id: string
+  title: string
+  detail: string
+  at: string
+}
+
+function describeSettlementState(
+  market: MarketDetail['market'],
+): string {
+  if (market.settlementState === 'grace') {
+    return 'The deadline passed and the book is in a grace window while LemonSuk waits for delivery evidence.'
+  }
+
+  if (market.settlementState === 'awaiting_operator') {
+    return 'The grace window has passed and the market is waiting for final operator handling.'
+  }
+
+  if (market.settlementState === 'settled') {
+    return 'This market is settled and no longer reprices.'
+  }
+
+  return 'The market is still live and reprices as liability, deadline pressure, and linked misses change.'
+}
+
+function buildSettlementTrail(
+  market: MarketDetail['market'],
+): SettlementTrailEntry[] {
+  const entries: SettlementTrailEntry[] = [
+    {
+      id: 'deadline',
+      title: 'Deadline closes',
+      detail: `${market.promisedBy} is on the record for ${formatDate(
+        market.promisedDate,
+      )}.`,
+      at: market.promisedDate,
+    },
+    {
+      id: 'state',
+      title:
+        market.settlementState === 'grace'
+          ? 'Grace window live'
+          : market.settlementState === 'awaiting_operator'
+            ? 'Operator handoff'
+            : market.settlementState === 'settled'
+              ? 'Settled'
+              : 'Still live',
+      detail: describeSettlementState(market),
+      at: market.updatedAt,
+    },
+  ]
+
+  if (market.autoResolveAt) {
+    entries.splice(1, 0, {
+      id: 'auto_resolve',
+      title: 'Auto-resolve watch',
+      detail: `If evidence still has not settled the market by ${formatDate(
+        market.autoResolveAt,
+      )}, LemonSuk escalates it for final handling.`,
+      at: market.autoResolveAt,
+    })
+  }
+
+  if (market.resolutionNotes) {
+    entries.unshift({
+      id: 'resolution',
+      title:
+        market.resolution === 'missed'
+          ? 'Deadline settlement'
+          : 'Resolution update',
+      detail: market.resolutionNotes,
+      at: market.bustedAt ?? market.updatedAt,
+    })
+  }
+
+  return entries
+}
 
 export async function generateMetadata({
   params,
@@ -55,6 +134,9 @@ export default async function MarketDetailPage({
     market.previousPayoutMultiplier,
   )
   const lineMoveLabel = formatLineMoveReason(market.lastLineMoveReason)
+  const evidenceUpdates = market.evidenceUpdates ?? []
+  const oddsCommentary = market.oddsCommentary ?? []
+  const settlementTrail = buildSettlementTrail(market)
 
   return (
     <RouteFrame
@@ -143,45 +225,52 @@ export default async function MarketDetailPage({
 
       <section className="route-section route-detail-columns">
         <article className="review-detail-card">
-          <div className="eyebrow">Sources</div>
-          <ul className="review-link-list">
-            {market.sources.map((source) => (
-              <li key={source.id}>
-                <a href={source.url} target="_blank" rel="noreferrer">
-                  {source.label}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <div className="eyebrow">Evidence trail</div>
+          {evidenceUpdates.length ? (
+            <ul className="route-history-list">
+              {evidenceUpdates.map((entry) => (
+                <li key={entry.id} className="route-history-item">
+                  <div>
+                    <strong>{entry.title}</strong>
+                    <p>{entry.detail}</p>
+                  </div>
+                  <div className="route-history-meta">
+                    <span>{formatDate(entry.publishedAt)}</span>
+                    {entry.url ? (
+                      <a href={entry.url} target="_blank" rel="noreferrer">
+                        Open source
+                      </a>
+                    ) : (
+                      <span>LemonSuk note</span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="route-note">No evidence trail yet.</p>
+          )}
         </article>
 
         <article className="review-detail-card">
-          <div className="eyebrow">Related groups</div>
-          <ul className="review-link-list">
-            {detail.eventGroups.map((group) => (
-              <li key={group.group.id}>
-                <a href={`/groups/${group.group.slug}`}>{group.group.title}</a>
-              </li>
-            ))}
-          </ul>
-        </article>
-
-        <article className="review-detail-card">
-          <div className="eyebrow">Related markets</div>
-          <ul className="review-link-list">
-            {detail.relatedMarkets.map((market) => (
-              <li key={market.id}>
-                <a href={`/markets/${market.slug}`}>{market.headline}</a>
-              </li>
-            ))}
-          </ul>
-        </article>
-      </section>
-
-      <section className="route-section route-detail-columns">
-        <article className="review-detail-card">
-          <div className="eyebrow">Book limits</div>
-          <dl className="review-detail-grid">
+          <div className="eyebrow">Why the line sits here</div>
+          <p className="review-body-copy">
+            {lineMoveLabel
+              ? `The book is ${market.payoutMultiplier.toFixed(
+                  2,
+                )}x right now after a ${lineMoveLabel.toLowerCase()} move.`
+              : `The book is ${market.payoutMultiplier.toFixed(
+                  2,
+                )}x right now and has not repriced yet.`}
+          </p>
+          {oddsCommentary.length ? (
+            <ul className="route-detail-bullet-list">
+              {oddsCommentary.map((entry) => (
+                <li key={entry}>{entry}</li>
+              ))}
+            </ul>
+          ) : null}
+          <dl className="review-detail-grid route-compact-grid">
             <div>
               <dt>Max stake</dt>
               <dd>
@@ -199,22 +288,18 @@ export default async function MarketDetailPage({
               </dd>
             </div>
             <div>
-              <dt>Grace window</dt>
+              <dt>Open interest</dt>
               <dd>
-                {market.settlementGraceHours !== undefined
-                  ? `${market.settlementGraceHours}h`
-                  : 'Not set'}
+                {market.currentOpenInterestCredits !== undefined
+                  ? formatCredits(market.currentOpenInterestCredits)
+                  : 'No live tickets yet'}
               </dd>
             </div>
             <div>
-              <dt>Status</dt>
+              <dt>Book status</dt>
               <dd>{market.bettingSuspended ? 'Paused' : 'Accepting tickets'}</dd>
             </div>
           </dl>
-        </article>
-
-        <article className="review-detail-card">
-          <div className="eyebrow">Line history</div>
           {market.lineHistory?.length ? (
             <ul className="route-history-list">
               {market.lineHistory.map((entry) => (
@@ -240,16 +325,66 @@ export default async function MarketDetailPage({
         </article>
 
         <article className="review-detail-card">
-          <div className="eyebrow">Settlement watch</div>
-          <p className="review-body-copy">
-            {market.settlementState === 'grace'
-              ? 'The deadline passed and the book is in a grace window while LemonSuk waits for delivery evidence.'
-              : market.settlementState === 'awaiting_operator'
-                ? 'The grace window has passed and the market is waiting for final operator handling.'
-                : market.settlementState === 'settled'
-                  ? 'This market is settled and no longer reprices.'
-                  : 'The market is still live and reprices as liability, deadline pressure, and linked misses change.'}
-          </p>
+          <div className="eyebrow">Settlement trail</div>
+          <ul className="route-history-list">
+            {settlementTrail.map((entry) => (
+              <li key={entry.id} className="route-history-item">
+                <div>
+                  <strong>{entry.title}</strong>
+                  <p>{entry.detail}</p>
+                </div>
+                <div className="route-history-meta">
+                  <span>{formatDate(entry.at)}</span>
+                  <span>{formatSettlementState(market.settlementState)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </article>
+      </section>
+
+      <section className="route-section route-detail-columns">
+        <article className="review-detail-card">
+          <div className="eyebrow">Sources</div>
+          <ul className="review-link-list">
+            {market.sources.map((source) => (
+              <li key={source.id}>
+                <a href={source.url} target="_blank" rel="noreferrer">
+                  {source.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="review-detail-card">
+          <div className="eyebrow">Related groups</div>
+          {detail.eventGroups.length ? (
+            <ul className="review-link-list">
+              {detail.eventGroups.map((group) => (
+                <li key={group.group.id}>
+                  <a href={`/groups/${group.group.slug}`}>{group.group.title}</a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="route-note">No linked boards yet.</p>
+          )}
+        </article>
+
+        <article className="review-detail-card">
+          <div className="eyebrow">Related markets</div>
+          {detail.relatedMarkets.length ? (
+            <ul className="review-link-list">
+              {detail.relatedMarkets.map((market) => (
+                <li key={market.id}>
+                  <a href={`/markets/${market.slug}`}>{market.headline}</a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="route-note">No related markets yet.</p>
+          )}
         </article>
       </section>
     </RouteFrame>

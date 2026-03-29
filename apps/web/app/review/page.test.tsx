@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   isReviewConsoleAuthorized: vi.fn(),
   fetchInternalLeadQueueServer: vi.fn(),
   fetchInternalLeadInspectionServer: vi.fn(),
+  fetchInternalClaudeReviewRunsServer: vi.fn(),
 }))
 
 vi.mock('../../src/lib/internal-server-api', () => ({
@@ -15,6 +16,7 @@ vi.mock('../../src/lib/internal-server-api', () => ({
   isReviewConsoleAuthorized: mocks.isReviewConsoleAuthorized,
   fetchInternalLeadQueueServer: mocks.fetchInternalLeadQueueServer,
   fetchInternalLeadInspectionServer: mocks.fetchInternalLeadInspectionServer,
+  fetchInternalClaudeReviewRunsServer: mocks.fetchInternalClaudeReviewRunsServer,
 }))
 
 vi.mock('./actions', () => ({
@@ -25,6 +27,7 @@ vi.mock('./actions', () => ({
 describe('ReviewPage', () => {
   it('renders an unavailable state when the internal service token is missing', async () => {
     mocks.isReviewConsoleAvailable.mockReturnValue(false)
+    mocks.fetchInternalClaudeReviewRunsServer.mockResolvedValue([])
 
     render(await ReviewPage({ searchParams: Promise.resolve({}) }))
 
@@ -35,6 +38,7 @@ describe('ReviewPage', () => {
   it('renders a locked state when the review key is not authorized', async () => {
     mocks.isReviewConsoleAvailable.mockReturnValue(true)
     mocks.isReviewConsoleAuthorized.mockReturnValue(false)
+    mocks.fetchInternalClaudeReviewRunsServer.mockResolvedValue([])
 
     render(await ReviewPage({ searchParams: Promise.resolve({}) }))
 
@@ -49,6 +53,7 @@ describe('ReviewPage', () => {
       pendingCount: 0,
       items: [],
     })
+    mocks.fetchInternalClaudeReviewRunsServer.mockResolvedValue([])
 
     render(
       await ReviewPage({
@@ -107,6 +112,48 @@ describe('ReviewPage', () => {
         },
       ],
     })
+    mocks.fetchInternalClaudeReviewRunsServer.mockResolvedValue([
+      {
+        id: 'claude_run_1',
+        agentKey: 'review-default',
+        leadId: 'lead_1',
+        sessionId: null,
+        providerRunId: 'provider_1',
+        status: 'completed',
+        trigger: 'manual',
+        workspaceCwd: '/tmp/review-default',
+        promptSummary: 'Inspect next pending lead.',
+        finalSummary: 'Completed review.',
+        errorMessage: null,
+        costUsd: 0.0132,
+        tokenUsage: null,
+        toolUsage: null,
+        recommendation: {
+          verdict: 'accept',
+          confidence: 0.82,
+          summary:
+            'The source is specific and deserves operator review as a viable market candidate.',
+          evidence: [
+            {
+              url: 'https://example.com/source',
+              excerpt: 'This source is specific and dated.',
+            },
+          ],
+          needsHumanReview: false,
+          recommendedFamilySlug: 'ai_launch',
+          recommendedEntitySlug: 'openai',
+          duplicateLeadIds: [],
+          duplicateMarketIds: [],
+          normalizedHeadline: 'Example lead',
+          normalizedSummary: 'Summary',
+          escalationReason: null,
+        },
+        startedAt: '2026-03-18T00:00:00.000Z',
+        completedAt: '2026-03-18T00:03:00.000Z',
+        createdAt: '2026-03-18T00:00:00.000Z',
+        updatedAt: '2026-03-18T00:03:00.000Z',
+      },
+    ])
     mocks.fetchInternalLeadInspectionServer.mockResolvedValue({
       lead: {
         id: 'lead_1',
@@ -188,6 +235,9 @@ describe('ReviewPage', () => {
     expect(screen.getByText('Manual status')).not.toBeNull()
     expect(screen.getByText('Manual decision')).not.toBeNull()
     expect(screen.getByText('Strong evidence.')).not.toBeNull()
+    expect(screen.getByText('Claude review runs')).not.toBeNull()
+    expect(screen.getByText('Inspect next pending lead.')).not.toBeNull()
+    expect(screen.getByText('$0.0132')).not.toBeNull()
   })
 
   it('auto-selects the first lead, shows flash copy, and renders related/reviewed fallback branches', async () => {
@@ -272,6 +322,7 @@ describe('ReviewPage', () => {
         },
       ],
     })
+    mocks.fetchInternalClaudeReviewRunsServer.mockResolvedValue([])
     mocks.fetchInternalLeadInspectionServer.mockResolvedValue({
       lead: {
         id: 'lead_2',
@@ -417,10 +468,55 @@ describe('ReviewPage', () => {
     expect(screen.getAllByText('example.com').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('No recent review results.')).not.toBeNull()
     expect(screen.getByText(/example\.com · accepted/)).not.toBeNull()
+    expect(screen.getByText('No Claude review runs recorded yet.')).not.toBeNull()
+  })
+
+  it('renders in-progress Claude runs when no recommendation or summary is available yet', async () => {
+    mocks.isReviewConsoleAvailable.mockReturnValue(true)
+    mocks.isReviewConsoleAuthorized.mockReturnValue(true)
+    mocks.fetchInternalLeadQueueServer.mockResolvedValue({
+      pendingCount: 0,
+      items: [],
+    })
+    mocks.fetchInternalClaudeReviewRunsServer.mockResolvedValue([
+      {
+        id: 'claude_run_live',
+        agentKey: 'review-default',
+        leadId: 'lead_live',
+        sessionId: null,
+        providerRunId: null,
+        status: 'running',
+        trigger: 'scheduled',
+        workspaceCwd: '/tmp/review-default',
+        promptSummary: 'Refresh source packet.',
+        finalSummary: null,
+        errorMessage: null,
+        costUsd: 0,
+        tokenUsage: null,
+        toolUsage: null,
+        recommendation: null,
+        startedAt: '2026-03-18T00:00:00.000Z',
+        completedAt: null,
+        createdAt: '2026-03-18T00:00:00.000Z',
+        updatedAt: '2026-03-18T00:00:00.000Z',
+      },
+    ])
+
+    render(
+      await ReviewPage({
+        searchParams: Promise.resolve({
+          review_key: 'secret',
+        }),
+      }),
+    )
+
+    expect(screen.getByText('Refresh source packet.')).not.toBeNull()
+    expect(screen.getByText('Run is still in progress.')).not.toBeNull()
   })
 
   it('renders the review form with an empty review key when authorization allows it', async () => {
     mocks.isReviewConsoleAuthorized.mockReturnValue(true)
+    mocks.fetchInternalClaudeReviewRunsServer.mockResolvedValue([])
     mocks.fetchInternalLeadQueueServer.mockResolvedValue({
       pendingCount: 1,
       items: [
